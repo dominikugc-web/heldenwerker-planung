@@ -1,0 +1,68 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { testServer, tempDir } from "./hilfe.mjs";
+
+const GH = "https://dominikugc-web.github.io";
+
+test("gesund meldet nur, ob Schlüssel da sind, nie den Wert", async () => {
+  const home = tempDir();
+  fs.mkdirSync(path.join(home, ".hero"));
+  fs.writeFileSync(path.join(home, ".hero", "graphql.env"), "HERO_GRAPHQL_KEY=geheim123\n");
+  const s = await testServer({ homeDir: home });
+  try {
+    const r = await fetch(s.url + "/api/gesund");
+    const text = await r.text();
+    assert.equal(r.status, 200);
+    assert.deepEqual(JSON.parse(text), { ok: true, hero: true, claude: false });
+    assert.ok(!text.includes("geheim123"));
+  } finally { await s.stop(); }
+});
+
+test("CORS-Vorabfrage von GitHub Pages wird erlaubt", async () => {
+  const s = await testServer();
+  try {
+    const r = await fetch(s.url + "/api/gesund", { method: "OPTIONS", headers: { Origin: GH, "Access-Control-Request-Method": "GET", "Access-Control-Request-Private-Network": "true" } });
+    assert.equal(r.status, 204);
+    assert.equal(r.headers.get("access-control-allow-origin"), GH);
+    assert.equal(r.headers.get("access-control-allow-private-network"), "true");
+  } finally { await s.stop(); }
+});
+
+test("fremder Origin bekommt keinen CORS-Kopf", async () => {
+  const s = await testServer();
+  try {
+    const r = await fetch(s.url + "/api/gesund", { headers: { Origin: "https://boese.example" } });
+    assert.equal(r.headers.get("access-control-allow-origin"), null);
+  } finally { await s.stop(); }
+});
+
+test("ohne Tailscale-Login und ohne lokal gibt es 401", async () => {
+  const s = await testServer({ lokal: false });
+  try {
+    assert.equal((await fetch(s.url + "/api/gesund")).status, 401);
+    const mit = await fetch(s.url + "/api/gesund", { headers: { "Tailscale-User-Login": "dominik@example.com" } });
+    assert.equal(mit.status, 200);
+  } finally { await s.stop(); }
+});
+
+test("liefert index.html aus und verhindert Pfad-Ausbruch", async () => {
+  const s = await testServer();
+  try {
+    const r = await fetch(s.url + "/");
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get("content-type"), /text\/html/);
+    const raus = await fetch(s.url + "/%2e%2e/package.json");
+    assert.equal(raus.status, 404);
+  } finally { await s.stop(); }
+});
+
+test("roher Pfad mit ..%2f kommt nicht aus web/ heraus", async () => {
+  const http = await import("node:http");
+  const s = await testServer();
+  try {
+    const status = await new Promise((ok, fail) => http.get(s.url + "/..%2fpackage.json", (r) => { r.resume(); ok(r.statusCode); }).on("error", fail));
+    assert.equal(status, 404);
+  } finally { await s.stop(); }
+});
