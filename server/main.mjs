@@ -7,7 +7,11 @@ import { GITHUB_ORIGIN, ladeSchluessel, SCHLUESSEL } from "./konfig.mjs";
 import { erstelleHero } from "./hero.mjs";
 import { erstelleSchreiber } from "./hero-schreiben.mjs";
 import { route, finde, json } from "./router.mjs";
+import { erstellePlanungen } from "./planungen.mjs";
+import { erstelleClaude } from "./claude.mjs";
+import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
+import "./routen-planungen.mjs";
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json", ".pdf": "application/pdf" };
@@ -43,11 +47,17 @@ route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
   claude: !!ladeSchluessel(...SCHLUESSEL.claude, k.homeDir),
 }));
 
-export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey }) {
+export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient }) {
   // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
   const hero = () => erstelleHero({ key: heroKey ?? ladeSchluessel(...SCHLUESSEL.hero, homeDir), fetch: heroFetch });
   const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber };
+  const claude = () => {
+    const key = !claudeClient && ladeSchluessel(...SCHLUESSEL.claude, homeDir);
+    if (!claudeClient && !key) return null;
+    return erstelleClaude({ client: claudeClient ?? new Anthropic({ apiKey: key }) });
+  };
+  const planungen = erstellePlanungen({ datenDir });
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
