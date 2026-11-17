@@ -21,7 +21,11 @@ async function zeigen() {
   ansicht.innerHTML = "";
   ansicht.scrollTop = 0;
   try { await fn(ansicht, id, abbruch.signal); } catch (e) { fehlerMelden(e); }
+  // Letzter Stand jeder Menüseite, damit sie beim Wischen sofort als Nachbarseite hereinkommt.
+  if (MENUE.includes(name) && location.hash.slice(1).split("/")[0] === name) seitenBild[name] = ansicht.innerHTML;
 }
+const MENUE = ["home", "kalender", "projekte", "setup"];
+const seitenBild = {};
 export const gehe = (ziel) => { if (location.hash === "#" + ziel) zeigen(); else location.hash = ziel; };
 
 $$(".tabs button").forEach((b) => b.addEventListener("click", () => (b.dataset.tab === "plus" ? plusSheet() : gehe(b.dataset.tab))));
@@ -252,6 +256,115 @@ function feedbackSheet() {
     try { await api("/api/feedback", { methode: "POST", body: { art, text } }); d.close(); toast("Danke, ist angekommen", "ok"); } catch (e) { fehlerMelden(e); }
   };
 }
+
+// ---------- Wischen zwischen den Menüfeldern (wie in der Stempeluhr) ----------
+// Die Menüseiten liegen wie eine lange Seite nebeneinander. Beim Wischen schiebt sich die Nachbarseite herein
+// (ihr letzter Stand aus seitenBild); nach dem Loslassen wird sie frisch geladen.
+(function seitenWischen() {
+  const nav = $(".tabs");
+  const peek = document.createElement("main");
+  peek.id = "peek"; peek.setAttribute("aria-hidden", "true"); peek.inert = true;
+  ansicht.after(peek);
+  let s = null, raf = 0, busy = false;
+  const aktuell = () => (location.hash.slice(1) || "home").split("/")[0];
+  const W = () => ansicht.clientWidth;
+  // Nicht wischen in Feldern, auf der Leiste, in offenen Sheets und in Bereichen, die selbst seitlich scrollen.
+  const gesperrt = (el) => el.closest("input,select,textarea,.tabs,[data-noswipe],dialog") || (function () {
+    for (let e = el; e && e !== ansicht; e = e.parentElement) if (e.scrollWidth > e.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(e).overflowX)) return true;
+    return false;
+  })();
+  const nachbarHtml = (t) => seitenBild[t] || `<h1>${{ home: "Home", kalender: "Kalender", projekte: "Projekte", setup: "Einstellungen" }[t]}</h1><div class="leer">Lädt …</div>`;
+  function setzen(x) {
+    ansicht.style.transform = x ? `translate3d(${x}px,0,0)` : "";
+    peek.style.transform = s?.seite ? `translate3d(${x + s.seite * W()}px,0,0)` : "";
+  }
+  function ausklingen(ms, dann) {
+    ansicht.style.transition = peek.style.transition = `transform ${ms}ms cubic-bezier(.22,1,.36,1)`;
+    setTimeout(() => { ansicht.style.transition = peek.style.transition = "none"; dann(); }, ms + 20);
+  }
+  ansicht.addEventListener("touchstart", (e) => {
+    s = null;
+    if (busy || e.touches.length !== 1 || nav.hidden || !MENUE.includes(aktuell()) || document.querySelector("dialog[open]") || gesperrt(e.target)) return;
+    s = { x: e.touches[0].clientX, y: e.touches[0].clientY, dir: 0, dx: 0, hist: [], seite: 0, ziel: null };
+  }, { passive: true });
+  ansicht.addEventListener("touchmove", (e) => {
+    if (!s || busy) return;
+    const t = e.touches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (!s.dir) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      s.dir = Math.abs(dx) > Math.abs(dy) * 1.3 ? "h" : "v";
+      if (s.dir === "h") { s.x = t.clientX; document.body.classList.add("wischt"); ansicht.style.transition = peek.style.transition = "none"; }
+    }
+    if (s.dir !== "h") return;
+    e.preventDefault();
+    s.hist.push([e.timeStamp, t.clientX]);
+    while (s.hist.length > 2 && e.timeStamp - s.hist[0][0] > 100) s.hist.shift();
+    s.dx = t.clientX - s.x;
+    const i = MENUE.indexOf(aktuell()), seite = s.dx < 0 ? 1 : -1, ziel = MENUE[i + seite];
+    if (ziel && s.seite !== seite) { peek.innerHTML = nachbarHtml(ziel); peek.scrollTop = 0; s.seite = seite; s.ziel = ziel; peek.classList.add("an"); }
+    if (!ziel) { s.seite = 0; s.ziel = null; peek.classList.remove("an"); }
+    const x = s.seite ? s.dx : s.dx / (1 + Math.abs(s.dx) / 60); // ohne Nachbar: Gummiband
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (s) setzen(x); });
+  }, { passive: false });
+  const fertig = (e) => {
+    if (!s) return;
+    const st = s; cancelAnimationFrame(raf); raf = 0;
+    if (st.dir !== "h") { s = null; return; }
+    const [erst, letzt] = [st.hist[0], st.hist.at(-1)];
+    const v = letzt && erst && letzt[0] > erst[0] && e.timeStamp - letzt[0] < 80 ? (letzt[1] - erst[1]) / (letzt[0] - erst[0]) : 0;
+    const schwung = Math.abs(v) > 0.4 && Math.sign(v) === Math.sign(st.dx);
+    const wechseln = e.type !== "touchcancel" && st.seite && (Math.abs(st.dx) > W() * 0.3 || schwung);
+    busy = true;
+    setzen(st.seite ? st.dx : st.dx / (1 + Math.abs(st.dx) / 60));
+    ansicht.offsetWidth;
+    const aufraeumen = () => { s = null; ansicht.style.transform = peek.style.transform = ""; document.body.classList.remove("wischt"); peek.classList.remove("an"); peek.innerHTML = ""; busy = false; };
+    if (wechseln) {
+      const rest = 1 - Math.abs(st.dx) / W();
+      $$(".tabs button").forEach((b) => (b.dataset.tab === st.ziel ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+      ausklingen(Math.round(180 + 200 * rest), () => {
+        // Neue Seite sofort mit ihrem letzten Stand zeigen, dann frisch laden (kein Aufblitzen von leer).
+        ansicht.innerHTML = peek.innerHTML; ansicht.scrollTop = 0;
+        aufraeumen(); gehe(st.ziel);
+      });
+      ansicht.style.transform = `translate3d(${-st.seite * W()}px,0,0)`;
+      peek.style.transform = "translate3d(0,0,0)";
+    } else {
+      ausklingen(320, aufraeumen);
+      ansicht.style.transform = "translate3d(0,0,0)";
+      if (st.seite) peek.style.transform = `translate3d(${st.seite * W()}px,0,0)`;
+    }
+  };
+  ansicht.addEventListener("touchend", fertig);
+  ansicht.addEventListener("touchcancel", fertig);
+})();
+
+// iOS-Web-App: Der Layout-Bereich endet manchmal über der Home-Leiste. Dann auf die echte Bildschirmhöhe ziehen,
+// damit die Menüleiste ganz unten sitzt (wie in der Stempeluhr).
+function hoeheAnpassen() {
+  const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  const h = standalone && innerHeight > innerWidth ? screen.height : 0;
+  if (h > innerHeight && h - innerHeight < 120) document.documentElement.style.setProperty("--appH", h + "px");
+  else document.documentElement.style.removeProperty("--appH");
+}
+hoeheAnpassen();
+addEventListener("resize", hoeheAnpassen);
+// Sichtbarer Bereich (ohne Tastatur) als CSS-Variablen: Der Chat sitzt darin fest, das Eingabefeld direkt über der Tastatur.
+function sichtbarerBereich() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const wurzel = document.documentElement.style;
+  wurzel.setProperty("--vv-top", vv.offsetTop + "px");
+  wurzel.setProperty("--vv-h", vv.height + "px");
+  document.body.classList.toggle("tastatur", innerHeight - vv.height > 120);
+}
+window.visualViewport?.addEventListener("resize", sichtbarerBereich);
+window.visualViewport?.addEventListener("scroll", sichtbarerBereich);
+sichtbarerBereich();
+// iOS: Nach dem Schließen der Tastatur bleibt die Seite manchmal verschoben.
+document.addEventListener("focusout", () => setTimeout(() => {
+  const a = document.activeElement;
+  if (!a || !/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) window.scrollTo(0, 0);
+}, 60));
 
 // ---------- Start ----------
 (async () => {
