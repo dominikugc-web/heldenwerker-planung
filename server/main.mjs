@@ -12,6 +12,7 @@ import { erstelleClaude } from "./claude.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
 import "./routen-planungen.mjs";
+import "./feedback.mjs";
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json", ".pdf": "application/pdf" };
@@ -47,7 +48,7 @@ route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
   claude: !!ladeSchluessel(...SCHLUESSEL.claude, k.homeDir),
 }));
 
-export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient }) {
+export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient, inhaber = null }) {
   // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
   const hero = () => erstelleHero({ key: heroKey ?? ladeSchluessel(...SCHLUESSEL.hero, homeDir), fetch: heroFetch });
   const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir });
@@ -57,7 +58,7 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     return erstelleClaude({ client: claudeClient ?? new Anthropic({ apiKey: key }) });
   };
   const planungen = erstellePlanungen({ datenDir });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen };
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, inhaber };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
@@ -85,6 +86,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     webDir: path.join(wurzel, "web"),
     datenDir: process.env.PLANUNG_DATEN || path.join(wurzel, "daten"),
     lokal: process.env.PLANUNG_LOKAL === "1",
+    inhaber: process.env.PLANUNG_INHABER || (process.env.PLANUNG_LOKAL === "1" ? "Lokal" : null),
   });
   console.log("Planung läuft auf http://127.0.0.1:" + s.address().port);
 }
