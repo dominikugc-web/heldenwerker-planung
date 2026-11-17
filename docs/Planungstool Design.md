@@ -183,3 +183,15 @@ Dominik hat entschieden: keine zweite Admin-App und keine Testfassung. Er bekomm
 - **Wer was macht:** Name des Anlegers an jeder Planung (Listen, Prüfansicht) und „Aufgenommen von …“ im HERO-Logbuch.
 - **Feedback:** Status neu oder erledigt, nur Admins sehen und ändern ihn. Roter Punkt an der Lampe, solange es neue Feedbacks gibt.
 - **Später:** feinere Rechte pro Rolle, Antworten an den Planer.
+
+## Nachtrag 17.11.2026: Fester Ablauf statt freiem Chat, PDF im Stil des Abnahmeprotokolls
+
+Dominik hat entschieden: Der Planungs-Chat wird ein fester Ablauf zum Durchklicken. Er ersetzt den freien Claude-Chat und das alte ausfüllbare PDF.
+
+- **Start:** „Was wird besichtigt? PV, Wärmepumpe oder beides.“ Nicht passende Bereiche fallen weg.
+- **Fragen** wie im Online-Formular „Protokoll Technische Wärmepumpe“, der Reihe nach. Ja/Nein und kurze Auswahl als Knöpfe, lange Produktlisten als Auswahlliste, Zahlen mit Einheit und Text als Eingabefeld. Folgefragen erscheinen nur, wenn sie passen (zum Beispiel „Freileitung isoliert?“ nur bei Freileitung ja).
+- **Jede Frage:** Überspringen, Fotos/Videos anhängen, Notiz als Text oder Sprache (Whisper). Pflichtfotos sind eigene Schritte.
+- **Ändern:** Frühere Antwort antippen. „Übersicht“ zeigt alle Punkte mit Status und springt direkt hin.
+- **Ende:** Claude schreibt aus den Antworten nur den Monteur-Text (ein Aufruf). Danach die Prüfansicht.
+- **PDF** im Stil des „DC Abnahmeprotokolls“ (wegatech): Heldenwerker-Logo, Titelband, blaue Abschnittsbalken, Frage und Antwort zweispaltig, Fotos unter der passenden Frage, Videos und Sprachnotizen als anklickbarer Drive-Link. Das PDF geht auf Drive, der Link mit dem Monteur-Text ins HERO-Logbuch. Keine Unterschriften.
+- **Fragenkatalog** in einer Datei (`server/fragen.mjs`), damit Dominik Änderungen per Chat beauftragen kann.
