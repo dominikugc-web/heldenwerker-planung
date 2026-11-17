@@ -39,14 +39,38 @@ test("fehlt nennt jedes Pflichtfoto ohne zugeordnetes Foto", () => {
   assert.ok(f.includes("Zählerschrank"));
 });
 
-test("Schema für Claude: alle Felder Pflicht, Auswahl als enum", async () => {
+test("Schema für Claude bleibt klein: Felder als Liste Feld + Wert", async () => {
   const felder = await ladeFelder();
   const s = ergebnisSchema(felder, ["abcdef12"]);
   assert.equal(s.additionalProperties, false);
-  assert.deepEqual(s.properties.felder.required.sort(), felder.map((f) => f.name).sort());
-  assert.ok(s.properties.felder.properties.dachbelag.enum.includes("Pfanne"));
-  assert.ok(s.properties.felder.properties.dachbelag.enum.includes(""));
+  const item = s.properties.felder.items;
+  assert.deepEqual(item.required, ["feld", "wert"]);
+  assert.deepEqual(item.properties.feld.enum.sort(), felder.map((f) => f.name).sort());
+  assert.deepEqual(item.properties.wert, { type: "string" });
   assert.deepEqual(s.properties.fotos.items.properties.dateiId.enum, ["abcdef12"]);
+  assert.ok(JSON.stringify(s).length < 6000, "Schema zu groß: " + JSON.stringify(s).length);
+});
+
+test("felderAusListe: gültige Werte übernehmen, Auswahl ohne Groß/Klein, Rest verwerfen", async () => {
+  const { felderAusListe } = await import("../server/protokoll.mjs");
+  const felder = await ladeFelder();
+  const f = felderAusListe([
+    { feld: "dachbelag", wert: "pfanne" }, { feld: "sturmklammern", wert: "Ja" }, { feld: "kundenname", wert: "Müller" },
+    { feld: "pfannentyp", wert: "Stroh" }, { feld: "erfunden", wert: "x" },
+  ], felder);
+  assert.equal(Object.keys(f).length, felder.length);
+  assert.equal(f.dachbelag, "Pfanne");
+  assert.equal(f.sturmklammern, "ja");
+  assert.equal(f.kundenname, "Müller");
+  assert.equal(f.pfannentyp, "");
+  assert.equal(f.erfunden, undefined);
+});
+
+test("Feldliste für den Prompt nennt Bereich, Beschriftung und Auswahlwerte", async () => {
+  const { feldListeText } = await import("../server/protokoll.mjs");
+  const t = feldListeText(await ladeFelder());
+  assert.match(t, /dachbelag \(Dachbelag\): Pfanne \| Bitum/);
+  assert.match(t, /sturmklammern \(Sturmklammern\?\): ja \| nein/);
 });
 
 test("protokollPdf füllt Felder, Haken und Umlaute und ist danach flach", async () => {

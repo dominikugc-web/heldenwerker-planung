@@ -4,10 +4,11 @@
 // Address: street zipcode city · CalendarEvent: id title start end project_match_id category{name}
 // FileUpload: id filename url · History: created custom_title custom_text
 // Sortierung: orderBy kennt nur aufsteigend; last:N + offset liefert das Neueste zuerst (geprüft 17.11.).
+import { fehler } from "./router.mjs";
 export const HERO_URL = "https://login.hero-software.de/api/external/v7/graphql";
 
 export class HeroFehler extends Error {
-  constructor(meldung) { super(meldung); this.status = 502; }
+  constructor(meldung) { super(meldung); this.status = 502; this.eigen = true; }
 }
 
 const PROJEKT_FELDER = "id project_nr project_title name customer { full_name company_name } address { street zipcode city } current_project_match_status { name }";
@@ -26,7 +27,7 @@ export function alsProjekt(p) {
 // key und fetch werden übergeben, damit Tests ohne echten HERO-Aufruf laufen.
 export function erstelleHero({ key, fetch = globalThis.fetch }) {
   async function abfrage(query, variables = {}) {
-    if (!key) throw Object.assign(new Error("HERO-Schlüssel fehlt"), { status: 503 });
+    if (!key) throw fehler(503, "HERO-Schlüssel fehlt");
     let r;
     try {
       r = await fetch(HERO_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ query, variables }) });
@@ -50,7 +51,7 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
       const d = await abfrage(`query($id:Int){ project_match(project_match_id:$id){ ${PROJEKT_FELDER}
         contact { full_name company_name phone_mobile phone_home email } file_uploads { id filename url }
         histories { created custom_title custom_text } } }`, { id: Number(id) });
-      if (!d.project_match) throw Object.assign(new Error("Projekt nicht gefunden"), { status: 404 });
+      if (!d.project_match) throw fehler(404, "Projekt nicht gefunden");
       const p = d.project_match, k = p.contact || p.customer || {};
       // histories kommt neueste zuerst und enthält auch per API geschriebene Einträge (project_histories nicht).
       const h = { project_histories: (p.histories || []).slice(0, 30) };

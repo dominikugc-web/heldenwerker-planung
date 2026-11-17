@@ -70,12 +70,33 @@ export function ergebnisSchema(felder, dateiIds) {
     properties: {
       monteure: { type: "object", additionalProperties: false, required: ["wasWirdGemacht", "woKommtWasHin", "achtung", "material", "offen"],
         properties: { wasWirdGemacht: liste, woKommtWasHin: liste, achtung: liste, material: liste, offen: liste } },
-      felder: { type: "object", additionalProperties: false, required: felder.map((f) => f.name),
-        properties: Object.fromEntries(felder.map((f) => [f.name, erlaubt(f) ? { type: "string", enum: erlaubt(f) } : { type: "string" }])) },
+      // Als Liste Feld + Wert: ein Objekt mit ~110 Pflicht-enums ist der API zu groß ("compiled grammar is too large", 17.11.).
+      felder: { type: "array", items: { type: "object", additionalProperties: false, required: ["feld", "wert"],
+        properties: { feld: { type: "string", enum: felder.map((f) => f.name) }, wert: { type: "string" } } } },
       fotos: { type: "array", items: { type: "object", additionalProperties: false, required: ["dateiId", "pflichtfoto"],
         properties: { dateiId: { type: "string", enum: dateiIds.length ? dateiIds : [""] }, pflichtfoto: { type: "string", enum: FOTO_ARTEN } } } },
     },
   };
+}
+
+// Claudes Liste -> Objekt mit allen Feldern. Auswahlwerte ohne Groß/Klein abgleichen, Ungültiges verwerfen
+// (der Planer sieht leere Felder in der Prüfung und trägt nach).
+export function felderAusListe(liste, felder) {
+  const aus = Object.fromEntries(felder.map((f) => [f.name, ""]));
+  const nachName = Object.fromEntries(felder.map((f) => [f.name, f]));
+  for (const { feld, wert } of liste || []) {
+    const f = nachName[feld];
+    if (!f || typeof wert !== "string") continue;
+    const ok = erlaubt(f);
+    if (!ok) aus[feld] = wert.trim();
+    else { const treffer = ok.find((o) => o.toLowerCase() === wert.trim().toLowerCase()); if (treffer !== undefined) aus[feld] = treffer; }
+  }
+  return aus;
+}
+
+// Feldbeschreibung für den Auftrag an Claude: Name (Beschriftung): erlaubte Werte.
+export function feldListeText(felder) {
+  return felder.map((f) => `${f.bereich}. ${f.name} (${f.label})` + (erlaubt(f) ? ": " + erlaubt(f).filter(Boolean).join(" | ") : "")).join("\n");
 }
 
 export function ergebnisPruefen(e, felder) {

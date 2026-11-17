@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import { EURO_JE_DOLLAR } from "./konfig.mjs";
-import { ergebnisSchema } from "./protokoll.mjs";
+import { ergebnisSchema, felderAusListe, feldListeText } from "./protokoll.mjs";
 import { fehler } from "./router.mjs";
 
 const ZUSAMMENFASSEN = `Die Besichtigung ist fertig. Fasse jetzt alles zusammen.
 monteure: kurze Stichpunkte ohne Anrede, so dass ein Monteur auf der Baustelle sofort versteht, was gemacht wird (wasWirdGemacht), wo was hinkommt (woKommtWasHin), worauf er achten muss (achtung), Material und Besonderheiten (material) und was noch offen ist (offen). Keine Gedankenstriche. Nur was im Chat steht, nichts erfinden.
-felder: die Felder des Besichtigungsprotokolls. Leerer Text, wenn ein Wert nicht im Chat vorkommt. Datum als TT.MM.JJJJ.
+felder: nur Felder, deren Wert im Chat vorkommt, als Liste aus feld und wert. Bei Auswahlfeldern genau einen der genannten Werte, bei Ja/Nein "ja" oder "nein". Datum als TT.MM.JJJJ.
 fotos: ordne jedes Foto (ID aus der Beschriftung [Foto ID: Name]) genau einem Pflichtfoto zu, sonst "Weitere".`;
 
 export const MODELL = "claude-sonnet-5-5";
@@ -31,9 +31,18 @@ const basis = (effort) => ({
   system: PROMPT,
 });
 
+// SDK-Fehler (Netz, Limits, ungültige Anfrage) nur allgemein melden; Details ins Server-Log.
+async function geschuetzt(fn) {
+  try { return await fn(); } catch (e) {
+    if (e.eigen) throw e;
+    console.error("Claude-Fehler", e.status, String(e.message).slice(0, 300));
+    throw fehler(502, e.status === 429 ? "Claude ist gerade ausgelastet, bitte gleich noch einmal" : "Claude antwortet nicht wie erwartet");
+  }
+}
+
 export function erstelleClaude({ client }) {
   return {
-    async chat(messages, onText) {
+    chat: (messages, onText) => geschuetzt(async () => {
       const stream = client.beta.messages.stream({ ...basis("low"), max_tokens: 4000, messages });
       let text = "";
       for await (const e of stream) {
@@ -43,11 +52,11 @@ export function erstelleClaude({ client }) {
       // Bei einer Ablehnung (auch mitten im Stream) wird der Teiltext verworfen.
       if (m.stop_reason === "refusal") return { text: ABGELEHNT, abgelehnt: true, usage: m.usage };
       return { text, abgelehnt: false, usage: m.usage };
-    },
+    }),
 
     // Ein Aufruf mit festem JSON-Format: Monteur-Text, Protokoll-Felder, Foto-Zuordnung.
-    async zusammenfassen(messages, felder, dateiIds) {
-      const auftrag = { role: "user", content: [{ type: "text", text: ZUSAMMENFASSEN }] };
+    zusammenfassen: (messages, felder, dateiIds) => geschuetzt(async () => {
+      const auftrag = { role: "user", content: [{ type: "text", text: `${ZUSAMMENFASSEN}\n\nFelder des Protokolls:\n${feldListeText(felder)}` }] };
       const letzte = messages.at(-1);
       const msgs = letzte?.role === "user" ? [...messages.slice(0, -1), { role: "user", content: [...letzte.content, ...auftrag.content] }] : [...messages, auftrag];
       const m = await client.beta.messages.create({
@@ -57,8 +66,10 @@ export function erstelleClaude({ client }) {
       if (m.stop_reason === "refusal") throw fehler(502, "Claude hat die Zusammenfassung abgelehnt");
       if (m.stop_reason === "max_tokens") throw fehler(502, "Die Zusammenfassung war zu lang, bitte noch einmal versuchen");
       const text = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-      try { return { ergebnis: JSON.parse(text), usage: m.usage }; } catch { throw fehler(502, "Claude hat kein gültiges Ergebnis geliefert"); }
-    },
+      let roh;
+      try { roh = JSON.parse(text); } catch { throw fehler(502, "Claude hat kein gültiges Ergebnis geliefert"); }
+      return { ergebnis: { ...roh, felder: felderAusListe(roh.felder, felder) }, usage: m.usage };
+    }),
     basis,
   };
 }

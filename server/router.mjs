@@ -28,7 +28,8 @@ export function json(res, status, obj) {
 }
 
 export function fehler(status, meldung) {
-  return Object.assign(new Error(meldung), { status });
+  // eigen = true: Meldung ist für die Oberfläche gedacht (fremde Fehler, z. B. aus dem SDK, gehen nur allgemein raus).
+  return Object.assign(new Error(meldung), { status, eigen: true });
 }
 
 export async function leseJson(req, max = 1_000_000) {

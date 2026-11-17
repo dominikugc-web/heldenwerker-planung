@@ -83,9 +83,9 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     try {
       await treffer.r.handler(req, res, treffer.params, { ...kontext, person: wer, query: new URL(req.url, "http://x").searchParams });
     } catch (e) {
-      if (!res.headersSent) json(res, e.status || 500, { fehler: e.status ? e.message : "Interner Fehler" });
+      if (!res.headersSent) json(res, e.eigen ? e.status : 500, { fehler: e.eigen ? e.message : "Interner Fehler" });
       else res.end();
-      if (!e.status) console.error(e);
+      if (!e.eigen) console.error(e);
     }
   });
   return new Promise((resolve) => server.listen(port, host, () => resolve(server)));

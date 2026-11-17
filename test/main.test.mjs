@@ -76,3 +76,17 @@ test("POST ohne JSON-Kennung wird abgewiesen (Schutz gegen fremde Seiten)", asyn
     assert.equal(ok.status, 201);
   } finally { await s.stop(); }
 });
+
+test("fremde Fehler mit status (z. B. aus dem SDK) gehen nur allgemein raus", async () => {
+  const geheim = Object.assign(new Error("400 invalid_request_error request_id req_123"), { status: 400 });
+  const client = { beta: { messages: { create: async () => { throw geheim; } } } };
+  const s = await testServer({ claudeClient: client });
+  try {
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 1, projektTitel: "T" }) })).json();
+    const r = await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    assert.equal(r.status, 502);
+    const text = await r.text();
+    assert.ok(!text.includes("req_123"), text);
+    assert.match(text, /Claude/);
+  } finally { await s.stop(); }
+});

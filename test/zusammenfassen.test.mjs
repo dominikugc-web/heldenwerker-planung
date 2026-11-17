@@ -9,7 +9,7 @@ import { testServer } from "./hilfe.mjs";
 async function antwortVon(felder, extra = {}) {
   return {
     monteure: { wasWirdGemacht: ["PV 9,9 kWp auf Süddach"], woKommtWasHin: ["WR im Keller links"], achtung: ["Freileitung am Giebel"], material: [], offen: [] },
-    felder: { ...Object.fromEntries(felder.map((f) => [f.name, ""])), dachbelag: "Pfanne" },
+    felder: [{ feld: "dachbelag", wert: "Pfanne" }],
     fotos: [{ dateiId: "bild0001", pflichtfoto: "Dach gesamt" }],
     ...extra,
   };
