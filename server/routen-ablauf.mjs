@@ -13,6 +13,7 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   const neu = { ...alt, zeit: new Date().toISOString() };
   if ("wert" in b) { neu.wert = pruefeAntwort(f, b.wert); if (neu.wert) neu.uebersprungen = false; }
   if ("uebersprungen" in b) neu.uebersprungen = !!b.uebersprungen;
+  if ("wert" in b || "uebersprungen" in b) delete neu.quelle; // selbst beantwortet, nicht mehr "aus Lieferschein"
   if ("notiz" in b) neu.notiz = String(b.notiz || "").trim().slice(0, 4000);
   if ("dateien" in b) {
     neu.dateien = k.planungen.dateienPruefen(pl, (b.dateien || []).map((d) => ({ id: d.id })));

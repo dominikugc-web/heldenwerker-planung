@@ -18,7 +18,7 @@ export function erstellePlanungen({ datenDir }) {
   const dateiPfad = (id, dateiId, klein = false) => path.join(ordner(id), "dateien", dateiId + (klein ? ".klein" : ""));
 
   const api = {
-    neu({ projektId, projektTitel, person, kunde = "", adresse = "", nummer = "" }) {
+    neu({ projektId, projektTitel, person, kunde = "", adresse = "", nummer = "", vorbefuellt = {} }) {
       // Kundendaten aus HERO und das heutige Datum sind schon beantwortet (änderbar wie jede Antwort).
       const jetzt = new Date();
       const heute = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
@@ -27,6 +27,8 @@ export function erstellePlanungen({ datenDir }) {
       if (kunde) antworten.kunde = vor(kunde);
       if (nummer) antworten.projektnr = vor(nummer);
       if (adresse) antworten.adresse = vor(adresse);
+      // Aus Lieferscheinen (quelle = Nummer); Kundendaten oben haben Vorrang.
+      for (const [id, x] of Object.entries(vorbefuellt)) antworten[id] ??= { ...vor(x.wert), notiz: x.notiz || "", quelle: x.quelle };
       const p = { id: crypto.randomUUID(), projektId: Number(projektId), projektTitel: String(projektTitel || ""), person, erstellt: jetzt.toISOString(),
         status: "offen", kostenCent: 0, verlauf: [], antworten, ergebnis: null, gesendet: { dateien: {}, logbuch: false, pdf: false } };
       speichereJson(path.join(ordner(p.id), "planung.json"), p);

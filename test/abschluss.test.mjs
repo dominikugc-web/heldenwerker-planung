@@ -154,9 +154,10 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach Logbuch-Eintrag in HE
     assert.equal(r.status, 200);
     const e = await r.json();
     assert.deepEqual(e.ziel, { id: 11541539, umgeleitet: true });
-    assert.equal(hero.length, 1);
-    assert.equal(hero[0].variables.e.target_id, 11541539);
-    assert.match(hero[0].variables.e.custom_text, /Freileitung am Giebel/);
+    const logbuch = hero.filter((b) => b.query.includes("add_logbook_entry")); // beim Anlegen wird HERO zusätzlich nach Lieferscheinen gefragt
+    assert.equal(logbuch.length, 1);
+    assert.equal(logbuch[0].variables.e.target_id, 11541539);
+    assert.match(logbuch[0].variables.e.custom_text, /Freileitung am Giebel/);
   } finally { await s.stop(); }
 });
 

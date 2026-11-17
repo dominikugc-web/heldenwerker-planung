@@ -5,6 +5,7 @@ import { audioMime } from "./transkribieren.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
+import { antwortenAusLieferscheinen } from "./lieferschein.mjs";
 
 const mitName = (k, pl) => ({ ...pl, personName: k.profile.nameVon(pl.person) });
 route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste().map((pl) => mitName(k, pl))));
@@ -13,7 +14,11 @@ route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k,
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
-  json(res, 201, k.planungen.neu({ projektId: b.projektId, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer: b.nummer }));
+  // Was schon in Lieferscheinen steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
+  let vorbefuellt = {};
+  try { vorbefuellt = antwortenAusLieferscheinen(await k.hero().lieferscheine(b.projektId)); }
+  catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
+  json(res, 201, k.planungen.neu({ projektId: b.projektId, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer: b.nummer, vorbefuellt }));
 });
 
 route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {

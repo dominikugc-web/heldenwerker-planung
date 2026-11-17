@@ -29,3 +29,9 @@ test("offline: Dateien behalten ihre Angaben, neue bekommen sie aus meta, bemalt
   assert.equal(a.dachbelag.dateien[0].v, 9);
   assert.equal(a.dachbelag.dateien[0].name, "A.jpg");
 });
+
+test("offline: geänderte Antwort verliert den Lieferschein-Hinweis, Notiz oder Foto nicht", () => {
+  const a0 = { leistung: { wert: "11,4", uebersprungen: false, dateien: [], notiz: "", quelle: "LS-883" } };
+  assert.equal(antwortAnwenden(a0, ZAHL, { notiz: "x" }).leistung.quelle, "LS-883");
+  assert.equal(antwortAnwenden(a0, ZAHL, { wert: "12" }).leistung.quelle, undefined);
+});

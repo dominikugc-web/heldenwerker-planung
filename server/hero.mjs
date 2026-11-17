@@ -46,6 +46,20 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
 
   return {
     abfrage,
+    // Lieferscheine eines Projekts, neueste zuerst. Produkte aus dem veröffentlichten Entwurf, dort stehen Menge und Beschreibung
+    // (metadata.positions hat nur Namen). Positionen können in Titeln verschachtelt sein.
+    async lieferscheine(projektId) {
+      const d = await abfrage(`query($id:Int){ project_match(project_match_id:$id){ customer_documents { nr type date published_customer_document_draft { data } } } }`, { id: Number(projektId) });
+      const produkte = (items) => {
+        const raus = [];
+        const geh = (x) => { if (Array.isArray(x)) x.forEach(geh); else if (x && typeof x === "object") { if (x.type === "product" && x.name) raus.push(x); else Object.values(x).forEach(geh); } };
+        geh(items);
+        return raus.map((p) => ({ name: trim(p.name), menge: Number(p.quantity) || 1, beschreibung: alsText(String(p.description || "").replace(/<\/(div|p|li)>|<br\s*\/?>/gi, " ")).replace(/\s+/g, " ") }));
+      };
+      return (d.project_match?.customer_documents || []).filter((x) => x.type === "delivery_note")
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+        .map((x) => ({ nr: x.nr, datum: x.date, produkte: produkte(x.published_customer_document_draft?.data?.items) }));
+    },
     async projekteSuchen(suche, { offset = 0, anzahl = 30 } = {}) {
       const d = await abfrage(`query($s:String,$f:Int,$o:Int){ project_matches(search:$s, last:$f, offset:$o, orderBy:"modified"){ ${PROJEKT_FELDER} } }`, { s: suche || null, f: anzahl, o: offset });
       return d.project_matches.map(alsProjekt);
