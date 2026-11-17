@@ -1,6 +1,6 @@
-// Plus-Sheet (neues oder vorhandenes Projekt) und der Planungs-Chat mit Claude.
-import { api, apiStrom, hochladen, dateiUrl, zustand, bericht } from "./api.js";
-import { $, $$, esc, toast, fehlerMelden, sheet, IKON, euro } from "./ui.js";
+// Plus-Sheet (neues oder vorhandenes Projekt) und der Planungs-Chat als fester Ablauf.
+import { api, hochladen, dateiUrl, zustand, bericht } from "./api.js";
+import { $, $$, esc, toast, fehlerMelden, sheet, IKON } from "./ui.js";
 import { zeichnen } from "./zeichnen.js";
 
 const gehe = (ziel) => (location.hash = ziel);
@@ -59,7 +59,7 @@ function projektWaehlenSheet() {
 export async function planungStarten(p) {
   try {
     const titel = [p.nummer, p.kunde, p.adresse].filter(Boolean).join(", ");
-    const pl = await api("/api/planungen", { methode: "POST", body: { projektId: p.id, projektTitel: titel } });
+    const pl = await api("/api/planungen", { methode: "POST", body: { projektId: p.id, projektTitel: titel, kunde: p.kunde, adresse: p.adresse, nummer: p.nummer } });
     gehe("chat/" + pl.id);
   } catch (e) { fehlerMelden(e); }
 }
@@ -83,214 +83,244 @@ export const bildVorbereiten = async (file) => ({ gross: await verkleinern(file,
 const artVon = (file) => (file.type.startsWith("image/") ? "bild" : file.type.startsWith("video/") ? "video" : file.type === "application/pdf" ? "pdf" : null);
 const neueId = () => crypto.randomUUID().replaceAll("-", "").slice(0, 16);
 
-// ---------- Chat ----------
+
+// ---------- Fester Ablauf (Planungs-Chat) ----------
+// Die App stellt die Fragen aus dem Katalog der Reihe nach. Antworten per Knopf, Liste oder Eingabe, jede Frage
+// kann übersprungen und später geändert werden. Fotos, Videos und Sprachnotizen hängen an der jeweiligen Frage.
+let katalogCache = null;
+const ladeKatalog = async () => (katalogCache ??= await api("/api/fragen"));
+
+// Gleiche Regeln wie auf dem Server (server/fragen.mjs): Typ blendet Bereiche aus, Folgefragen nur bei passender Antwort.
+function sichtbar(fragen, antworten) {
+  const typ = antworten.typ?.wert;
+  if (!typ) return [fragen[0]];
+  const pv = typ === "PV" || typ === "Beides", wp = typ === "Wärmepumpe" || typ === "Beides";
+  return fragen.filter((f) => (f.nur !== "pv" || pv) && (f.nur !== "wp" || wp) && (!f.wenn || antworten[f.wenn.frage]?.wert === f.wenn.ist));
+}
+const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);
+const mitEinheit = (f, w) => (f.einheit && w ? (f.einheit.startsWith("°") ? w + f.einheit : `${w} ${f.einheit}`) : w);
+
 export async function chatAnsicht(el, id) {
+  const { katalog: fragen, bereiche } = await ladeKatalog();
   let planung = await api("/api/planungen/" + id);
-  const wartend = []; // gewählte, noch nicht gesendete Dateien
+  let bearbeite = decodeURIComponent(location.hash.split("/")[2] || "") || null; // #chat/<id>/<frage> springt zum Ändern
+  if (bearbeite) history.replaceState(null, "", "#chat/" + id); // Neu laden soll nicht wieder zur Frage springen
+  const antworten = () => planung.antworten || {};
+
   el.innerHTML = `<div class="chatseite">
     <div class="chatkopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button>
-      <div class="haupt"><div class="titel">${esc(planung.projektTitel)}</div><div class="neben" id="kosten"></div></div>
-      <button class="pill akzent" data-zusammen>Zusammenfassen</button></div>
+      <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div></div>
+      <button class="pill" data-uebersicht>Übersicht</button></div>
+    <div class="fortschritt" aria-hidden="true"><span id="balken"></span></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
-    <div class="vorschau" id="vorschau" hidden></div>
-    <div class="chatleiste" id="leiste"><div class="eingabebox">
-      <textarea id="text" rows="1" placeholder="Nachricht schreiben …" aria-label="Nachricht" enterkeyhint="send"></textarea>
-      <div class="eingabezeile">
-        <label class="rundknopf" aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}<input type="file" id="datei" accept="image/*,video/*,application/pdf" multiple hidden></label>
-        <span class="platz"></span>
-        <button class="rundknopf diktat" id="diktat" aria-label="Diktieren: Gesprochenes wird zu Text" aria-pressed="false" hidden>${IKON.mikro}</button>
-        <button class="sendbtn" id="senden" aria-label="Senden">${IKON.senden}</button>
-      </div>
-    </div></div>
-    <div class="chatleiste aufnahme" id="aufnahme" hidden>
-      <button class="pill" id="aufnahmeAbbrechen">Abbrechen</button>
-      <div class="aufnahmeanzeige" role="status"><span class="rotpunkt" aria-hidden="true"></span><span id="aufnahmeZeit">0:00</span></div>
-      <button class="sendbtn" id="aufnahmeSenden" aria-label="Sprachnachricht senden">${IKON.senden}</button>
-    </div></div>`;
-  const verlauf = $("#verlauf", el), vorschau = $("#vorschau", el), text = $("#text", el), senden = $("#senden", el);
+    <div class="steuerung" id="steuerung"></div>
+    <input type="file" id="kamera" accept="image/*" capture="environment" hidden>
+    <input type="file" id="galerie" accept="image/*,video/*,application/pdf" multiple hidden>
+  </div>`;
+  const verlauf = $("#verlauf", el), steuerung = $("#steuerung", el);
   $("[data-zurueck]", el).onclick = () => gehe("home");
+  $("[data-uebersicht]", el).onclick = uebersicht;
 
-  function zeichneVerlauf() {
-    $("#kosten", el).textContent = planung.kostenCent ? "Claude bisher " + euro(planung.kostenCent) : "Neue Besichtigung";
-    verlauf.innerHTML = planung.verlauf.length ? planung.verlauf.map((n) => {
-      const sichtbar = (n.dateien || []).filter((d) => d.art !== "audio");
-      const anh = sichtbar.length ? `<div class="anhaenge">${sichtbar.map((d) => anhangHtml(d, dateiUrl(planung.id, d.id))).join("")}</div>` : "";
-      return anh + (n.dateien || []).filter((d) => d.art === "audio").map((d) => sprachHtml(d, dateiUrl(planung.id, d.id, false))).join("") + (n.text ? `<div class="blase ${n.rolle === "claude" ? "claude" : "planer"}">${esc(n.text)}</div>` : "");
-    }).join("") : `<div class="start-hilfe"><b>Erzähl mir von der Besichtigung</b>Schick Fotos, Videos, PDFs oder Notizen. Ich frage nach, was fürs Protokoll noch fehlt.</div>`;
-    verlauf.scrollTop = verlauf.scrollHeight;
-  }
-  let zeichneVorschau = function () {
-    vorschau.hidden = !wartend.length;
-    vorschau.innerHTML = wartend.map((w, i) => anhangHtml(w, w.vorschau, i)).join("");
-  };
-  zeichneVerlauf();
+  const aktuelleFrage = () => (bearbeite && fragen.find((f) => f.id === bearbeite)) || sichtbar(fragen, antworten()).find((f) => !erledigt(antworten()[f.id])) || null;
 
-  $("#datei", el).addEventListener("change", async (e) => {
-    for (const file of e.target.files) {
-      const art = artVon(file);
-      if (!art) { toast(`${file.name}: nur Fotos, Videos und PDFs`, "fehler"); continue; }
-      const w = { id: neueId(), name: file.name, art, file, fortschritt: 0, fertig: false };
-      if (art === "bild") {
-        try { Object.assign(w, await bildVorbereiten(file)); w.vorschau = URL.createObjectURL(w.klein); w.name = w.name.replace(/\.\w+$/, "") + ".jpg"; }
-        catch { toast(`${file.name} lässt sich nicht öffnen`, "fehler"); continue; }
-      }
-      wartend.push(w);
-    }
-    e.target.value = "";
-    zeichneVorschau();
-  });
-
-  vorschau.addEventListener("click", async (e) => {
-    const weg = e.target.closest("[data-weg]"), bild = e.target.closest("[data-i]");
-    if (weg) { wartend.splice(Number(weg.dataset.weg), 1); return zeichneVorschau(); }
-    const w = bild && wartend[bild.dataset.i];
-    if (!w || w.art !== "bild") return;
-    const neu = await zeichnen(w.gross);
-    if (!neu) return;
-    w.gross = neu; w.klein = await verkleinern(neu, 1600, 0.8); w.fertig = false;
-    URL.revokeObjectURL(w.vorschau); w.vorschau = URL.createObjectURL(w.klein);
-    zeichneVorschau();
-  });
-
-  text.addEventListener("input", () => { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 160) + "px"; knopfZustand(); });
-
-  // Senden-Knopf: bei leerem Feld wird er zum Mikrofon für eine Sprachnachricht (wie bei WhatsApp).
-  const kannAufnehmen = !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
-  const leer = () => !text.value.trim() && !wartend.length;
-  function knopfZustand() {
-    const mikro = leer() && kannAufnehmen;
-    senden.innerHTML = mikro ? IKON.mikro : IKON.senden;
-    senden.setAttribute("aria-label", mikro ? "Sprachnachricht aufnehmen" : "Senden");
-  }
-  knopfZustand();
-  const altesZeichnen = zeichneVorschau;
-  zeichneVorschau = () => { altesZeichnen(); knopfZustand(); };
-
-  // Diktieren: der Browser wandelt live in Text um (am iPhone die Apple-Spracherkennung).
-  const Erkennung = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const diktat = $("#diktat", el);
-  let erkennung = null;
-  if (Erkennung) {
-    diktat.hidden = false;
-    diktat.onclick = () => {
-      if (erkennung) return erkennung.stop();
-      erkennung = new Erkennung();
-      Object.assign(erkennung, { lang: "de-DE", continuous: true, interimResults: true });
-      const vorher = text.value.trim() ? text.value.trimEnd() + " " : "";
-      erkennung.onresult = (e) => { text.value = vorher + [...e.results].map((r) => r[0].transcript).join(""); text.dispatchEvent(new Event("input")); };
-      erkennung.onerror = (e) => {
-        bericht("diktat", e.error);
-        if (e.error === "no-speech" || e.error === "aborted") return;
-        toast(e.error === "not-allowed" || e.error === "service-not-allowed" ? "Diktieren ist hier nicht erlaubt. Mikrofon in den Einstellungen freigeben." : "Diktieren hat nicht geklappt (" + e.error + ")", "fehler");
-      };
-      erkennung.onend = () => { erkennung = null; diktat.setAttribute("aria-pressed", "false"); };
-      erkennung.start();
-      diktat.setAttribute("aria-pressed", "true");
-    };
+  function zeichne() {
+    const liste = sichtbar(fragen, antworten()), akt = aktuelleFrage();
+    const fertig = liste.filter((f) => erledigt(antworten()[f.id])).length;
+    $("#balken", el).style.width = Math.round((fertig / Math.max(liste.length, 1)) * 100) + "%";
+    $("#stand", el).textContent = akt ? `${bereiche[akt.bereich]} · ${fertig} von ${liste.length}` : `Alles erfasst · ${fertig} von ${liste.length}`;
+    // Verlauf: alle erledigten Fragen mit Antwort, dazu die aktuelle Frage an ihrer Stelle.
+    verlauf.innerHTML = liste.filter((f) => erledigt(antworten()[f.id]) || f === akt).map((f) => {
+      const a = antworten()[f.id];
+      const frage = `<div class="blase claude frageblase${f === akt ? " aktiv" : ""}" id="f-${f.id}">${f.pflicht ? "📷 " : ""}${esc(f.frage)}${f === akt && bearbeite ? '<span class="badge orange">wird geändert</span>' : ""}</div>`;
+      if (!erledigt(a) || f === akt && bearbeite) return frage + (f === akt && a ? antwortHtml(f, a) : "");
+      return frage + antwortHtml(f, a);
+    }).join("") || "";
+    if (!akt) verlauf.insertAdjacentHTML("beforeend", `<div class="blase claude">Alles erfasst. Tipp auf „Zusammenfassen“, dann schreibt Claude den Text für die Monteure und du prüfst alles vor dem Speichern.</div>`);
+    steuerungZeichnen(akt);
+    requestAnimationFrame(() => { const z = akt && $("#f-" + akt.id, el); (bearbeite && z) ? z.scrollIntoView({ block: "center" }) : (verlauf.scrollTop = verlauf.scrollHeight); });
   }
 
-  // Sprachnachricht aufnehmen: Audio geht an den Server, Whisper macht daraus Text für Claude.
-  const leiste = $("#leiste", el), aufnahmeLeiste = $("#aufnahme", el);
-  let aufnahme = null;
-  async function aufnahmeStarten() {
-    try { await aufnehmen(); }
-    catch (e) {
-      bericht("aufnahme-start", e);
-      leiste.hidden = false; aufnahmeLeiste.hidden = true;
-      toast(e?.name === "NotAllowedError" ? "Mikrofon ist nicht erlaubt. In den Einstellungen freigeben." : "Aufnahme klappt nicht: " + (e?.message || e), "fehler");
-    }
-  }
-  async function aufnehmen() {
-    const strom = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const typ = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t));
-    const rec = new MediaRecorder(strom, typ ? { mimeType: typ } : {});
+  function antwortHtml(f, a) {
     const teile = [];
-    rec.ondataavailable = (e) => e.data.size && teile.push(e.data);
-    const start = Date.now();
-    const uhr = setInterval(() => { const s = Math.floor((Date.now() - start) / 1000); $("#aufnahmeZeit", el).textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }, 250);
-    aufnahme = { rec, verwerfen: false };
-    rec.onerror = (e) => { bericht("aufnahme", e.error || e); toast("Aufnahme abgebrochen: " + (e.error?.message || "unbekannter Fehler"), "fehler"); };
-    rec.onstop = () => { try { aufnahmeFertig(); } catch (e) { bericht("aufnahme-ende", e); toast("Sprachnachricht konnte nicht gesendet werden: " + e.message, "fehler"); } };
-    const aufnahmeFertig = () => {
-      clearInterval(uhr); strom.getTracks().forEach((t) => t.stop());
-      leiste.hidden = false; aufnahmeLeiste.hidden = true; $("#aufnahmeZeit", el).textContent = "0:00";
-      const { verwerfen } = aufnahme; aufnahme = null;
-      if (verwerfen) return;
-      if (!teile.length) { bericht("aufnahme-ende", "keine Audiodaten"); return toast("Die Aufnahme war leer. Bitte noch einmal versuchen.", "fehler"); }
-      const mime = rec.mimeType || typ || "audio/webm";
-      const endung = mime.includes("mp4") ? "m4a" : "webm";
-      const nr = planung.verlauf.flatMap((n) => n.dateien).filter((d) => d.art === "audio").length + 1;
-      wartend.push({ id: neueId(), name: `Sprachnachricht ${nr}.${endung}`, art: "audio", file: new Blob(teile, { type: mime }), fortschritt: 0, fertig: false });
-      senden.click();
-    };
-    rec.start(1000);
-    leiste.hidden = true; aufnahmeLeiste.hidden = false;
+    if (a.uebersprungen) teile.push(`<span class="muted">übersprungen</span>`);
+    else if (a.wert) teile.push(esc(mitEinheit(f, a.wert)));
+    const bilder = (a.dateien || []).filter((d) => d.art === "bild"), andere = (a.dateien || []).filter((d) => d.art !== "bild");
+    if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(dateiUrl(planung.id, d.id))}" alt="" loading="lazy">`).join("")}</span>`);
+    for (const d of andere) teile.push(d.art === "audio" ? `<span class="klein">🎙 ${esc(d.text || "Sprachnotiz")}</span>` : `<span class="klein">${d.art === "video" ? "🎬" : "📄"} ${esc(d.name)}</span>`);
+    if (a.notiz) teile.push(`<span class="klein">✎ ${esc(a.notiz)}</span>`);
+    return `<button class="blase planer antwortblase" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
   }
-  $("#aufnahmeSenden", el).onclick = () => aufnahme?.rec.stop();
-  $("#aufnahmeAbbrechen", el).onclick = () => { if (aufnahme) { aufnahme.verwerfen = true; aufnahme.rec.stop(); } };
-  // Enter sendet nur mit echter Tastatur; während einer Eingabe-Komposition (z. B. Diktat) nie.
-  text.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) { e.preventDefault(); senden.click(); } });
+  verlauf.addEventListener("click", (e) => { const b = e.target.closest("[data-bearbeite]"); if (b) { bearbeite = b.dataset.bearbeite; zeichne(); } });
 
-  senden.onclick = async () => {
+  // ---------- Eingabe für die aktuelle Frage ----------
+  function steuerungZeichnen(f) {
+    if (!f) {
+      steuerung.innerHTML = `<button class="gross" data-zusammen>${IKON.haken}Zusammenfassen und prüfen</button>`;
+      $("[data-zusammen]", steuerung).onclick = zusammenfassen;
+      return;
+    }
+    const a = antworten()[f.id] || {};
+    let eingabe = "";
+    if (f.art === "janein") eingabe = `<div class="knoepfe zwei">${["Ja", "Nein"].map((o) => `<button class="wahl${a.wert === o.toLowerCase() ? " gewaehlt" : ""}" data-wert="${o}">${o}</button>`).join("")}</div>`;
+    else if (f.art === "auswahl") eingabe = `<div class="knoepfe">${f.optionen.map((o) => `<button class="wahl${a.wert === o ? " gewaehlt" : ""}" data-wert="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+    else if (f.art === "liste") eingabe = `<div class="feldzeile"><select id="wert" aria-label="${esc(f.frage)}"><option value="">Bitte wählen …</option>${f.optionen.map((o) => `<option ${a.wert === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
+    else if (f.art === "zahl") eingabe = `<div class="feldzeile"><input id="wert" inputmode="decimal" enterkeyhint="next" value="${esc(a.wert || "")}" placeholder="Zahl" aria-label="${esc(f.frage)}">${f.einheit ? `<span class="einheit">${esc(f.einheit)}</span>` : ""}<button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
+    else if (f.art === "text") eingabe = `<div class="feldzeile"><textarea id="wert" rows="1" enterkeyhint="next" placeholder="Antwort …" aria-label="${esc(f.frage)}">${esc(a.wert || "")}</textarea><button class="rundknopf diktat" data-diktat hidden aria-label="Diktieren">${IKON.mikro}</button><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
+    else if (f.art === "foto") {
+      const bilder = (a.dateien || []).filter((d) => d.art === "bild");
+      eingabe = `${bilder.length ? `<div class="vorschau">${bilder.map((d) => `<button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen"><img src="${esc(dateiUrl(planung.id, d.id))}&v=${encodeURIComponent(d.groesse || "")}" alt=""><span class="art">Bemalen</span></button>`).join("")}</div>` : ""}
+        <div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
+        ${bilder.length ? `<button class="wahl gewaehlt" data-fertig>Weiter</button>` : ""}`;
+    }
+    steuerung.innerHTML = `${eingabe}
+      <div class="zusatz">
+        <button class="rundknopf" data-anhang aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}</button>
+        <button class="rundknopf" data-sprache aria-label="Sprachnotiz aufnehmen">${IKON.mikro}</button>
+        <button class="rundknopf" data-notiz aria-label="Notiz schreiben">✎</button>
+        <span class="platz"></span>
+        ${bearbeite ? `<button class="pill" data-zurueckzumablauf>Fertig</button>` : ""}
+        <button class="pill" data-ueberspringen>Überspringen</button>
+      </div>`;
+    const feld = $("#wert", steuerung);
+    $$("[data-wert]", steuerung).forEach((b) => (b.onclick = () => speichern(f, { wert: b.dataset.wert })));
+    $("[data-weiter]", steuerung)?.addEventListener("click", () => feld.value.trim() ? speichern(f, { wert: feld.value }) : toast("Bitte etwas eintragen oder überspringen", "fehler"));
+    feld?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && f.art !== "text") { e.preventDefault(); $("[data-weiter]", steuerung).click(); } });
+    if (f.art === "text") { feld.style.height = "auto"; feld.addEventListener("input", () => { feld.style.height = "auto"; feld.style.height = Math.min(feld.scrollHeight, 140) + "px"; }); diktieren(feld, $("[data-diktat]", steuerung)); }
+    if (feld && matchMedia("(pointer: fine)").matches) feld.focus();
+    $("[data-kamera]", steuerung)?.addEventListener("click", () => $("#kamera", el).click());
+    $("[data-galerie]", steuerung)?.addEventListener("click", () => $("#galerie", el).click());
+    $("[data-fertig]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
+    $$("[data-malen]", steuerung).forEach((b) => (b.onclick = () => malen(f, b.dataset.malen)));
+    $("[data-anhang]", steuerung).onclick = () => $("#galerie", el).click();
+    $("[data-sprache]", steuerung).onclick = () => sprachnotiz(f);
+    $("[data-notiz]", steuerung).onclick = () => notizSheet(f);
+    $("[data-ueberspringen]", steuerung).onclick = () => speichern(f, { uebersprungen: true });
+    $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
+  }
+
+  async function speichern(f, body) {
     if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
-    const nachricht = text.value.trim();
-    if (!nachricht && !wartend.length) return kannAufnehmen && aufnahmeStarten();
-    erkennung?.stop();
-    senden.disabled = true;
     try {
-      // Bereits hochgeladene Dateien (fertig) werden beim erneuten Senden übersprungen.
-      for (const [i, w] of wartend.entries()) {
-        if (w.fertig) continue;
-        const balken = () => { const b = $(`[data-i="${i}"] .fortschritt`, vorschau); if (b) b.style.width = Math.round(w.fortschritt * 100) + "%"; };
-        const pfad = (klein) => `/api/planungen/${planung.id}/dateien/${w.id}?name=${encodeURIComponent(w.name)}&art=${w.art}&klein=${klein ? 1 : 0}`;
-        await hochladen(pfad(false), w.art === "bild" ? w.gross : w.file, (f) => { w.fortschritt = f; balken(); });
-        if (w.art === "bild") await hochladen(pfad(true), w.klein);
-        w.fertig = true;
-      }
-      const dateien = wartend.map((w) => ({ id: w.id, name: w.name, art: w.art }));
-      const lokaleVorschau = Object.fromEntries(wartend.map((w) => [w.id, w.vorschau]));
-      verlauf.querySelector(".start-hilfe")?.remove();
-      verlauf.insertAdjacentHTML("beforeend", (dateien.length ? `<div class="anhaenge">${dateien.map((d) => anhangHtml(d, lokaleVorschau[d.id])).join("")}</div>` : "") + (nachricht ? `<div class="blase planer">${esc(nachricht)}</div>` : ""));
-      const antwort = Object.assign(document.createElement("div"), { className: "blase claude tippt" });
-      verlauf.append(antwort);
-      verlauf.scrollTop = verlauf.scrollHeight;
-      const sicherung = [...wartend];
-      text.value = ""; text.style.height = "auto";
-      wartend.length = 0; zeichneVorschau();
-      try {
-        await apiStrom(`/api/planungen/${planung.id}/nachricht`, { text: nachricht, dateien }, (t) => { antwort.textContent += t; verlauf.scrollTop = verlauf.scrollHeight; });
-      } catch (err) {
-        // Nicht angekommen: Text und Dateien zurück in die Eingabe, damit nichts verloren geht.
-        if (!err.angekommen) { text.value = nachricht; wartend.push(...sicherung); }
-        throw err;
-      } finally {
-        // Der Server hält die Wahrheit (z. B. Hinweis statt Teiltext bei einer Ablehnung).
-        planung = await api("/api/planungen/" + planung.id).catch(() => planung);
-        zeichneVerlauf();
-      }
-    } catch (e) {
-      bericht("senden", e);
-      fehlerMelden(e);
-      zeichneVorschau();
-    } finally { senden.disabled = false; }
-  };
+      const r = await api(`/api/planungen/${planung.id}/antworten/${f.id}`, { methode: "PUT", body });
+      planung.antworten = r.antworten;
+      // Nach einer Antwort geht es zur nächsten Frage; nach Datei oder Notiz bleibt die Frage offen (weitere Fotos, Antwort fehlt noch).
+      bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
+      zeichne();
+    } catch (e) { bericht("antwort", e); fehlerMelden(e); }
+  }
 
-  $("[data-zusammen]", el).onclick = async (e) => {
-    if (!planung.verlauf.length) return toast("Erst etwas in den Chat schicken", "fehler");
-    const knopf = e.currentTarget; knopf.disabled = true; knopf.textContent = "Claude fasst zusammen …";
+  // ---------- Dateien an der aktuellen Frage ----------
+  const dateienVon = (f) => (antworten()[f.id]?.dateien || []).map((d) => ({ id: d.id }));
+  async function hochladenUndAnhaengen(f, files) {
+    const neu = [];
+    let n = 0;
+    for (const file of files) {
+      const art = file.type.startsWith("audio/") ? "audio" : artVon(file);
+      if (!art) { toast(`${file.name}: nur Fotos, Videos, PDFs`, "fehler"); continue; }
+      n++; toast(`Lädt hoch … ${n} von ${files.length}`);
+      const idNeu = neueId(), name = art === "bild" ? (file.name || "Foto").replace(/\.\w+$/, "") + ".jpg" : file.name;
+      const pfad = (klein) => `/api/planungen/${planung.id}/dateien/${idNeu}?name=${encodeURIComponent(name)}&art=${art}&klein=${klein ? 1 : 0}`;
+      if (art === "bild") { const { gross, klein } = await bildVorbereiten(file); await hochladen(pfad(false), gross); await hochladen(pfad(true), klein); }
+      else await hochladen(pfad(false), file);
+      neu.push({ id: idNeu });
+    }
+    if (neu.length) { await speichern(f, { dateien: [...dateienVon(f), ...neu] }); toast(neu.length === 1 ? "Angehängt" : `${neu.length} Dateien angehängt`, "ok"); }
+  }
+  for (const eingang of ["#kamera", "#galerie"]) $(eingang, el).addEventListener("change", async (e) => {
+    const f = aktuelleFrage(), files = [...e.target.files];
+    e.target.value = "";
+    if (!f || !files.length) return;
+    try { await hochladenUndAnhaengen(f, files); } catch (err) { bericht("hochladen", err); fehlerMelden(err); }
+  });
+
+  async function malen(f, dateiId) {
+    try {
+      const blob = await (await fetch(dateiUrl(planung.id, dateiId, false))).blob();
+      const neu = await zeichnen(blob);
+      if (!neu) return;
+      const d = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);
+      const pfad = (klein) => `/api/planungen/${planung.id}/dateien/${dateiId}?name=${encodeURIComponent(d?.name || "Foto.jpg")}&art=bild&klein=${klein ? 1 : 0}`;
+      await hochladen(pfad(false), neu); await hochladen(pfad(true), await verkleinern(neu, 1600, 0.8));
+      await speichern(f, { dateien: dateienVon(f) }); // Größe neu einlesen, damit das Vorschaubild sich erneuert
+    } catch (e) { bericht("malen", e); fehlerMelden(e); }
+  }
+
+  function notizSheet(f) {
+    const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Notiz</h2><button class="pill akzent" data-ok>Speichern</button></div>
+      <p class="muted small">${esc(f.frage)}</p><textarea rows="5" placeholder="Was die Monteure dazu wissen müssen …">${esc(antworten()[f.id]?.notiz || "")}</textarea>`);
+    $("[data-zu]", d).onclick = () => d.close();
+    $("[data-ok]", d).onclick = async () => { await speichern(f, { notiz: $("textarea", d).value }); d.close(); };
+    setTimeout(() => $("textarea", d).focus(), 200);
+  }
+
+  // Sprachnotiz: Aufnahme an die Frage hängen, Whisper auf dem Server macht Text daraus.
+  async function sprachnotiz(f) {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("Aufnehmen geht in diesem Browser nicht", "fehler");
+    let strom;
+    try { strom = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (e) { bericht("aufnahme-start", e); return toast("Mikrofon ist nicht erlaubt. In den Einstellungen freigeben.", "fehler"); }
+    try {
+      const typ = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t));
+      const rec = new MediaRecorder(strom, typ ? { mimeType: typ } : {});
+      const teile = [];
+      rec.ondataavailable = (e) => e.data.size && teile.push(e.data);
+      const start = Date.now();
+      steuerung.innerHTML = `<div class="aufnahmeanzeige" role="status"><span class="rotpunkt" aria-hidden="true"></span><span id="zeit">0:00</span></div>
+        <div class="knoepfe zwei"><button class="wahl" data-weg>Verwerfen</button><button class="wahl gewaehlt" data-stopp>Fertig</button></div>`;
+      const uhr = setInterval(() => { const s = Math.floor((Date.now() - start) / 1000); const z = $("#zeit", steuerung); if (z) z.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }, 250);
+      let verwerfen = false;
+      rec.onstop = async () => {
+        clearInterval(uhr); strom.getTracks().forEach((t) => t.stop());
+        if (verwerfen) return zeichne();
+        if (!teile.length) { bericht("aufnahme-ende", "keine Audiodaten"); toast("Die Aufnahme war leer", "fehler"); return zeichne(); }
+        const mime = rec.mimeType || typ || "audio/webm";
+        const file = new File(teile, `Sprachnotiz ${new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }).replace(":", "-")}.${mime.includes("mp4") ? "m4a" : "webm"}`, { type: mime });
+        try { toast("Sprachnotiz wird umgewandelt …"); await hochladenUndAnhaengen(f, [file]); } catch (e) { bericht("sprachnotiz", e); fehlerMelden(e); zeichne(); }
+      };
+      rec.onerror = (e) => bericht("aufnahme", e.error || e);
+      $("[data-stopp]", steuerung).onclick = () => rec.stop();
+      $("[data-weg]", steuerung).onclick = () => { verwerfen = true; rec.stop(); };
+      rec.start(1000);
+    } catch (e) { strom.getTracks().forEach((t) => t.stop()); bericht("aufnahme-start", e); toast("Aufnahme klappt nicht: " + (e.message || e), "fehler"); zeichne(); }
+  }
+
+  function uebersicht() {
+    const liste = sichtbar(fragen, antworten());
+    const gruppen = [...new Set(liste.map((f) => f.bereich))];
+    const d = sheet(`<div class="sheetkopf"><span></span><h2>Übersicht</h2><button class="pill" data-zu>Schließen</button></div>
+      ${gruppen.map((b) => `<div class="label">${esc(bereiche[b])}</div><div class="gruppe">${liste.filter((f) => f.bereich === b).map((f) => {
+        const a = antworten()[f.id], status = !erledigt(a) ? ["offen", ""] : a.uebersprungen ? ["übersprungen", "orange"] : ["✓", "gruen"];
+        const kurz = a?.wert ? mitEinheit(f, a.wert) : a?.dateien?.length ? `${a.dateien.length} Datei(en)` : "";
+        return `<button class="zeile" data-springe="${f.id}"><div class="haupt"><div class="titel">${esc(f.frage)}</div>${kurz ? `<div class="neben">${esc(kurz)}</div>` : ""}</div><span class="badge ${status[1]}">${status[0]}</span></button>`;
+      }).join("")}</div>`).join("")}`);
+    $("[data-zu]", d).onclick = () => d.close();
+    $$("[data-springe]", d).forEach((b) => (b.onclick = () => { bearbeite = b.dataset.springe; d.close(); zeichne(); }));
+  }
+
+  async function zusammenfassen(e) {
+    const knopf = e.currentTarget; knopf.disabled = true; knopf.textContent = "Claude schreibt den Monteur-Text …";
     try { await api(`/api/planungen/${planung.id}/zusammenfassen`, { methode: "POST", body: {} }); gehe("pruefung/" + planung.id); }
-    catch (err) { fehlerMelden(err); knopf.disabled = false; knopf.textContent = "Zusammenfassen"; }
+    catch (err) { fehlerMelden(err); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Zusammenfassen und prüfen"; }
+  }
+
+  zeichne();
+}
+
+// Diktieren in ein Textfeld: der Browser wandelt live in Text um (am iPhone die Apple-Spracherkennung).
+function diktieren(feld, knopf) {
+  const Erkennung = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Erkennung || !knopf) return;
+  knopf.hidden = false;
+  let erkennung = null;
+  knopf.onclick = () => {
+    if (erkennung) return erkennung.stop();
+    erkennung = new Erkennung();
+    Object.assign(erkennung, { lang: "de-DE", continuous: true, interimResults: true });
+    const vorher = feld.value.trim() ? feld.value.trimEnd() + " " : "";
+    erkennung.onresult = (e) => { feld.value = vorher + [...e.results].map((r) => r[0].transcript).join(""); feld.dispatchEvent(new Event("input")); };
+    erkennung.onerror = (e) => { bericht("diktat", e.error); if (e.error !== "no-speech" && e.error !== "aborted") toast("Diktieren hat nicht geklappt (" + e.error + ")", "fehler"); };
+    erkennung.onend = () => { erkennung = null; knopf.setAttribute("aria-pressed", "false"); };
+    erkennung.start();
+    knopf.setAttribute("aria-pressed", "true");
   };
-}
-
-function sprachHtml(d, src) {
-  return `<div class="sprachblase"><audio controls preload="none" src="${esc(src)}" aria-label="${esc(d.name)}"></audio>${d.text ? `<div class="transkript">${esc(d.text)}</div>` : ""}</div>`;
-}
-
-function anhangHtml(d, src, index) {
-  const label = { bild: "Foto", video: "Video", pdf: "PDF", audio: "Sprache" }[d.art];
-  const innen = d.art === "bild" && src ? `<img src="${esc(src)}" alt="${esc(d.name)}" loading="lazy">` : `<span>${esc(d.name)}</span>`;
-  const extra = index === undefined ? "" : `<span class="fortschritt" style="width:${Math.round((d.fortschritt || 0) * 100)}%"></span><button class="weg" data-weg="${index}" aria-label="${esc(d.name)} entfernen">×</button>`;
-  const tag = index === undefined ? "div" : "div";
-  return `<${tag} class="anhang" ${index === undefined ? "" : `data-i="${index}" role="button" tabindex="0" aria-label="${d.art === "bild" ? "Zum Zeichnen öffnen: " : ""}${esc(d.name)}"`}>${innen}<span class="art">${label}</span>${extra}</${tag}>`;
 }
