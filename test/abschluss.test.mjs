@@ -155,3 +155,16 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach Logbuch-Eintrag in HE
     assert.match(hero[0].variables.e.custom_text, /Freileitung am Giebel/);
   } finally { await s.stop(); }
 });
+
+test("Ablage darf eine Funktion sein (Drive-Zugang wird ohne Neustart erkannt), Ordner = Nummer und Kunde", async () => {
+  const { p, planungen, log } = await aufbau();
+  const ordner = [];
+  let da = false;
+  const ablage = () => (da ? { hochladen: async (pfad, name, mime, o) => { ordner.push(o); return "https://l/" + name; } } : null);
+  const schreiber = { zielProjekt: () => ({ id: 11541539, umgeleitet: false }) };
+  const a = erstelleAbschluss({ planungen, schreiber, dateien: { logbuchEintrag: async (id, t) => log.logbuch.push({ id, t }) }, ablage });
+  assert.equal((await a.abschliessen(p.id)).offen, 6);
+  da = true;
+  assert.equal((await a.abschliessen(p.id)).hochgeladen, 6);
+  assert.equal(ordner[0], "UNB-1149 Müller");
+});

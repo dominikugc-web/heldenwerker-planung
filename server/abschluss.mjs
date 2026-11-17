@@ -30,7 +30,7 @@ export function dateiNamen(fotos) {
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
-export function erstelleAbschluss({ planungen, schreiber, dateien, ablage, nameVon = (l) => l }) {
+export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablageQuelle, nameVon = (l) => l }) {
   const laufend = new Set();
 
   return {
@@ -42,6 +42,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage, nameV
   };
 
   async function lauf(id) {
+    const ablage = typeof ablageQuelle === "function" ? ablageQuelle() : ablageQuelle;
     let pl = planungen.laden(id);
     if (!pl.ergebnis) throw fehler(409, "Erst zusammenfassen");
     const ziel = schreiber.zielProjekt(pl.projektId);
@@ -61,7 +62,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage, nameV
       if (!ablage) { r.offen++; continue; }
       try {
         if (a.protokoll) fs.writeFileSync(a.pfad, await protokollPdf(pl.ergebnis, await ladeFelder()));
-        const link = await ablage.hochladen(a.pfad, a.name, a.mime, pl.projektTitel);
+        const link = await ablage.hochladen(a.pfad, a.name, a.mime, pl.projektTitel.split(", ").slice(0, 2).join(" "));
         pl = planungen.laden(id);
         pl.gesendet.dateien[a.schluessel] = { name: a.name, link };
         planungen.speichern(pl);

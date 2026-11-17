@@ -11,6 +11,7 @@ import { erstellePlanungen } from "./planungen.mjs";
 import { erstelleClaude } from "./claude.mjs";
 import { erstelleDateien } from "./hero-dateien.mjs";
 import { erstelleAbschluss } from "./abschluss.mjs";
+import { ladeDrive } from "./drive.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
 import "./routen-planungen.mjs";
@@ -63,14 +64,14 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
   };
   const planungen = erstellePlanungen({ datenDir });
   // Einmal pro Server, damit der Schutz gegen doppeltes Absenden greift; HERO wird je Aufruf frisch gebaut.
-  // shortcut: ablage null, bis Drive (Task 13) oder der HERO-Upload steht; dann gehen nur Logbuch-Einträge raus.
+  // Ablage = Drive, sobald ~/.google/planung-drive.env existiert; sonst gehen nur Logbuch-Einträge raus.
   const profile = erstelleProfile({ datenDir, inhaber });
   const abschluss = erstelleAbschluss({
     nameVon: (login) => profile.nameVon(login),
     planungen,
     schreiber: { zielProjekt: (id) => schreiber().zielProjekt(id) },
     dateien: { logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text) },
-    ablage: null,
+    ablage: () => ladeDrive(homeDir),
   });
   const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile };
   const server = http.createServer(async (req, res) => {
