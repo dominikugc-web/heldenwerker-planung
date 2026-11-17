@@ -27,7 +27,7 @@ export async function pruefAnsicht(el, id, signal) {
   };
 
   el.innerHTML = `<div class="kopf"><button class="pill rund" data-chat aria-label="Zurück zum Chat">${IKON.zurueck}</button><h1>Prüfen</h1><span class="muted small" id="gespeichert"></span></div>
-    <p class="unter">${esc(planung.projektTitel)}</p>
+    <p class="unter">${esc(planung.projektTitel)}<br>Aufgenommen von ${esc(planung.personName || planung.person)}</p>
     <div id="ergebnis"></div>
     ${e.fehlt.length ? `<div class="karte fehlt"><b>Es fehlen noch Fotos</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p></div>` : ""}
     <div class="label">Für die Monteure</div>

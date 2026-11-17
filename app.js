@@ -36,7 +36,7 @@ function banner() {
 document.addEventListener("click", async (e) => {
   if (!e.target.closest("[data-verbinden]")) return;
   if (!zustand.server && location.hostname.endsWith("github.io")) return gehe("setup");
-  await verbinden();
+  await verbinden(); lampe();
   toast(zustand.verbunden ? "Verbunden" : "Server nicht erreichbar", zustand.verbunden ? "ok" : "fehler");
   zeigen();
 });
@@ -69,7 +69,7 @@ const STATUS = { offen: ["Offen", "blau"], zusammengefasst: ["Zum Prüfen", "ora
 function planungZeile(p) {
   const [text, farbe] = STATUS[p.status] || STATUS.offen;
   const ziel = p.status === "offen" ? "chat/" + p.id : "pruefung/" + p.id;
-  return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · ${p.nachrichten} Nachrichten</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
+  return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc((p.personName || p.person || "").split(/[s@]/)[0])} · ${p.nachrichten} Nachrichten</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
 }
 function terminZeile(t) {
   const ziel = t.projektId ? `href="#projekt/${t.projektId}"` : "";
@@ -180,7 +180,7 @@ async function setup(el, _, signal) {
   $$("[data-theme]", el).forEach((b) => (b.onclick = () => { speicher.set("planung-theme", b.dataset.theme); $('meta[name="color-scheme"]').content = b.dataset.theme; zeigen(); }));
   $("#verbinden", el).onclick = async () => {
     if (vonGithub) serverSetzen($("#adresse", el).value);
-    await verbinden();
+    await verbinden(); lampe();
     toast(zustand.verbunden ? "Verbunden" : "Server nicht erreichbar", zustand.verbunden ? "ok" : "fehler");
     zeigen();
   };
@@ -188,12 +188,53 @@ async function setup(el, _, signal) {
   const summe = planungen.reduce((s, p) => s + (p.kostenCent || 0), 0);
   $("#kosten", el).innerHTML = `<div class="zeile"><div class="haupt">${planungen.length} Planungen</div><span class="wert">${euro(summe)}</span></div>
     ${planungen.length ? `<div class="zeile"><div class="haupt">Im Schnitt pro Planung</div><span class="wert">${euro(summe / planungen.length)}</span></div>` : ""}`;
-  if (zustand.ich?.inhaber) {
-    const liste = await api("/api/feedback", { signal }).catch(() => []);
-    const ART = { idee: "💡", fehler: "🐞", frage: "❓" };
-    $("#fbliste", el).innerHTML = `<div class="label">Feedback</div><div class="gruppe">${liste.length ? liste.map((f) => `<div class="zeile"><span aria-hidden="true">${ART[f.art]}</span><div class="haupt"><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(f.text)}</div><div class="neben">${esc(f.person)} · ${esc(relativ(f.zeit))}${f.bild ? ` · <a href="${serverUrl("/api/feedback/bild/" + f.bild)}" target="_blank" rel="noopener">Bild</a>` : ""}</div></div></div>`).join("") : `<div class="leer">Noch kein Feedback.</div>`}</div>`;
-  }
+  if (zustand.ich?.inhaber) await adminBereich($("#fbliste", el), signal);
 }
+
+// ---------- Nur für Admins: Feedback-Postfach und Team ----------
+let feedbackFilter = "neu";
+async function adminBereich(el, signal) {
+  const [liste, team] = await Promise.all([api("/api/feedback", { signal }).catch(() => []), api("/api/team", { signal }).catch(() => [])]);
+  const ART = { idee: "💡", fehler: "🐞", frage: "❓" };
+  const status = (f) => f.status || "neu";
+  const neu = liste.filter((f) => status(f) === "neu").length;
+  const sichtbar = liste.filter((f) => status(f) === feedbackFilter);
+  el.innerHTML = `<div class="label">Feedback${neu ? ` <span class="badge orange">${neu} neu</span>` : ""}</div>
+    <div class="segctl" role="group" aria-label="Feedback filtern"><button data-fb="neu" aria-pressed="${feedbackFilter === "neu"}">Neu</button><button data-fb="erledigt" aria-pressed="${feedbackFilter === "erledigt"}">Erledigt</button></div>
+    <div class="gruppe">${sichtbar.length ? sichtbar.map((f) => `<div class="zeile"><span aria-hidden="true">${ART[f.art]}</span><div class="haupt"><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(f.text)}</div><div class="neben">${esc(f.name || f.person)} · ${esc(relativ(f.zeit))}${f.bild ? ` · <a href="${serverUrl("/api/feedback/bild/" + f.bild)}" target="_blank" rel="noopener">Bild</a>` : ""}</div></div>
+      <button class="pill" data-status="${f.id}" data-ziel="${status(f) === "neu" ? "erledigt" : "neu"}">${status(f) === "neu" ? "Erledigt" : "Zurück"}</button></div>`).join("") : `<div class="leer">${feedbackFilter === "neu" ? "Nichts Neues." : "Noch nichts erledigt."}</div>`}</div>
+    <div class="label">Team</div>
+    <div class="gruppe">${team.map((p) => `<button class="zeile" data-login="${esc(p.login)}"><div class="haupt"><div class="titel">${esc(p.name)}</div><div class="neben">zuletzt ${esc(relativ(p.zuletzt))}</div></div><span class="badge ${p.rolle === "admin" ? "blau" : ""}">${p.rolle === "admin" ? "Admin" : "Planer"}</span><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>
+    <p class="hinweis">Jeder, der die App über Tailscale öffnet, erscheint hier automatisch.</p>`;
+  $$("[data-fb]", el).forEach((b) => (b.onclick = () => { feedbackFilter = b.dataset.fb; adminBereich(el, signal); }));
+  $$("[data-status]", el).forEach((b) => (b.onclick = async () => {
+    try {
+      await api("/api/feedback/" + b.dataset.status, { methode: "PUT", body: { status: b.dataset.ziel } });
+      await verbinden(); lampe(); adminBereich(el, signal);
+    } catch (e) { fehlerMelden(e); }
+  }));
+  $$("[data-login]", el).forEach((b) => (b.onclick = () => profilSheet(team.find((p) => p.login === b.dataset.login), () => adminBereich(el, signal))));
+}
+
+function profilSheet(p, fertig) {
+  let rolle = p.rolle;
+  const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Profil</h2><span></span></div>
+    <div class="gruppe"><label class="feld"><span>Name</span><input id="pname" value="${esc(p.name)}" maxlength="80" autocomplete="off"></label>
+      <div class="zeile"><div class="haupt"><div class="neben">Login</div><div>${esc(p.login)}</div></div></div></div>
+    <div class="label">Rolle</div>
+    <div class="segctl" role="group" aria-label="Rolle"><button data-rolle="planer" aria-pressed="${rolle === "planer"}">Planer</button><button data-rolle="admin" aria-pressed="${rolle === "admin"}">Admin</button></div>
+    <p class="hinweis">Admins sehen Feedback und Team. Weitere Rechte kommen später.</p>
+    <button class="gross" data-speichern>Speichern</button>`);
+  $("[data-zu]", d).onclick = () => d.close();
+  $$("[data-rolle]", d).forEach((b) => (b.onclick = () => { rolle = b.dataset.rolle; $$("[data-rolle]", d).forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+  $("[data-speichern]", d).onclick = async () => {
+    try { await api("/api/team/" + encodeURIComponent(p.login), { methode: "PUT", body: { name: $("#pname", d).value, rolle } }); d.close(); toast("Gespeichert", "ok"); fertig(); }
+    catch (e) { fehlerMelden(e); }
+  };
+}
+
+// Roter Punkt an der Lampe, solange es neue Feedbacks gibt (nur Admins).
+const lampe = () => $("#fbbtn").classList.toggle("ungelesen", (zustand.ich?.feedbackNeu || 0) > 0);
 
 // ---------- Feedback-Lampe ----------
 function feedbackSheet() {
@@ -216,5 +257,6 @@ function feedbackSheet() {
 (async () => {
   if (await brauchtKlick()) { zustand.demo = true; }
   else await verbinden();
+  lampe();
   zeigen();
 })();
