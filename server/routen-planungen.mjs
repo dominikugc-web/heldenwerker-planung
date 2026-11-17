@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { istAdmin } from "./profile.mjs";
+import { feedbackNeu } from "./feedback.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf, PFLICHTFOTOS, BEREICHE } from "./protokoll.mjs";
@@ -98,6 +99,7 @@ route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
   name: k.profil.name,
   rolle: k.profil.rolle,
   inhaber: istAdmin(k),
+  ...(istAdmin(k) && { feedbackNeu: feedbackNeu(k) }),
 }));
 
 route("GET", "/api/protokoll-felder", async (req, res, p, k) => json(res, 200, { felder: await ladeFelder(), pflichtfotos: PFLICHTFOTOS, bereiche: BEREICHE }));

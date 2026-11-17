@@ -16,7 +16,7 @@ route("POST", "/api/feedback", async (req, res, p, k) => {
   const text = String(b.text || "").trim();
   if (!ARTEN.includes(b.art)) throw fehler(400, "Unbekannte Art");
   if (!text || text.length > 4000) throw fehler(400, "Bitte 1 bis 4000 Zeichen");
-  const eintrag = { id: crypto.randomUUID(), art: b.art, text, person: k.person, zeit: new Date().toISOString(), bild: null };
+  const eintrag = { id: crypto.randomUUID(), art: b.art, text, person: k.person, name: k.profil?.name || k.person, zeit: new Date().toISOString(), bild: null, status: "neu" };
   if (b.bild) {
     const buf = Buffer.from(String(b.bild), "base64");
     if (buf.length > 5_000_000) throw fehler(400, "Bild zu groß");
@@ -38,3 +38,19 @@ route("GET", "/api/feedback/bild/:name", (req, res, p, k) => {
   res.writeHead(200, { "Content-Type": "image/png" });
   fs.createReadStream(f).pipe(res);
 });
+
+// Admin hakt Feedback ab (oder holt es zurück auf neu).
+route("PUT", "/api/feedback/:id", async (req, res, p, k) => {
+  nurInhaber(k);
+  const { status } = await leseJson(req);
+  if (!["neu", "erledigt"].includes(status)) throw fehler(400, "Unbekannter Status");
+  const liste = ladeJson(datei(k), []);
+  const f = liste.find((x) => x.id === p.id);
+  if (!f) throw fehler(404, "Feedback nicht gefunden");
+  f.status = status;
+  speichereJson(datei(k), liste);
+  json(res, 200, f);
+});
+
+// Anzahl neuer Feedbacks für den roten Punkt an der Lampe (ältere Einträge ohne Status zählen als neu).
+export const feedbackNeu = (k) => ladeJson(datei(k), []).filter((f) => (f.status || "neu") === "neu").length;
