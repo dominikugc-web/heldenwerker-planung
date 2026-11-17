@@ -94,3 +94,13 @@ const safeJson = (t) => { try { return JSON.parse(t); } catch { return {}; } };
 
 export const dateiUrl = (planungId, dateiId, klein = true) => zustand.demo ? "" : `${zustand.server}/api/planungen/${planungId}/dateien/${dateiId}${klein ? "?klein=1" : ""}`;
 export const serverUrl = (pfad) => zustand.server + pfad;
+
+// Fehler aus der Oberfläche ans Server-Log melden, damit sie ohne Gerät nachlesbar sind.
+export function bericht(ort, fehler) {
+  if (zustand.demo || !zustand.verbunden) return;
+  const meldung = fehler instanceof Error ? `${fehler.name}: ${fehler.message}` : String(fehler);
+  fetch(zustand.server + "/api/fehlerbericht", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ort, meldung, geraet: navigator.userAgent + (navigator.standalone ? " (Home-Bildschirm)" : "") }) }).catch(() => {});
+}
+addEventListener("error", (e) => bericht("seite", e.error || e.message));
+addEventListener("unhandledrejection", (e) => bericht("seite", e.reason));

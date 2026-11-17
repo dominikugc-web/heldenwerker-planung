@@ -1,5 +1,5 @@
 // Plus-Sheet (neues oder vorhandenes Projekt) und der Planungs-Chat mit Claude.
-import { api, apiStrom, hochladen, dateiUrl, zustand } from "./api.js";
+import { api, apiStrom, hochladen, dateiUrl, zustand, bericht } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, sheet, IKON, euro } from "./ui.js";
 import { zeichnen } from "./zeichnen.js";
 
@@ -178,7 +178,11 @@ export async function chatAnsicht(el, id) {
       Object.assign(erkennung, { lang: "de-DE", continuous: true, interimResults: true });
       const vorher = text.value.trim() ? text.value.trimEnd() + " " : "";
       erkennung.onresult = (e) => { text.value = vorher + [...e.results].map((r) => r[0].transcript).join(""); text.dispatchEvent(new Event("input")); };
-      erkennung.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Mikrofon ist nicht erlaubt. In den Einstellungen des Browsers freigeben.", "fehler"); };
+      erkennung.onerror = (e) => {
+        bericht("diktat", e.error);
+        if (e.error === "no-speech" || e.error === "aborted") return;
+        toast(e.error === "not-allowed" || e.error === "service-not-allowed" ? "Diktieren ist hier nicht erlaubt. Mikrofon in den Einstellungen freigeben." : "Diktieren hat nicht geklappt (" + e.error + ")", "fehler");
+      };
       erkennung.onend = () => { erkennung = null; diktat.setAttribute("aria-pressed", "false"); };
       erkennung.start();
       diktat.setAttribute("aria-pressed", "true");
@@ -189,9 +193,15 @@ export async function chatAnsicht(el, id) {
   const leiste = $("#leiste", el), aufnahmeLeiste = $("#aufnahme", el);
   let aufnahme = null;
   async function aufnahmeStarten() {
-    let strom;
-    try { strom = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch { return toast("Mikrofon ist nicht erlaubt. In den Einstellungen des Browsers freigeben.", "fehler"); }
+    try { await aufnehmen(); }
+    catch (e) {
+      bericht("aufnahme-start", e);
+      leiste.hidden = false; aufnahmeLeiste.hidden = true;
+      toast(e?.name === "NotAllowedError" ? "Mikrofon ist nicht erlaubt. In den Einstellungen freigeben." : "Aufnahme klappt nicht: " + (e?.message || e), "fehler");
+    }
+  }
+  async function aufnehmen() {
+    const strom = await navigator.mediaDevices.getUserMedia({ audio: true });
     const typ = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t));
     const rec = new MediaRecorder(strom, typ ? { mimeType: typ } : {});
     const teile = [];
@@ -199,11 +209,14 @@ export async function chatAnsicht(el, id) {
     const start = Date.now();
     const uhr = setInterval(() => { const s = Math.floor((Date.now() - start) / 1000); $("#aufnahmeZeit", el).textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }, 250);
     aufnahme = { rec, verwerfen: false };
-    rec.onstop = () => {
+    rec.onerror = (e) => { bericht("aufnahme", e.error || e); toast("Aufnahme abgebrochen: " + (e.error?.message || "unbekannter Fehler"), "fehler"); };
+    rec.onstop = () => { try { aufnahmeFertig(); } catch (e) { bericht("aufnahme-ende", e); toast("Sprachnachricht konnte nicht gesendet werden: " + e.message, "fehler"); } };
+    const aufnahmeFertig = () => {
       clearInterval(uhr); strom.getTracks().forEach((t) => t.stop());
       leiste.hidden = false; aufnahmeLeiste.hidden = true; $("#aufnahmeZeit", el).textContent = "0:00";
       const { verwerfen } = aufnahme; aufnahme = null;
-      if (verwerfen || !teile.length) return;
+      if (verwerfen) return;
+      if (!teile.length) { bericht("aufnahme-ende", "keine Audiodaten"); return toast("Die Aufnahme war leer. Bitte noch einmal versuchen.", "fehler"); }
       const mime = rec.mimeType || typ || "audio/webm";
       const endung = mime.includes("mp4") ? "m4a" : "webm";
       const nr = planung.verlauf.flatMap((n) => n.dateien).filter((d) => d.art === "audio").length + 1;
@@ -256,6 +269,7 @@ export async function chatAnsicht(el, id) {
         zeichneVerlauf();
       }
     } catch (e) {
+      bericht("senden", e);
       fehlerMelden(e);
       zeichneVorschau();
     } finally { senden.disabled = false; }
