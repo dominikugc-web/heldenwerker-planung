@@ -94,30 +94,41 @@ export async function berichtPdf(pl, { links = {}, bild }) {
     const vorhanden = seite.node.lookup(PDFName.of("Annots"));
     if (vorhanden) vorhanden.push(ref); else seite.node.set(PDFName.of("Annots"), doc.context.obj([ref]));
   };
-  const zeile = (frage, antwort, notiz) => {
-    const l = umbrechen(frage, fett, 9.5, LABEL_B), w = umbrechen(antwort || "", normal, 9.5, WERT_B), n = notiz ? umbrechen("Notiz: " + notiz, kursiv, 8.5, WERT_B) : [];
+  const zeile = (frage, antwort, notiz, einzug = 0) => {
+    const l = umbrechen(frage, fett, 9.5, LABEL_B - einzug), w = umbrechen(antwort || "", normal, 9.5, WERT_B), n = notiz ? umbrechen("Notiz: " + notiz, kursiv, 8.5, WERT_B) : [];
     const hoehe = Math.max(l.length, w.length + n.length) * 12.5 + 8;
     platz(hoehe);
     const start = y;
-    l.forEach((s, i) => { y = start - i * 12.5; text(s, RAND, fett, 9.5); });
+    l.forEach((s, i) => { y = start - i * 12.5; text(s, RAND + einzug, fett, 9.5); });
     w.forEach((s, i) => { y = start - i * 12.5; text(s, WERT_X, normal, 9.5); });
     n.forEach((s, i) => { y = start - (w.length + i) * 12.5; text(s, WERT_X, kursiv, 8.5, GRAU); });
     y = start - hoehe;
   };
-  const fotos = async (liste) => {
-    const b = (BREITE - 2 * 14) / 3, maxH = 150;
-    for (let i = 0; i < liste.length; i += 3) {
+  // Frage mit Fotos als Kästchen: Überschrift und Fotos stehen sichtbar zusammen, die nächste Überschrift hat Abstand.
+  // Bricht die Seite mitten in den Fotos um, wird das Kästchen unten geschlossen und auf der neuen Seite fortgesetzt.
+  const P = 8, LUECKE = 10;
+  const kaestchen = (k, unten) => k.seite.drawRectangle({ x: RAND, y: unten, width: BREITE, height: k.oben - unten, borderColor: BLUE_GRAU(), borderWidth: 0.8 });
+  const fotoKarte = async (e) => {
+    platz(40 + 160); // Überschrift nicht allein unten lassen: mit der ersten Fotoreihe zusammen
+    const k = { seite, oben: y + 9.5 + P - 2 }; // Grundlinie + Schrifthöhe + Rand
+    zeile(e.frage, e.antwort, e.notiz, P);
+    let unten = y + 12.5 + 8 - 3, erste = true; // Unterkante der letzten Textzeile
+    const b = (BREITE - 2 * P - 2 * LUECKE) / 3, maxH = 150;
+    for (let i = 0; i < e.bilder.length; i += 3) {
       const reihe = [];
-      for (const d of liste.slice(i, i + 3)) {
+      for (const d of e.bilder.slice(i, i + 3)) {
         // Kopie: kleine Node-Buffer liegen in einem gemeinsamen Speicherblock, pdf-lib liest sonst ab dessen Anfang ("SOI not found").
         try { reihe.push({ d, img: await doc.embedJpg(Uint8Array.from(await bild(d.id))) }); } catch { /* Bild nicht lesbar: weglassen */ }
       }
       if (!reihe.length) continue;
-      const hoehen = reihe.map((r) => Math.min(maxH, (r.img.height / r.img.width) * b));
-      platz(Math.max(...hoehen) + 10);
-      reihe.forEach((r, j) => seite.drawImage(r.img, { x: RAND + j * (b + 14), y: y - hoehen[j], width: (r.img.width / r.img.height) * hoehen[j], height: hoehen[j] }));
-      y -= Math.max(...hoehen) + 12;
+      const hoehen = reihe.map((r) => Math.min(maxH, (r.img.height / r.img.width) * b)), h = Math.max(...hoehen);
+      let oben = unten - (erste ? 6 : LUECKE);
+      if (oben - h - P < 60) { kaestchen(k, unten - P); neueSeite(); k.seite = seite; k.oben = y + 10; oben = k.oben - P; }
+      reihe.forEach((r, j) => seite.drawImage(r.img, { x: RAND + P + j * (b + LUECKE), y: oben - hoehen[j], width: (r.img.width / r.img.height) * hoehen[j], height: hoehen[j] }));
+      unten = oben - h; erste = false;
     }
+    kaestchen(k, unten - P);
+    y = unten - P - 30; // deutlicher Abstand zur nächsten Überschrift
   };
   const medien = (liste) => {
     for (const m of liste) {
@@ -147,9 +158,8 @@ export async function berichtPdf(pl, { links = {}, bild }) {
     platz(ab.eintraege[0]?.bilder.length ? 40 + 200 : 80); // Balken nicht allein unten: mit dem ersten Eintrag zusammen
     band(ab.titel, BAND_HELL, 11.5);
     for (const e of ab.eintraege) {
-      if (e.bilder.length) platz(40 + 160); // Überschrift nicht allein unten lassen: mit der ersten Fotoreihe zusammen
-      zeile(e.frage, e.antwort || (e.bilder.length || e.medien.length ? "" : "nicht angegeben"), e.notiz);
-      if (e.bilder.length) await fotos(e.bilder);
+      if (e.bilder.length) await fotoKarte(e);
+      else zeile(e.frage, e.antwort || (e.medien.length ? "" : "nicht angegeben"), e.notiz);
       if (e.medien.length) { medien(e.medien); y -= 6; }
     }
     y -= 6;
