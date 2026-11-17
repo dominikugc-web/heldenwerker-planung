@@ -9,7 +9,7 @@ import { testServer, tempDir } from "./hilfe.mjs";
 
 const json = (r) => r.json();
 async function neuePlanung(s) {
-  return json(await fetch(s.url + "/api/planungen", { method: "POST", body: JSON.stringify({ projektId: 11541539, projektTitel: "UNB-1149 Test" }) }));
+  return json(await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "UNB-1149 Test" }) }));
 }
 
 test("neue Planung wird angelegt und gelistet (ohne Verlauf)", async () => {
@@ -131,7 +131,7 @@ test("Nachricht ohne Claude-Schlüssel: 503 und Verlauf bleibt leer", async () =
   const s = await testServer();
   try {
     const p = await neuePlanung(s);
-    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", body: JSON.stringify({ text: "Hallo", dateien: [] }) });
+    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "Hallo", dateien: [] }) });
     assert.equal(r.status, 503);
     assert.deepEqual((await json(await fetch(s.url + `/api/planungen/${p.id}`))).verlauf, []);
   } finally { await s.stop(); }
@@ -145,7 +145,7 @@ test("Nachricht mit Claude-Attrappe: Stream kommt an, beide Nachrichten und Kost
   const s = await testServer({ claudeClient: client });
   try {
     const p = await neuePlanung(s);
-    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", body: JSON.stringify({ text: "Dach ist fertig", dateien: [] }) });
+    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "Dach ist fertig", dateien: [] }) });
     assert.equal(r.status, 200);
     assert.equal(await r.text(), "Wo ist der Zählerschrank?");
     const neu = await json(await fetch(s.url + `/api/planungen/${p.id}`));
@@ -158,7 +158,7 @@ test("Nachricht mit unbekannter Datei wird abgewiesen", async () => {
   const s = await testServer({ claudeClient: { beta: { messages: { stream: () => { throw new Error("darf nicht laufen"); } } } } });
   try {
     const p = await neuePlanung(s);
-    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", body: JSON.stringify({ text: "x", dateien: [{ id: "fehlt0001", name: "a.jpg", art: "bild" }] }) });
+    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "x", dateien: [{ id: "fehlt0001", name: "a.jpg", art: "bild" }] }) });
     assert.equal(r.status, 400);
   } finally { await s.stop(); }
 });

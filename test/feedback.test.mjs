@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { testServer } from "./hilfe.mjs";
 
-const senden = (s, body, wer = "planer@x.de") => fetch(s.url + "/api/feedback", { method: "POST", headers: { "Tailscale-User-Login": wer }, body: JSON.stringify(body) });
+const senden = (s, body, wer = "planer@x.de") => fetch(s.url + "/api/feedback", { method: "POST", headers: { "Tailscale-User-Login": wer, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 test("Feedback wird gespeichert, nur der Inhaber sieht die Liste, neueste oben", async () => {
   const s = await testServer({ lokal: false, inhaber: "chef@x.de" });

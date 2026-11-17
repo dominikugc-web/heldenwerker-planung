@@ -66,3 +66,13 @@ test("roher Pfad mit ..%2f kommt nicht aus web/ heraus", async () => {
     assert.equal(status, 404);
   } finally { await s.stop(); }
 });
+
+test("POST ohne JSON-Kennung wird abgewiesen (Schutz gegen fremde Seiten)", async () => {
+  const s = await testServer();
+  try {
+    const r = await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ projektId: 1 }) });
+    assert.equal(r.status, 415);
+    const ok = await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 1 }) });
+    assert.equal(ok.status, 201);
+  } finally { await s.stop(); }
+});

@@ -66,7 +66,7 @@ test("POST /api/projekte ohne Pflichtangaben antwortet 400 ohne HERO-Aufruf", as
   let aufrufe = 0;
   const s = await testServer({ heroKey: "k", heroFetch: async () => { aufrufe++; return new Response("{}"); } });
   try {
-    const r = await fetch(s.url + "/api/projekte", { method: "POST", body: JSON.stringify({ titel: "PV" }) });
+    const r = await fetch(s.url + "/api/projekte", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ titel: "PV" }) });
     assert.equal(r.status, 400);
     assert.equal(aufrufe, 0);
   } finally { await s.stop(); }

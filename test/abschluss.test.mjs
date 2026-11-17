@@ -129,13 +129,13 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach Logbuch-Eintrag in HE
   const heroFetch = async (url, init) => { const b = JSON.parse(init.body); hero.push(b); return new Response(JSON.stringify({ data: { add_logbook_entry: { id: 5 } } })); };
   const s = await testServer({ heroKey: "k", heroFetch });
   try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", body: JSON.stringify({ projektId: 4242, projektTitel: "Fremd" }) })).json();
-    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST" })).status, 409);
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 4242, projektTitel: "Fremd" }) })).json();
+    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: { "Content-Type": "application/json" } })).status, 409);
     const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
     const pl = JSON.parse(fs.readFileSync(datei));
     pl.ergebnis = { monteure: MONTEURE, felder: {}, fotos: [], fehlt: [] };
     fs.writeFileSync(datei, JSON.stringify(pl));
-    const r = await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST" });
+    const r = await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: { "Content-Type": "application/json" } });
     assert.equal(r.status, 200);
     const e = await r.json();
     assert.deepEqual(e.ziel, { id: 11541539, umgeleitet: true });

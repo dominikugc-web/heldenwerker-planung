@@ -43,7 +43,7 @@ test("Route: zusammenfassen speichert Ergebnis mit fehlt, PUT prüft Änderungen
   const felder = await ladeFelder();
   const s = await testServer({ claudeClient: client(await antwortVon(felder)) });
   try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
     const dir = path.join(s.datenDir, "planungen", p.id, "dateien");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "bild0001"), "JPEG");
@@ -52,7 +52,7 @@ test("Route: zusammenfassen speichert Ergebnis mit fehlt, PUT prüft Änderungen
     pl.verlauf.push({ rolle: "planer", text: "Dach", zeit: "t", dateien: [{ id: "bild0001", name: "Dach.jpg", art: "bild" }] });
     fs.writeFileSync(path.join(s.datenDir, "planungen", p.id, "planung.json"), JSON.stringify(pl));
 
-    const r = await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST" });
+    const r = await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } });
     assert.equal(r.status, 200);
     const e = await r.json();
     assert.equal(e.fehlt.length, 11);
@@ -72,11 +72,23 @@ test("Route: Protokoll-PDF zur Vorschau", async () => {
   const felder = await ladeFelder();
   const s = await testServer({ claudeClient: client(await antwortVon(felder)) });
   try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
     assert.equal((await fetch(s.url + `/api/planungen/${p.id}/protokoll.pdf`)).status, 409);
-    await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST" });
+    await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } });
     const r = await fetch(s.url + `/api/planungen/${p.id}/protokoll.pdf`);
     assert.equal(r.status, 200);
     assert.equal(r.headers.get("content-type"), "application/pdf");
+  } finally { await s.stop(); }
+});
+
+test("Route: Fotos mit unbekannter ID aus Claudes Antwort werden verworfen", async () => {
+  const felder = await ladeFelder();
+  const s = await testServer({ claudeClient: client(await antwortVon(felder, { fotos: [{ dateiId: "", pflichtfoto: "Weitere" }] })) });
+  try {
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
+    const e = await (await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } })).json();
+    assert.deepEqual(e.fotos, []);
+    const r = await fetch(s.url + `/api/planungen/${p.id}/ergebnis`, { method: "PUT", body: JSON.stringify(e) });
+    assert.equal(r.status, 200);
   } finally { await s.stop(); }
 });

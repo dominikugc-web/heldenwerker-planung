@@ -76,6 +76,8 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     if (!pfad.startsWith("/api/")) return statisch(webDir, pfad, res);
     const wer = person(req, lokal);
     if (!wer) return json(res, 401, { fehler: "Nur über Tailscale erreichbar" });
+    // POST nur mit JSON-Kennung: Browser schicken dann erst eine CORS-Vorabfrage, fremde Seiten scheitern daran.
+    if (req.method === "POST" && !String(req.headers["content-type"] || "").startsWith("application/json")) return json(res, 415, { fehler: "Bitte als JSON senden" });
     const treffer = finde(req.method, pfad);
     if (!treffer) return json(res, 404, { fehler: "Unbekannte Adresse" });
     try {

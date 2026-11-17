@@ -49,6 +49,8 @@ route("POST", "/api/planungen/:id/zusammenfassen", async (req, res, p, k) => {
   const felder = await ladeFelder();
   const { ergebnis, usage } = await claude.zusammenfassen(k.planungen.alsNachrichten(pl), felder, fotoIds(pl));
   ergebnisPruefen(ergebnis, felder);
+  const ids = new Set(fotoIds(pl));
+  ergebnis.fotos = ergebnis.fotos.filter((f) => ids.has(f.dateiId));
   const neu = k.planungen.laden(p.id); // frisch laden: der Aufruf dauert, in der Zeit kann eine Nachricht dazugekommen sein
   neu.ergebnis = mitFehlt(ergebnis);
   neu.status = "zusammengefasst";
