@@ -15,6 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
 import "./routen-planungen.mjs";
 import "./feedback.mjs";
+import { erstelleProfile } from "./profile.mjs";
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json", ".pdf": "application/pdf" };
@@ -69,7 +70,8 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     dateien: { logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text) },
     ablage: null,
   });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber };
+  const profile = erstelleProfile({ datenDir, inhaber });
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
@@ -82,7 +84,7 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     const treffer = finde(req.method, pfad);
     if (!treffer) return json(res, 404, { fehler: "Unbekannte Adresse" });
     try {
-      await treffer.r.handler(req, res, treffer.params, { ...kontext, person: wer, query: new URL(req.url, "http://x").searchParams });
+      await treffer.r.handler(req, res, treffer.params, { ...kontext, person: wer, profil: profile.fuer(wer, req.headers["tailscale-user-name"]), query: new URL(req.url, "http://x").searchParams });
     } catch (e) {
       if (!res.headersSent) json(res, e.eigen ? e.status : 500, { fehler: e.eigen ? e.message : "Interner Fehler" });
       else res.end();

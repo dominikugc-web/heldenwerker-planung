@@ -3,11 +3,12 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { ladeJson, speichereJson } from "./speicher.mjs";
+import { istAdmin } from "./profile.mjs";
 
 const ARTEN = ["idee", "fehler", "frage"];
 const datei = (k) => path.join(k.datenDir, "feedback.json");
 const bildOrdner = (k) => path.join(k.datenDir, "feedback-bilder");
-const nurInhaber = (k) => { if (!k.inhaber || k.person !== k.inhaber) throw fehler(403, "Nur für den Inhaber"); };
+const nurInhaber = (k) => { if (!istAdmin(k)) throw fehler(403, "Nur für Admins"); };
 
 // Lampe: jeder darf schreiben, nur der Inhaber (PLANUNG_INHABER) liest.
 route("POST", "/api/feedback", async (req, res, p, k) => {

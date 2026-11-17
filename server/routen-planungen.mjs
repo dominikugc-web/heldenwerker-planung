@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { istAdmin } from "./profile.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf, PFLICHTFOTOS, BEREICHE } from "./protokoll.mjs";
@@ -93,8 +94,9 @@ route("GET", "/api/planungen/:id/dateien/:dateiId", (req, res, p, k) => {
 
 route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
   login: k.person,
-  name: String(req.headers["tailscale-user-name"] || "").trim() || k.person,
-  inhaber: !!k.inhaber && k.person === k.inhaber,
+  name: k.profil.name,
+  rolle: k.profil.rolle,
+  inhaber: istAdmin(k),
 }));
 
 route("GET", "/api/protokoll-felder", async (req, res, p, k) => json(res, 200, { felder: await ladeFelder(), pflichtfotos: PFLICHTFOTOS, bereiche: BEREICHE }));
