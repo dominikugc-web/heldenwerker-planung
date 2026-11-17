@@ -103,3 +103,16 @@ test("HERO-Schlüssel: eigener aus planung.env vor dem allgemeinen", async () =>
   fs.writeFileSync(path.join(home, ".hero", "planung.env"), "HERO_GRAPHQL_KEY=planung\n");
   assert.equal(heroSchluessel(home), "planung");
 });
+
+test("Fehlerbericht der Oberfläche landet im Server-Log, gekürzt", async () => {
+  const s = await testServer();
+  const alt = console.error, zeilen = [];
+  console.error = (...a) => zeilen.push(a.join(" "));
+  try {
+    const r = await fetch(s.url + "/api/fehlerbericht", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ort: "aufnahme", meldung: "NotSupportedError: " + "x".repeat(2000), geraet: "iPhone Safari" }) });
+    assert.equal(r.status, 204);
+    const z = zeilen.find((l) => l.includes("Oberfläche"));
+    assert.ok(z && z.includes("aufnahme") && z.includes("NotSupportedError") && z.includes("iPhone"));
+    assert.ok(z.length < 1200);
+  } finally { console.error = alt; await s.stop(); }
+});

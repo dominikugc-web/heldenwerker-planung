@@ -109,3 +109,11 @@ route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
 }));
 
 route("GET", "/api/protokoll-felder", async (req, res, p, k) => json(res, 200, { felder: await ladeFelder(), pflichtfotos: PFLICHTFOTOS, bereiche: BEREICHE }));
+
+// Fehler aus der Oberfläche (z. B. Aufnahme am iPhone) ins Server-Log, damit man sie ohne Gerät nachlesen kann.
+route("POST", "/api/fehlerbericht", async (req, res, p, k) => {
+  const b = await leseJson(req, 20_000);
+  const kurz = (s, n) => String(s ?? "").replace(/\s+/g, " ").slice(0, n);
+  console.error(`[Oberfläche] ${new Date().toISOString()} ${k.person} ${kurz(b.ort, 40)}: ${kurz(b.meldung, 800)} | ${kurz(b.geraet, 200)}`);
+  res.writeHead(204); res.end();
+});
