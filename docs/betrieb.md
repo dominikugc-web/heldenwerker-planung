@@ -2,7 +2,12 @@
 
 ## Server starten
 
-Doppelklick auf `start.cmd` (oder `npm start`). Der Server lauscht nur auf `127.0.0.1:8790`.
+- **Im Hintergrund (empfohlen):** Doppelklick auf `start-hintergrund.vbs` (oder die Desktop-Verknüpfung „Heldenwerker Planung“). Kein Fenster, Ausgaben in `daten/server.log`.
+- **Beenden:** `stop.cmd` (oder Verknüpfung „Heldenwerker Planung stoppen“).
+- **Mit Fenster (zum Zuschauen):** `start.cmd`.
+
+Der Server lauscht nur auf `127.0.0.1:8790`. Läuft schon einer, beendet sich ein zweiter Start sofort wieder.
+Automatisch nach dem Anmelden: Verknüpfung nach `shell:startup` kopieren.
 Schlüssel: `~/.hero/planung.env` (`HERO_GRAPHQL_KEY=`, `PLANUNG_INHABER=` Tailscale-Login des Inhabers), `~/.anthropic/planung.env` (`ANTHROPIC_API_KEY=`).
 Daten: Ordner `daten/` (Planungen, Fotos, Feedback). Nicht im Repo.
 
