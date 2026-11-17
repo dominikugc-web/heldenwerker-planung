@@ -14,6 +14,9 @@ export class HeroFehler extends Error {
 const PROJEKT_FELDER = "id project_nr project_title name customer { full_name company_name } address { street zipcode city } current_project_match_status { name }";
 
 const trim = (s) => (s || "").trim();
+// HERO speichert Logbuch-Text als HTML (Zeilenumbruch = <br />).
+const ENT = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&nbsp;": " " };
+export const alsText = (s) => trim(String(s || "").replace(/<br\s*\/?>\s*\n?/gi, "\n").replace(/<[^>]+>/g, "").replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ENT[m]));
 const name = (c) => trim(c?.full_name) || trim(c?.company_name);
 export function alsProjekt(p) {
   const a = p.address || {};
@@ -59,12 +62,12 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
         ...alsProjekt(p),
         kontakt: { name: name(k), telefon: k.phone_mobile || k.phone_home || "", email: k.email || "" },
         dateien: (p.file_uploads || []).map((f) => ({ id: f.id, name: f.filename, url: f.url })),
-        logbuch: h.project_histories.map((e) => ({ datum: e.created, text: trim(e.custom_text) || trim(e.custom_title) })).filter((e) => e.text),
+        logbuch: h.project_histories.map((e) => ({ datum: e.created, text: alsText(e.custom_text) || alsText(e.custom_title) })).filter((e) => e.text),
       };
     },
     async termineLaden(von, bis) {
-      const d = await abfrage(`query($von:DateTime,$bis:DateTime){ calendar_events(start:$von, end:$bis, first:500){ id title start end project_match_id category { name } } }`, { von, bis });
-      return d.calendar_events.map((t) => ({ id: t.id, titel: t.title, start: t.start, ende: t.end, projektId: t.project_match_id || null, kategorie: t.category?.name || "" }));
+      const d = await abfrage(`query($von:DateTime,$bis:DateTime){ calendar_events(start:$von, end:$bis, first:500){ id title start end all_day project_match_id category { name } } }`, { von, bis });
+      return d.calendar_events.map((t) => ({ id: t.id, titel: t.title, start: t.start, ende: t.end, projektId: t.project_match_id || null, kategorie: t.category?.name || "", ganztags: !!t.all_day }));
     },
     async terminKategorien() {
       const d = await abfrage(`{ calendar_event_categories { id name } }`);

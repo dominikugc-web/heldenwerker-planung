@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
-import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf } from "./protokoll.mjs";
+import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf, PFLICHTFOTOS } from "./protokoll.mjs";
 
 route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste()));
 route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, k.planungen.laden(p.id)));
@@ -96,3 +96,6 @@ route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
   name: String(req.headers["tailscale-user-name"] || "").trim() || k.person,
   inhaber: !!k.inhaber && k.person === k.inhaber,
 }));
+
+const BEREICHE = ["Objekt und Kunde", "PV-System und Angebot", "DC und Dachmontage", "Gerüst, Sicherheit, Dachfreigabe", "AC und Elektro PV", "Wärmepumpe Bestand", "WP-Standort und Leitungsweg"];
+route("GET", "/api/protokoll-felder", async (req, res, p, k) => json(res, 200, { felder: await ladeFelder(), pflichtfotos: PFLICHTFOTOS, bereiche: BEREICHE }));

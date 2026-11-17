@@ -53,10 +53,10 @@ test("ohne HERO-Schlüssel antwortet die Route 503", async () => {
 });
 
 test("Termine bekommen Zeitraum als Variablen und werden abgebildet", async () => {
-  const f = attrappe({ data: { calendar_events: [{ id: 1, title: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", end: "2026-11-18T10:00:00+01:00", project_match_id: 7, category: { name: "Besichtigung" } }] } });
+  const f = attrappe({ data: { calendar_events: [{ id: 1, title: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", end: "2026-11-18T10:00:00+01:00", project_match_id: 7, all_day: false, category: { name: "Besichtigung" } }] } });
   const t = await erstelleHero({ key: "k", fetch: f }).termineLaden("2026-11-18T00:00:00Z", "2026-11-19T00:00:00Z");
   assert.equal(f.aufrufe[0].body.variables.von, "2026-11-18T00:00:00Z");
-  assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kategorie: "Besichtigung" });
+  assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kategorie: "Besichtigung", ganztags: false });
 });
 
 test("projektLaden nimmt das Logbuch aus histories, neueste zuerst, höchstens 30", async () => {
@@ -68,4 +68,10 @@ test("projektLaden nimmt das Logbuch aus histories, neueste zuerst, höchstens 3
   assert.deepEqual(p.logbuch[0], { datum: "2026-11-40", text: "Eintrag 0" });
   assert.deepEqual(p.kontakt, { name: "Jörg Müller", telefon: "0170", email: "j@x.de" });
   assert.deepEqual(p.dateien, [{ id: 3, name: "Dach.jpg", url: "u" }]);
+});
+
+test("Logbuch-Text aus HERO: <br /> wird zu Zeilenumbruch, andere Tags verschwinden", async () => {
+  const f = attrappe({ data: { project_match: { ...PM, contact: {}, file_uploads: [], histories: [{ created: "2026-11-17", custom_title: "", custom_text: "Für die Monteure<br />\n<br />\n• <b>Hund</b> &amp; Katze" }] } } });
+  const p = await erstelleHero({ key: "k", fetch: f }).projektLaden(7);
+  assert.equal(p.logbuch[0].text, "Für die Monteure\n\n• Hund & Katze");
 });

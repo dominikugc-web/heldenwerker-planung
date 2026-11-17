@@ -1,0 +1,26 @@
+{
+  "/api/gesund": { "ok": true, "hero": false, "claude": false },
+  "/api/ich": { "login": "demo", "name": "Demo", "inhaber": false },
+  "/api/projekte": [
+    { "id": 1001, "nummer": "DEMO-101", "titel": "PV 9,9 kWp mit Speicher", "kunde": "Familie Beispiel", "adresse": "Musterweg 12, 12345 Musterstadt", "status": "Besichtigung" },
+    { "id": 1002, "nummer": "DEMO-102", "titel": "Wärmepumpe Altbau", "kunde": "Erika Muster", "adresse": "Lindenstraße 4, 12345 Musterstadt", "status": "Angebot" },
+    { "id": 1003, "nummer": "DEMO-103", "titel": "PV und Wallbox", "kunde": "Muster GmbH", "adresse": "Industriering 7, 12345 Musterstadt", "status": "Neu" }
+  ],
+  "/api/projekte/1001": { "id": 1001, "nummer": "DEMO-101", "titel": "PV 9,9 kWp mit Speicher", "kunde": "Familie Beispiel", "adresse": "Musterweg 12, 12345 Musterstadt", "status": "Besichtigung",
+    "kontakt": { "name": "Familie Beispiel", "telefon": "0123 456789", "email": "" }, "dateien": [],
+    "logbuch": [{ "datum": "2026-11-10T09:00:00Z", "text": "Projekt angelegt (Demo)." }] },
+  "/api/projekte/1002": { "id": 1002, "nummer": "DEMO-102", "titel": "Wärmepumpe Altbau", "kunde": "Erika Muster", "adresse": "Lindenstraße 4, 12345 Musterstadt", "status": "Angebot",
+    "kontakt": { "name": "Erika Muster", "telefon": "", "email": "" }, "dateien": [], "logbuch": [] },
+  "/api/projekte/1003": { "id": 1003, "nummer": "DEMO-103", "titel": "PV und Wallbox", "kunde": "Muster GmbH", "adresse": "Industriering 7, 12345 Musterstadt", "status": "Neu",
+    "kontakt": { "name": "Muster GmbH", "telefon": "", "email": "" }, "dateien": [], "logbuch": [] },
+  "/api/termine": [],
+  "/api/termin-kategorien": [{ "id": 1, "name": "TB" }],
+  "/api/planungen": [
+    { "id": "demo-planung-1", "projektId": 1001, "projektTitel": "DEMO-101, Familie Beispiel, Musterweg 12, 12345 Musterstadt", "person": "demo", "erstellt": "2026-11-17T08:00:00Z", "status": "offen", "kostenCent": 2.1, "nachrichten": 2 }
+  ],
+  "/api/planungen/demo-planung-1": { "id": "demo-planung-1", "projektId": 1001, "projektTitel": "DEMO-101, Familie Beispiel, Musterweg 12, 12345 Musterstadt", "person": "demo", "erstellt": "2026-11-17T08:00:00Z", "status": "offen", "kostenCent": 2.1,
+    "verlauf": [
+      { "rolle": "planer", "text": "PV-Besichtigung. Satteldach Süd, Frankfurter Pfanne, Zählerschrank im Keller.", "dateien": [], "zeit": "2026-11-17T08:01:00Z" },
+      { "rolle": "claude", "text": "Alles notiert. Zwei Fragen: Wie groß ist das Dach ungefähr, und wo soll der Wechselrichter hin? Schick gern schon Fotos vom Dach und vom Zählerschrank.", "dateien": [], "zeit": "2026-11-17T08:01:05Z" }
+    ], "ergebnis": null, "gesendet": { "dateien": {}, "logbuch": false } }
+}

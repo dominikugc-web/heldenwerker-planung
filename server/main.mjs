@@ -40,7 +40,8 @@ function statisch(webDir, pfad, res) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     return res.end("Nicht gefunden");
   }
-  res.writeHead(200, { "Content-Type": TYPEN[path.extname(datei)] || "application/octet-stream" });
+  // no-cache: nach einem Update holt jedes Handy sofort die neue Oberfläche.
+  res.writeHead(200, { "Content-Type": TYPEN[path.extname(datei)] || "application/octet-stream", "Cache-Control": "no-cache" });
   fs.createReadStream(datei).pipe(res);
 }
 

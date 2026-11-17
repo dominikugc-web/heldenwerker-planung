@@ -88,3 +88,14 @@ test("protokollPdf ersetzt Zeichen, die die PDF-Schrift nicht kann", async () =>
   const ergebnis = { monteure: {}, fotos: [], felder: { ...leer(felder), kundenname: "Kunde 😀 Ćosić" } };
   await assert.doesNotReject(protokollPdf(ergebnis, felder));
 });
+
+test("Route liefert Felder und Pflichtfotos für die Prüfansicht", async () => {
+  const { testServer } = await import("./hilfe.mjs");
+  const s = await testServer();
+  try {
+    const r = await (await fetch(s.url + "/api/protokoll-felder")).json();
+    assert.equal(r.pflichtfotos.length, 12);
+    assert.ok(r.felder.some((f) => f.name === "dachbelag" && f.optionen.includes("Pfanne")));
+    assert.deepEqual(r.bereiche.length, 7);
+  } finally { await s.stop(); }
+});

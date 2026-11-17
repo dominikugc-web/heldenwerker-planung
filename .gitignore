@@ -2,3 +2,4 @@ node_modules/
 daten/
 .superpowers/
 *.log
+daten-test/
