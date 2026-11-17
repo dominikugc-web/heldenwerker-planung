@@ -34,6 +34,7 @@ addEventListener("hashchange", zeigen);
 
 // Hinweise oben: Demo, Erlaubnis für das lokale Netz, Testmodus.
 function banner() {
+  if (zustand.offline) return `<div class="banner" role="status">Offline. Begonnene Besichtigungen laufen weiter, alles wird hochgeladen, sobald wieder Netz da ist.<button data-verbinden>Erneut verbinden</button></div>`;
   if (zustand.demo) return `<div class="banner blau" role="status">Demo, nicht verbunden. ${zustand.server ? "Server nicht erreichbar." : "Server-Adresse fehlt."}<button data-verbinden>${zustand.server ? "Erneut verbinden" : "Einrichten"}</button></div>`;
   return `<div class="banner" role="status">Testmodus: Speichern geht nach UNB-1149 oder in TEST-Projekte.</div>`;
 }
@@ -371,6 +372,8 @@ document.addEventListener("focusout", () => setTimeout(() => {
 }, 60));
 
 // ---------- Start ----------
+// Service Worker: App-Dateien auf dem Gerät, damit die App auch ohne Netz startet.
+navigator.serviceWorker?.register("sw.js").catch((e) => console.warn("Service Worker:", e));
 (async () => {
   if (await brauchtKlick()) { zustand.demo = true; }
   else await verbinden();

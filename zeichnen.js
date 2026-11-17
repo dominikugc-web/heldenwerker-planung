@@ -10,7 +10,7 @@ export function zeichnen(blob) {
     const el = document.createElement("div");
     el.className = "zeichnen";
     el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Im Foto zeichnen");
-    el.innerHTML = `<div class="oben"><button class="pill" data-abbrechen>Abbrechen</button><button class="pill" data-fertig style="background:#fff;color:#000;font-weight:600">Fertig</button></div>
+    el.innerHTML = `<div class="oben"><button class="pill" data-abbrechen>Abbrechen</button><button class="pill" data-fertig style="background:#fff;color:#000;font-weight:600">Speichern</button></div>
       <div class="flaeche"><canvas></canvas></div>
       <div class="werkzeuge">${FARBEN.map(([f, n], i) => `<button class="farbe" style="background:${f}" data-farbe="${f}" aria-label="${n}" aria-pressed="${i === 0}"></button>`).join("")}
         <button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
@@ -69,10 +69,12 @@ export function zeichnen(blob) {
       if (b.dataset.farbe) { farbe = b.dataset.farbe; el.querySelectorAll("[data-farbe]").forEach((x) => x.setAttribute("aria-pressed", x === b)); }
       if (b.dataset.werkzeug) { werkzeug = b.dataset.werkzeug; el.querySelectorAll("[data-werkzeug]").forEach((x) => x.setAttribute("aria-pressed", x === b)); }
       if ("rueck" in b.dataset) { striche.pop(); malen(); }
-      if ("abbrechen" in b.dataset) schliessen(null);
+      if ("abbrechen" in b.dataset && verwerfen()) schliessen(null);
       if ("fertig" in b.dataset) striche.length ? c.toBlob((neu) => schliessen(neu), "image/jpeg", 0.88) : schliessen(null);
     });
-    const taste = (e) => { if (e.key === "Escape") schliessen(null); };
+    const taste = (e) => { if (e.key === "Escape" && verwerfen()) schliessen(null); };
+    // Mit Zeichnung erst nachfragen, damit nichts aus Versehen verloren geht.
+    const verwerfen = () => !striche.length || confirm("Zeichnung verwerfen? Sie wird nicht gespeichert.");
     document.addEventListener("keydown", taste);
     function schliessen(ergebnis) { document.removeEventListener("keydown", taste); URL.revokeObjectURL(url); el.remove(); fertig(ergebnis); }
   });
