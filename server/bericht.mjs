@@ -45,6 +45,7 @@ export function fehltPflichtfotos(pl) {
 }
 
 // ---------- PDF ----------
+const STREIFEN = rgb(0.935, 0.94, 0.945); // leichtes Grau für jede zweite Zeile
 const BLAU = rgb(0.22, 0.71, 1), BAND = rgb(0.9, 0.96, 1), BAND_HELL = rgb(0.95, 0.98, 1), TEXT = rgb(0.13, 0.13, 0.15), GRAU = rgb(0.42, 0.44, 0.48), LINK = rgb(0.05, 0.4, 0.75);
 const RAND = 45, BREITE = 595 - 2 * RAND, LABEL_B = 230, WERT_X = RAND + 255, WERT_B = 595 - RAND - (RAND + 255);
 const LOGO = new URL("../vorlagen/logo.png", import.meta.url);
@@ -86,6 +87,7 @@ export async function berichtPdf(pl, { links = {}, bild }) {
     const w = fett.widthOfTextAtSize(winAnsi(s), groesse);
     text(s, RAND + (BREITE - w) / 2, fett, groesse);
     y -= groesse + 22;
+    streifenNr = 0;
   };
   const link = (url, x1, y1, x2, y2) => {
     const annot = doc.context.obj({ Type: "Annot", Subtype: "Link", Rect: [x1, y1, x2, y2], Border: [0, 0, 0],
@@ -94,11 +96,14 @@ export async function berichtPdf(pl, { links = {}, bild }) {
     const vorhanden = seite.node.lookup(PDFName.of("Annots"));
     if (vorhanden) vorhanden.push(ref); else seite.node.set(PDFName.of("Annots"), doc.context.obj([ref]));
   };
-  const zeile = (frage, antwort, notiz, einzug = 0) => {
+  // Zeilen abwechselnd weiß und hellgrau, damit man beim Lesen in der Zeile bleibt; jeder Abschnitt beginnt weiß.
+  let streifenNr = 0;
+  const zeile = (frage, antwort, notiz, { einzug = 6, streifen = true } = {}) => {
     const l = umbrechen(frage, fett, 9.5, LABEL_B - einzug), w = umbrechen(antwort || "", normal, 9.5, WERT_B), n = notiz ? umbrechen("Notiz: " + notiz, kursiv, 8.5, WERT_B) : [];
     const hoehe = Math.max(l.length, w.length + n.length) * 12.5 + 8;
     platz(hoehe);
     const start = y;
+    if (streifen && streifenNr++ % 2) seite.drawRectangle({ x: RAND, y: start - hoehe + 9.5, width: BREITE, height: hoehe, color: STREIFEN });
     l.forEach((s, i) => { y = start - i * 12.5; text(s, RAND + einzug, fett, 9.5); });
     w.forEach((s, i) => { y = start - i * 12.5; text(s, WERT_X, normal, 9.5); });
     n.forEach((s, i) => { y = start - (w.length + i) * 12.5; text(s, WERT_X, kursiv, 8.5, GRAU); });
@@ -111,7 +116,7 @@ export async function berichtPdf(pl, { links = {}, bild }) {
   const fotoKarte = async (e) => {
     platz(40 + 160); // Überschrift nicht allein unten lassen: mit der ersten Fotoreihe zusammen
     const k = { seite, oben: y + 9.5 + P - 2 }; // Grundlinie + Schrifthöhe + Rand
-    zeile(e.frage, e.antwort, e.notiz, P);
+    zeile(e.frage, e.antwort, e.notiz, { einzug: P, streifen: false });
     let unten = y + 12.5 + 8 - 3, erste = true; // Unterkante der letzten Textzeile
     const b = (BREITE - 2 * P - 2 * LUECKE) / 3, maxH = 150;
     for (let i = 0; i < e.bilder.length; i += 3) {
@@ -129,6 +134,7 @@ export async function berichtPdf(pl, { links = {}, bild }) {
     }
     kaestchen(k, unten - P);
     y = unten - P - 30; // deutlicher Abstand zur nächsten Überschrift
+    streifenNr = 0; // nach dem Kästchen wieder weiß anfangen
   };
   const medien = (liste) => {
     for (const m of liste) {
@@ -152,7 +158,7 @@ export async function berichtPdf(pl, { links = {}, bild }) {
   if (monteure && ABSCHNITTE_MONTEURE.some(([k]) => monteure[k]?.length)) {
     band("Für die Monteure", BAND_HELL, 11.5);
     for (const [k, t] of ABSCHNITTE_MONTEURE) if (monteure[k]?.length) zeile(t, monteure[k].map((s) => "• " + s).join("\n"));
-    y -= 6;
+    y -= 14; // Luft vor dem nächsten Balken, auch wenn die letzte Zeile grau ist
   }
   for (const ab of berichtAbschnitte(pl)) {
     platz(ab.eintraege[0]?.bilder.length ? 40 + 200 : 80); // Balken nicht allein unten: mit dem ersten Eintrag zusammen
@@ -162,7 +168,7 @@ export async function berichtPdf(pl, { links = {}, bild }) {
       else zeile(e.frage, e.antwort || (e.medien.length ? "" : "nicht angegeben"), e.notiz);
       if (e.medien.length) { medien(e.medien); y -= 6; }
     }
-    y -= 6;
+    y -= 14; // Luft vor dem nächsten Balken, auch wenn die letzte Zeile grau ist
   }
 
   // Fußzeile mit Seitenzahl
