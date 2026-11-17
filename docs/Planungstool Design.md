@@ -174,3 +174,12 @@ Ordner- und Dateistruktur, Port für Tailscale Serve (Klartext belegt 443 und Fu
 
 - [[HERO KI Schnittstelle und Heldenwerker Brain]]
 - [[00 Heldenwerker – Überblick]]
+
+## Nachtrag 17.11.2026: Profile und Feedback-Postfach
+
+Dominik hat entschieden: keine zweite Admin-App und keine Testfassung. Er bekommt Feedback in der App, gibt Claude im Chat die Änderungen, und Claude spielt sie direkt live.
+
+- **Profile:** automatisch aus dem Tailscale-Login (Name, Rolle `admin` oder `planer`, zuletzt aktiv). Der Inhaber (`PLANUNG_INHABER`) ist Admin. Admins sehen in den Einstellungen „Team“ und können Name und Rolle ändern. Der letzte Admin kann sich nicht selbst herabstufen.
+- **Wer was macht:** Name des Anlegers an jeder Planung (Listen, Prüfansicht) und „Aufgenommen von …“ im HERO-Logbuch.
+- **Feedback:** Status neu oder erledigt, nur Admins sehen und ändern ihn. Roter Punkt an der Lampe, solange es neue Feedbacks gibt.
+- **Später:** feinere Rechte pro Rolle, Antworten an den Planer.
