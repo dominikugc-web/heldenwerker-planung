@@ -99,7 +99,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     webDir: path.join(wurzel, "web"),
     datenDir: process.env.PLANUNG_DATEN || path.join(wurzel, "daten"),
     lokal: process.env.PLANUNG_LOKAL === "1",
-    inhaber: process.env.PLANUNG_INHABER || (process.env.PLANUNG_LOKAL === "1" ? "Lokal" : null),
+    inhaber: process.env.PLANUNG_INHABER || ladeSchluessel(".hero/planung.env", "PLANUNG_INHABER") || (process.env.PLANUNG_LOKAL === "1" ? "Lokal" : null),
   });
   console.log("Planung läuft auf http://127.0.0.1:" + s.address().port);
 }
