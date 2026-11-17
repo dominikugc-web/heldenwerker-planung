@@ -55,5 +55,6 @@ export function relativ(iso) {
   const tage = Math.round((new Date(tagSchluessel(Date.now())) - new Date(tagSchluessel(iso))) / 864e5);
   return tage === 0 ? "heute " + uhrzeit(iso) : tage === 1 ? "gestern" : tage < 7 ? `vor ${tage} Tagen` : datumKurz(iso);
 }
-export const istBesichtigung = (t) => /besichtigung/i.test(t.kategorie) || t.kategorie === "TB";
+// In HERO heißen Besichtigungen „Vor-Ort-Termin“ (geprüft 17.11.2026).
+export const istBesichtigung = (t) => /besichtigung|vor-ort/i.test(t.kategorie) || t.kategorie === "TB";
 export const euro = (cent) => (cent / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
