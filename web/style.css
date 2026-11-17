@@ -220,3 +220,4 @@ details.bereich[open] summary { border-bottom: 1px solid var(--line); }
 .ergebnis .zeile { min-height: 44px; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+.fbbtn.ungelesen::after { content: ""; position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--err); box-shadow: 0 0 0 2px var(--panel); }
