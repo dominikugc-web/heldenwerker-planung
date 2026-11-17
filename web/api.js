@@ -1,4 +1,6 @@
 // Verbindung zum Server auf dem PC (über Tailscale). Ohne Server: Demo mit erfundenen Daten.
+// Ohne Netz (Gerät war schon verbunden): offline, gelesen wird aus der Ablage auf dem Gerät.
+import { ablage } from "./lokal.js";
 const speicher = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* privates Fenster */ } },
@@ -7,7 +9,7 @@ export { speicher };
 
 // Kommt die Seite vom eigenen Server, ist die Adresse leer (gleiche Herkunft). Auf GitHub Pages trägt man sie in den Einstellungen ein.
 const vonGithub = location.hostname.endsWith("github.io");
-export const zustand = { server: vonGithub ? (speicher.get("planung-server") || "") : "", verbunden: false, demo: false, gesund: null, ich: null };
+export const zustand = { server: vonGithub ? (speicher.get("planung-server") || "") : "", verbunden: false, demo: false, offline: false, gesund: null, ich: null };
 
 export class VerbindungsFehler extends Error {}
 export class ServerFehler extends Error { constructor(m, status) { super(m); this.status = status; } }
@@ -39,9 +41,13 @@ export async function verbinden() {
     if (!r.ok) throw new Error();
     zustand.gesund = await r.json();
     zustand.ich = await (await fetch(zustand.server + "/api/ich")).json();
-    zustand.verbunden = true; zustand.demo = false;
+    speicher.set("planung-ich", JSON.stringify(zustand.ich));
+    zustand.verbunden = true; zustand.demo = false; zustand.offline = false;
   } catch {
-    zustand.verbunden = false; zustand.demo = true;
+    zustand.verbunden = false;
+    // Schon einmal verbunden: kein Demo, sondern offline weiterarbeiten.
+    const ich = speicher.get("planung-ich");
+    if (ich) { zustand.offline = true; zustand.demo = false; zustand.ich = JSON.parse(ich); } else zustand.demo = true;
   }
   return zustand.verbunden;
 }
@@ -57,12 +63,24 @@ export async function api(pfad, { methode = "GET", body, signal } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch (e) {
     if (e.name === "AbortError") throw e;
-    throw new VerbindungsFehler("Keine Verbindung zum Server");
+    return ohneNetz(pfad, methode);
   }
   const daten = await r.json().catch(() => ({}));
+  // 502 bis 504 ohne eigene Meldung kommt von Tailscale, wenn der PC aus ist: wie kein Netz behandeln.
+  if (r.status >= 502 && r.status <= 504 && !daten.fehler) return ohneNetz(pfad, methode);
   if (!r.ok) throw new ServerFehler(daten.fehler || "Fehler " + r.status, r.status);
+  zustand.offline = false; zustand.verbunden = true;
+  if (methode === "GET") ablage.set("get:" + pfad, daten).catch(() => {});
   return daten;
 }
+async function ohneNetz(pfad, methode) {
+  zustand.offline = true;
+  const alt = methode === "GET" ? await ablage.get("get:" + pfad).catch(() => null) : null;
+  if (alt) return alt;
+  throw new VerbindungsFehler("Keine Verbindung zum Server");
+}
+// Lokalen Stand merken (z. B. Antworten, die noch im Ausgang liegen), damit er ohne Netz beim Öffnen da ist.
+export const merken = (pfad, daten) => ablage.set("get:" + pfad, daten).catch(() => {});
 
 // Claude-Antwort als Text-Stream; onText bekommt jedes Stück.
 export async function apiStrom(pfad, body, onText) {
@@ -85,8 +103,12 @@ export function hochladen(pfad, blob, onFortschritt) {
     const x = new XMLHttpRequest();
     x.open("PUT", zustand.server + pfad);
     x.upload.onprogress = (e) => e.lengthComputable && onFortschritt?.(e.loaded / e.total);
-    x.onload = () => (x.status < 300 ? ok(JSON.parse(x.responseText)) : fehler(new ServerFehler(safeJson(x.responseText).fehler || "Upload fehlgeschlagen", x.status)));
-    x.onerror = () => fehler(new VerbindungsFehler("Keine Verbindung zum Server"));
+    x.onload = () => {
+      if (x.status < 300) { zustand.offline = false; return ok(JSON.parse(x.responseText)); }
+      const m = safeJson(x.responseText).fehler;
+      fehler(x.status >= 502 && x.status <= 504 && !m ? new VerbindungsFehler("Keine Verbindung zum Server") : new ServerFehler(m || "Upload fehlgeschlagen", x.status));
+    };
+    x.onerror = () => { zustand.offline = true; fehler(new VerbindungsFehler("Keine Verbindung zum Server")); };
     x.send(blob);
   });
 }

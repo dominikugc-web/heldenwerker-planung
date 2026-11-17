@@ -1,5 +1,7 @@
 // Plus-Sheet (neues oder vorhandenes Projekt) und der Planungs-Chat als fester Ablauf.
-import { api, hochladen, dateiUrl, zustand, bericht } from "./api.js";
+import { api, dateiUrl, zustand, bericht, merken } from "./api.js";
+import { ablage, antwortAnwenden, istZahl } from "./lokal.js";
+import { einreihen, abarbeiten, offeneAntworten, dateiBlob, anzahl } from "./ausgang.js";
 import { $, $$, esc, toast, fehlerMelden, sheet, IKON } from "./ui.js";
 import { zeichnen } from "./zeichnen.js";
 
@@ -103,13 +105,25 @@ const mitEinheit = (f, w) => (f.einheit && w ? (f.einheit.startsWith("°") ? w +
 export async function chatAnsicht(el, id) {
   const { katalog: fragen, bereiche } = await ladeKatalog();
   let planung = await api("/api/planungen/" + id);
+  // Antworten, die noch im Ausgang auf dem Gerät liegen, über den (älteren) Stand vom Server legen.
+  for (const op of await offeneAntworten(id).catch(() => [])) {
+    const f = fragen.find((x) => x.id === op.frage);
+    if (f) planung.antworten = antwortAnwenden(planung.antworten || {}, f, op.body, op.meta);
+  }
+  // Fotos, die noch nicht hochgeladen sind, vom Gerät anzeigen.
+  const lokaleUrl = new Map();
+  for (const d of Object.values(planung.antworten || {}).flatMap((a) => a.dateien || [])) {
+    const b = await ablage.get("bild:" + d.id).catch(() => null);
+    if (b) lokaleUrl.set(d.id, URL.createObjectURL(b.blob));
+  }
+  const bildSrc = (d) => lokaleUrl.get(d.id) || dateiUrl(planung.id, d.id, true, d.v);
   let bearbeite = decodeURIComponent(location.hash.split("/")[2] || "") || null; // #chat/<id>/<frage> springt zum Ändern
   if (bearbeite) history.replaceState(null, "", "#chat/" + id); // Neu laden soll nicht wieder zur Frage springen
   const antworten = () => planung.antworten || {};
 
   el.innerHTML = `<div class="chatseite">
     <div class="chatkopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button>
-      <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div></div>
+      <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div><div class="sync" id="sync" role="status" hidden></div></div>
       <button class="pill" data-uebersicht>Übersicht</button></div>
     <div class="fortschritt" aria-hidden="true"><span id="balken"></span></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
@@ -129,9 +143,26 @@ export async function chatAnsicht(el, id) {
   const beiTastatur = () => (verlauf.isConnected ? anheften() : vv.removeEventListener("resize", beiTastatur));
   vv?.addEventListener("resize", beiTastatur); // nach sichtbarerBereich() in app.js, die Höhe ist dann schon gesetzt
 
+  // Ausgang: zeigen, was noch hochgeladen wird; Stand vom Server übernehmen, sobald für diese Planung alles oben ist.
+  const syncZeigen = (offen) => {
+    const s = $("#sync", el);
+    s.hidden = !offen;
+    s.textContent = zustand.offline ? `☁ Offline gespeichert · ${offen} warten auf Netz` : `☁ Lädt hoch … ${offen} offen`;
+  };
+  const beiAusgang = ({ detail: d }) => {
+    if (!el.isConnected || !$("#verlauf", el)) return removeEventListener("ausgang", beiAusgang);
+    syncZeigen(d.offen);
+    if (d.abgelehnt) toast("Nicht gespeichert: " + d.abgelehnt, "fehler");
+    if (d.planungId === planung.id && d.antworten) { planung.antworten = d.antworten; merken("/api/planungen/" + planung.id, planung); zeichne(true); }
+    if (d.offen === 0 && d.planungId === planung.id) toast("Alles hochgeladen", "ok");
+  };
+  addEventListener("ausgang", beiAusgang);
+  anzahl().then((n) => { syncZeigen(n); if (n) abarbeiten(); }).catch(() => {});
+
   const aktuelleFrage = () => (bearbeite && fragen.find((f) => f.id === bearbeite)) || sichtbar(fragen, antworten()).find((f) => !erledigt(antworten()[f.id])) || null;
 
-  function zeichne() {
+  function zeichne(nurVerlauf = false) {
+    const scrollVorher = verlauf.scrollTop;
     const liste = sichtbar(fragen, antworten()), akt = aktuelleFrage();
     const fertig = liste.filter((f) => erledigt(antworten()[f.id])).length;
     $("#balken", el).style.width = Math.round((fertig / Math.max(liste.length, 1)) * 100) + "%";
@@ -144,6 +175,8 @@ export async function chatAnsicht(el, id) {
       return frage + antwortHtml(f, a);
     }).join("") || "";
     if (!akt) verlauf.insertAdjacentHTML("beforeend", `<div class="blase claude">Alles erfasst. Tipp auf „Zusammenfassen“, dann schreibt Claude den Text für die Monteure und du prüfst alles vor dem Speichern.</div>`);
+    // Stand vom Server im Hintergrund: Eingabe nicht anfassen (Tastatur, getippter Text), Scrollposition halten.
+    if (nurVerlauf) { verlauf.scrollTop = scrollVorher; return; }
     steuerungZeichnen(akt);
     requestAnimationFrame(() => { const z = akt && $("#f-" + akt.id, el); (bearbeite && z) ? z.scrollIntoView({ block: "center" }) : (verlauf.scrollTop = verlauf.scrollHeight); });
   }
@@ -153,7 +186,7 @@ export async function chatAnsicht(el, id) {
     if (a.uebersprungen) teile.push(`<span class="muted">übersprungen</span>`);
     else if (a.wert) teile.push(esc(mitEinheit(f, a.wert)));
     const bilder = (a.dateien || []).filter((d) => d.art === "bild"), andere = (a.dateien || []).filter((d) => d.art !== "bild");
-    if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt="" loading="lazy">`).join("")}</span>`);
+    if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(bildSrc(d))}" alt="" loading="lazy">`).join("")}</span>`);
     for (const d of andere) teile.push(d.art === "audio" ? `<span class="klein">🎙 ${esc(d.text || "Sprachnotiz")}</span>` : `<span class="klein">${d.art === "video" ? "🎬" : "📄"} ${esc(d.name)}</span>`);
     if (a.notiz) teile.push(`<span class="klein">✎ ${esc(a.notiz)}</span>`);
     return `<button class="blase planer antwortblase" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
@@ -178,12 +211,12 @@ export async function chatAnsicht(el, id) {
     if (f.art === "foto") eingabe = `<div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
         ${bilder.length ? `<button class="wahl gewaehlt" data-fertig>Weiter</button>` : ""}`;
     // Alle Fotos dieser Frage antippen zum Bemalen und Beschriften, egal welche Frage.
-    const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt=""><span class="art">Bemalen</span></button>`).join("")}</div>` : "";
+    const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(bildSrc(d))}" alt=""><span class="art">Bemalen</span></button>`).join("")}</div>` : "";
     steuerung.innerHTML = `${vorschau}${eingabe}
       <div class="zusatz">
         <button class="rundknopf" data-anhang aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}</button>
         <button class="rundknopf" data-sprache aria-label="Sprachnotiz aufnehmen">${IKON.mikro}</button>
-        <button class="rundknopf" data-notiz aria-label="Notiz schreiben">✎</button>
+        <button class="pill notizknopf" data-notiz aria-label="Notiz für die Monteure schreiben">✎ Notiz</button>
         <span class="platz"></span>
         ${bearbeite ? `<button class="pill" data-zurueckzumablauf>Fertig</button>` : ""}
         <button class="pill" data-ueberspringen>Überspringen</button>
@@ -207,37 +240,49 @@ export async function chatAnsicht(el, id) {
     $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
   }
 
-  async function speichern(f, body) {
+  // Antwort sofort auf dem Gerät eintragen und in den Ausgang legen; hochgeladen wird, sobald Netz da ist.
+  async function speichern(f, body, meta = {}) {
     if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
+    if (f.art === "zahl" && body.wert && !istZahl(body.wert)) return toast("Bitte eine Zahl eintragen", "fehler");
     // Tastatur offen: Fokus solange auf ein verstecktes Feld parken, das beim Neuzeichnen bleibt, dann ans nächste Feld geben.
     const halter = $("#halter", el), tastatur = steuerung.contains(document.activeElement) && document.activeElement.matches("input, textarea");
     if (tastatur) halter.focus({ preventScroll: true });
     try {
-      const r = await api(`/api/planungen/${planung.id}/antworten/${f.id}`, { methode: "PUT", body });
-      planung.antworten = r.antworten;
+      await einreihen({ planungId: planung.id, art: "antwort", pfad: `/api/planungen/${planung.id}/antworten/${f.id}`, body, frage: f.id, meta });
+      planung.antworten = antwortAnwenden(antworten(), f, body, meta);
+      merken("/api/planungen/" + planung.id, planung);
       // Nach einer Antwort geht es zur nächsten Frage; nach Datei oder Notiz bleibt die Frage offen (weitere Fotos, Antwort fehlt noch).
       bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
       zeichne();
-    } catch (e) { bericht("antwort", e); fehlerMelden(e); }
+      abarbeiten();
+    } catch (e) { bericht("antwort", e); toast("Konnte auf dem Gerät nicht speichern: " + (e.message || e), "fehler"); }
     if (tastatur) { const neu = $("input#wert, textarea#wert", steuerung); neu ? neu.focus({ preventScroll: true }) : halter.blur(); }
   }
 
   // ---------- Dateien an der aktuellen Frage ----------
   const dateienVon = (f) => (antworten()[f.id]?.dateien || []).map((d) => ({ id: d.id }));
+  // Datei in den Ausgang legen (Fotos groß und klein); das kleine Foto bleibt bis zum Hochladen auf dem Gerät zum Anzeigen.
+  async function dateiEinreihen(dateiId, name, art, blob, klein, v) {
+    const pfad = `/api/planungen/${planung.id}/dateien/${dateiId}?name=${encodeURIComponent(name)}&art=${art}&klein=${klein ? 1 : 0}`;
+    await einreihen({ planungId: planung.id, art: "datei", pfad, blob, dateiId, klein, v });
+    if (klein) {
+      await ablage.set("bild:" + dateiId, { v, blob });
+      if (lokaleUrl.has(dateiId)) URL.revokeObjectURL(lokaleUrl.get(dateiId));
+      lokaleUrl.set(dateiId, URL.createObjectURL(blob));
+    }
+  }
   async function hochladenUndAnhaengen(f, files) {
-    const neu = [];
-    let n = 0;
+    const neu = [], meta = {};
     for (const file of files) {
       const art = file.type.startsWith("audio/") ? "audio" : artVon(file);
       if (!art) { toast(`${file.name}: nur Fotos, Videos, PDFs`, "fehler"); continue; }
-      n++; toast(`Lädt hoch … ${n} von ${files.length}`);
-      const idNeu = neueId(), name = art === "bild" ? (file.name || "Foto").replace(/\.\w+$/, "") + ".jpg" : file.name;
-      const pfad = (klein) => `/api/planungen/${planung.id}/dateien/${idNeu}?name=${encodeURIComponent(name)}&art=${art}&klein=${klein ? 1 : 0}`;
-      if (art === "bild") { const { gross, klein } = await bildVorbereiten(file); await hochladen(pfad(false), gross); await hochladen(pfad(true), klein); }
-      else await hochladen(pfad(false), file);
+      const idNeu = neueId(), name = art === "bild" ? (file.name || "Foto").replace(/\.\w+$/, "") + ".jpg" : file.name, v = Date.now();
+      if (art === "bild") { const { gross, klein } = await bildVorbereiten(file); await dateiEinreihen(idNeu, name, art, gross, false, v); await dateiEinreihen(idNeu, name, art, klein, true, v); }
+      else await dateiEinreihen(idNeu, name, art, file, false, v);
+      meta[idNeu] = { id: idNeu, name, art, groesse: file.size, v };
       neu.push({ id: idNeu });
     }
-    if (neu.length) { await speichern(f, { dateien: [...dateienVon(f), ...neu] }); toast(neu.length === 1 ? "Angehängt" : `${neu.length} Dateien angehängt`, "ok"); }
+    if (neu.length) { await speichern(f, { dateien: [...dateienVon(f), ...neu] }, meta); toast(neu.length === 1 ? "Gespeichert" : `${neu.length} Dateien gespeichert`, "ok"); }
   }
   for (const eingang of ["#kamera", "#galerie"]) $(eingang, el).addEventListener("change", async (e) => {
     const f = aktuelleFrage(), files = [...e.target.files];
@@ -248,14 +293,21 @@ export async function chatAnsicht(el, id) {
 
   async function malen(f, dateiId) {
     try {
-      const d0 = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);
-      const blob = await (await fetch(dateiUrl(planung.id, dateiId, false, d0?.v), { cache: "no-cache" })).blob(); // immer die aktuelle, schon bemalte Fassung
+      const d = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);
+      // Immer die aktuelle, schon bemalte Fassung: erst die noch nicht hochgeladene, dann vom Server, ohne Netz die kleine vom Gerät.
+      let blob = await dateiBlob(dateiId);
+      if (!blob) {
+        try { const r = await fetch(dateiUrl(planung.id, dateiId, false, d?.v), { cache: "no-cache" }); if (r.ok) blob = await r.blob(); } catch { /* kein Netz */ }
+      }
+      blob ??= (await ablage.get("bild:" + dateiId).catch(() => null))?.blob;
+      if (!blob) return toast("Das Foto ist ohne Netz nicht auf diesem Gerät", "fehler");
       const neu = await zeichnen(blob);
       if (!neu) return;
-      const d = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);
-      const pfad = (klein) => `/api/planungen/${planung.id}/dateien/${dateiId}?name=${encodeURIComponent(d?.name || "Foto.jpg")}&art=bild&klein=${klein ? 1 : 0}`;
-      await hochladen(pfad(false), neu); await hochladen(pfad(true), await verkleinern(neu, 1600, 0.8));
-      await speichern(f, { dateien: dateienVon(f) }); // Größe neu einlesen, damit das Vorschaubild sich erneuert
+      const v = Date.now(), name = d?.name || "Foto.jpg";
+      await dateiEinreihen(dateiId, name, "bild", neu, false, v);
+      await dateiEinreihen(dateiId, name, "bild", await verkleinern(neu, 1600, 0.8), true, v);
+      await speichern(f, { dateien: dateienVon(f) }, { [dateiId]: { v, groesse: neu.size } });
+      toast("Zeichnung gespeichert", "ok");
     } catch (e) { bericht("malen", e); fehlerMelden(e); }
   }
 
@@ -312,8 +364,12 @@ export async function chatAnsicht(el, id) {
   }
 
   async function zusammenfassen(e) {
-    const knopf = e.currentTarget; knopf.disabled = true; knopf.textContent = "Claude schreibt den Monteur-Text …";
-    try { await api(`/api/planungen/${planung.id}/zusammenfassen`, { methode: "POST", body: {} }); gehe("pruefung/" + planung.id); }
+    const knopf = e.currentTarget; knopf.disabled = true; knopf.textContent = "Lädt noch hoch …";
+    try {
+      // Erst muss alles auf dem Server sein, sonst fehlen Claude Antworten und Fotos.
+      const offen = await abarbeiten();
+      if (offen) { toast(`Noch ${offen} Einträge nicht hochgeladen. Zusammenfassen geht, sobald wieder Netz da ist.`, "fehler"); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Zusammenfassen und prüfen"; return; }
+      knopf.textContent = "Claude schreibt den Monteur-Text …"; await api(`/api/planungen/${planung.id}/zusammenfassen`, { methode: "POST", body: {} }); gehe("pruefung/" + planung.id); }
     catch (err) { fehlerMelden(err); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Zusammenfassen und prüfen"; }
   }
 
