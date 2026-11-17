@@ -74,3 +74,5 @@ route("GET", "/api/planungen/:id/protokoll.pdf", async (req, res, p, k) => {
   res.writeHead(200, { "Content-Type": "application/pdf", "Content-Length": pdf.length });
   res.end(pdf);
 });
+
+route("POST", "/api/planungen/:id/abschliessen", async (req, res, p, k) => json(res, 200, await k.abschluss.abschliessen(p.id)));

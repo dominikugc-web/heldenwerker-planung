@@ -9,6 +9,8 @@ import { erstelleSchreiber } from "./hero-schreiben.mjs";
 import { route, finde, json } from "./router.mjs";
 import { erstellePlanungen } from "./planungen.mjs";
 import { erstelleClaude } from "./claude.mjs";
+import { erstelleDateien } from "./hero-dateien.mjs";
+import { erstelleAbschluss } from "./abschluss.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
 import "./routen-planungen.mjs";
@@ -58,7 +60,15 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     return erstelleClaude({ client: claudeClient ?? new Anthropic({ apiKey: key }) });
   };
   const planungen = erstellePlanungen({ datenDir });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, inhaber };
+  // Einmal pro Server, damit der Schutz gegen doppeltes Absenden greift; HERO wird je Aufruf frisch gebaut.
+  // shortcut: ablage null, bis Drive (Task 13) oder der HERO-Upload steht; dann gehen nur Logbuch-Einträge raus.
+  const abschluss = erstelleAbschluss({
+    planungen,
+    schreiber: { zielProjekt: (id) => schreiber().zielProjekt(id) },
+    dateien: { logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text) },
+    ablage: null,
+  });
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
