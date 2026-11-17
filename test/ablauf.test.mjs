@@ -67,3 +67,20 @@ test("Fotos und Sprachnotiz an einer Antwort: Datei muss existieren, Sprache wir
     assert.notEqual(r.naechste, "foto_zaehlerschrank");
   } finally { await s.stop(); }
 });
+
+test("bemaltes Foto ersetzt das alte: neue Version in der Antwort, Abruf nicht aus dem Cache", async () => {
+  const s = await testServer();
+  try {
+    const p = await neu(s);
+    const hoch = (inhalt, klein) => fetch(s.url + `/api/planungen/${p.id}/dateien/bild0001?name=Foto.jpg&art=bild&klein=${klein ? 1 : 0}`, { method: "PUT", body: inhalt });
+    await hoch("ALT", false); await hoch("alt", true);
+    const v1 = (await (await put(s, `/api/planungen/${p.id}/antworten/foto_zaehlerschrank`, { dateien: [{ id: "bild0001" }] })).json()).antworten.foto_zaehlerschrank.dateien[0].v;
+    await new Promise((r) => setTimeout(r, 5));
+    await hoch("NEU", false); await hoch("neu", true);
+    const v2 = (await (await put(s, `/api/planungen/${p.id}/antworten/foto_zaehlerschrank`, { dateien: [{ id: "bild0001" }] })).json()).antworten.foto_zaehlerschrank.dateien[0].v;
+    assert.ok(v1 && v2 && v2 !== v1, "Version ändert sich beim Bemalen");
+    const r = await fetch(s.url + `/api/planungen/${p.id}/dateien/bild0001?klein=1`);
+    assert.equal(await r.text(), "neu");
+    assert.match(r.headers.get("cache-control"), /no-cache/);
+  } finally { await s.stop(); }
+});

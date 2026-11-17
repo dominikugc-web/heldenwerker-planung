@@ -92,7 +92,8 @@ export function hochladen(pfad, blob, onFortschritt) {
 }
 const safeJson = (t) => { try { return JSON.parse(t); } catch { return {}; } };
 
-export const dateiUrl = (planungId, dateiId, klein = true) => zustand.demo ? "" : `${zustand.server}/api/planungen/${planungId}/dateien/${dateiId}${klein ? "?klein=1" : ""}`;
+// v = Version der Datei; nach dem Bemalen ändert sie sich, damit der Browser nicht das alte Bild zeigt.
+export const dateiUrl = (planungId, dateiId, klein = true, v) => zustand.demo ? "" : `${zustand.server}/api/planungen/${planungId}/dateien/${dateiId}?klein=${klein ? 1 : 0}${v ? "&v=" + v : ""}`;
 export const serverUrl = (pfad) => zustand.server + pfad;
 
 // Fehler aus der Oberfläche ans Server-Log melden, damit sie ohne Gerät nachlesbar sind.

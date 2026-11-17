@@ -153,7 +153,7 @@ export async function chatAnsicht(el, id) {
     if (a.uebersprungen) teile.push(`<span class="muted">übersprungen</span>`);
     else if (a.wert) teile.push(esc(mitEinheit(f, a.wert)));
     const bilder = (a.dateien || []).filter((d) => d.art === "bild"), andere = (a.dateien || []).filter((d) => d.art !== "bild");
-    if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(dateiUrl(planung.id, d.id))}" alt="" loading="lazy">`).join("")}</span>`);
+    if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt="" loading="lazy">`).join("")}</span>`);
     for (const d of andere) teile.push(d.art === "audio" ? `<span class="klein">🎙 ${esc(d.text || "Sprachnotiz")}</span>` : `<span class="klein">${d.art === "video" ? "🎬" : "📄"} ${esc(d.name)}</span>`);
     if (a.notiz) teile.push(`<span class="klein">✎ ${esc(a.notiz)}</span>`);
     return `<button class="blase planer antwortblase" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
@@ -174,13 +174,12 @@ export async function chatAnsicht(el, id) {
     else if (f.art === "liste") eingabe = `<div class="feldzeile"><select id="wert" aria-label="${esc(f.frage)}"><option value="">Bitte wählen …</option>${f.optionen.map((o) => `<option ${a.wert === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
     else if (f.art === "zahl") eingabe = `<div class="feldzeile"><input id="wert" inputmode="decimal" enterkeyhint="next" value="${esc(a.wert || "")}" placeholder="Zahl" aria-label="${esc(f.frage)}">${f.einheit ? `<span class="einheit">${esc(f.einheit)}</span>` : ""}<button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
     else if (f.art === "text") eingabe = `<div class="feldzeile"><textarea id="wert" rows="1" enterkeyhint="next" placeholder="Antwort …" aria-label="${esc(f.frage)}">${esc(a.wert || "")}</textarea><button class="rundknopf diktat" data-diktat hidden aria-label="Diktieren">${IKON.mikro}</button><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
-    else if (f.art === "foto") {
-      const bilder = (a.dateien || []).filter((d) => d.art === "bild");
-      eingabe = `${bilder.length ? `<div class="vorschau">${bilder.map((d) => `<button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen"><img src="${esc(dateiUrl(planung.id, d.id))}&v=${encodeURIComponent(d.groesse || "")}" alt=""><span class="art">Bemalen</span></button>`).join("")}</div>` : ""}
-        <div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
+    const bilder = (a.dateien || []).filter((d) => d.art === "bild");
+    if (f.art === "foto") eingabe = `<div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
         ${bilder.length ? `<button class="wahl gewaehlt" data-fertig>Weiter</button>` : ""}`;
-    }
-    steuerung.innerHTML = `${eingabe}
+    // Alle Fotos dieser Frage antippen zum Bemalen und Beschriften, egal welche Frage.
+    const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt=""><span class="art">Bemalen</span></button>`).join("")}</div>` : "";
+    steuerung.innerHTML = `${vorschau}${eingabe}
       <div class="zusatz">
         <button class="rundknopf" data-anhang aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}</button>
         <button class="rundknopf" data-sprache aria-label="Sprachnotiz aufnehmen">${IKON.mikro}</button>
@@ -249,7 +248,8 @@ export async function chatAnsicht(el, id) {
 
   async function malen(f, dateiId) {
     try {
-      const blob = await (await fetch(dateiUrl(planung.id, dateiId, false))).blob();
+      const d0 = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);
+      const blob = await (await fetch(dateiUrl(planung.id, dateiId, false, d0?.v), { cache: "no-cache" })).blob(); // immer die aktuelle, schon bemalte Fassung
       const neu = await zeichnen(blob);
       if (!neu) return;
       const d = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);

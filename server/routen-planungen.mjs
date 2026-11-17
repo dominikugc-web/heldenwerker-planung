@@ -67,7 +67,7 @@ route("GET", "/api/planungen/:id/dateien/:dateiId", (req, res, p, k) => {
   let meta;
   try { [meta] = k.planungen.dateienPruefen({ id: p.id }, [{ id: p.dateiId }]); } catch { throw fehler(404, "Datei nicht gefunden"); }
   const datei = k.query.get("klein") === "1" && meta.klein ? k.planungen.dateiPfad(p.id, p.dateiId, true) : k.planungen.dateiPfad(p.id, p.dateiId);
-  res.writeHead(200, { "Content-Type": meta.art === "audio" ? audioMime(meta.name) : TYP[meta.art] || "application/octet-stream", "Cache-Control": "private, max-age=3600" });
+  res.writeHead(200, { "Content-Type": meta.art === "audio" ? audioMime(meta.name) : TYP[meta.art] || "application/octet-stream", "Cache-Control": "private, no-cache" }); // Bilder können übermalt werden
   fs.createReadStream(datei).pipe(res);
 });
 

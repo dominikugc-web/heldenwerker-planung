@@ -62,9 +62,12 @@ export function erstellePlanungen({ datenDir }) {
         throw fehler(400, "Upload abgebrochen");
       }
       fs.renameSync(tmp, ziel);
-      const groesse = fs.statSync(ziel).size;
-      if (!klein) speichereJson(dateiPfad(id, dateiId) + ".json", { id: dateiId, name, art, groesse });
-      return { id: dateiId, name, art, groesse };
+      const groesse = fs.statSync(ziel).size, metaDatei = dateiPfad(id, dateiId) + ".json";
+      // v = Version: ändert sich bei jedem Upload (z. B. nach dem Bemalen), damit die Oberfläche das neue Bild lädt.
+      const v = Date.now(), alt = ladeJson(metaDatei, null);
+      if (!klein) speichereJson(metaDatei, { ...alt, id: dateiId, name, art, groesse, v });
+      else if (alt) speichereJson(metaDatei, { ...alt, v });
+      return { id: dateiId, name, art, groesse, v };
     },
 
     // Prüft, dass die Dateien einer Nachricht wirklich hochgeladen sind, und liefert ihre gespeicherten Angaben.
@@ -72,7 +75,7 @@ export function erstellePlanungen({ datenDir }) {
       return refs.map((r) => {
         const meta = ID.test(r.id || "") && ladeJson(dateiPfad(p.id, r.id) + ".json", null);
         if (!meta) throw fehler(400, "Datei fehlt: " + (r.name || r.id));
-        return { id: meta.id, name: meta.name, art: meta.art, groesse: meta.groesse, klein: fs.existsSync(dateiPfad(p.id, r.id, true)), ...(meta.text && { text: meta.text }) };
+        return { id: meta.id, name: meta.name, art: meta.art, groesse: meta.groesse, v: meta.v, klein: fs.existsSync(dateiPfad(p.id, r.id, true)), ...(meta.text && { text: meta.text }) };
       });
     },
     // Umgewandelter Text einer Sprachnachricht, damit sie nur einmal durch Whisper muss.
