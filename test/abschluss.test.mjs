@@ -129,7 +129,7 @@ test("ohne Ablage geht nur der Logbuch-Eintrag raus, Dateien bleiben offen", asy
     ablage: { hochladen: async (pfad, name) => "https://link/" + encodeURIComponent(name) } });
   assert.equal((await mit.abschliessen(p.id)).hochgeladen, 6);
   assert.equal(log.logbuch.length, 2);
-  assert.match(log.logbuch[1].t, /Nachtrag/);
+  assert.match(log.logbuch[1].t, /^Nachtrag zur Besichtigung: Fotos und Protokoll\n\nDateien\n/);
   assert.match(log.logbuch[1].t, /Z%C3%A4hlerschrank%201\.jpg/);
   assert.equal(planungen.laden(p.id).gesendet.logbuch, true);
 });

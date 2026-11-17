@@ -77,7 +77,8 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
     const links = auftraege.filter((a) => pl.gesendet.dateien[a.schluessel]).map((a) => [a.name, pl.gesendet.dateien[a.schluessel].link]);
     if (fertig && pl.gesendet.logbuch !== true) {
-      const text = pl.gesendet.logbuch === "vorlaeufig" ? monteurText({}, links, "Nachtrag zur Besichtigung: Fotos und Protokoll") : monteurText(pl.ergebnis.monteure, links, "", protokollText(pl.ergebnis.felder, await ladeFelder()), aufgenommen);
+      const nachtrag = "Nachtrag zur Besichtigung: Fotos und Protokoll\n\nDateien\n" + links.map(([n, l]) => `${n}: ${l}`).join("\n");
+      const text = pl.gesendet.logbuch === "vorlaeufig" ? nachtrag :monteurText(pl.ergebnis.monteure, links, "", protokollText(pl.ergebnis.felder, await ladeFelder()), aufgenommen);
       await dateien.logbuchEintrag(ziel.id, text);
       pl.gesendet.logbuch = true;
     } else if (!ablage && !pl.gesendet.logbuch) {
