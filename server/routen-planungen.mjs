@@ -7,7 +7,10 @@ import { kostenSchaetzen } from "./claude.mjs";
 import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
 import { antwortenAusLieferscheinen } from "./lieferschein.mjs";
 
-const mitName = (k, pl) => ({ ...pl, personName: k.profile.nameVon(pl.person) });
+// Steht "laeuft" drin, aber hier läuft nichts (Server wurde neu gestartet): als unterbrochen melden, damit man neu senden kann.
+const sendenStand = (k, pl) => (pl.senden?.status === "laeuft" && !k.abschluss.laeuft(pl.id)
+  ? { ...pl.senden, status: "fehler", meldung: "Unterbrochen, bitte erneut senden" } : pl.senden);
+const mitName = (k, pl) => ({ ...pl, personName: k.profile.nameVon(pl.person), senden: sendenStand(k, pl) });
 route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste().map((pl) => mitName(k, pl))));
 route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k, k.planungen.laden(p.id))));
 
@@ -63,7 +66,7 @@ route("GET", "/api/planungen/:id/protokoll.pdf", async (req, res, p, k) => {
 });
 export const linksAus = (pl) => Object.fromEntries(Object.entries(pl.gesendet?.dateien || {}).map(([id, d]) => [id, d.link]));
 
-route("POST", "/api/planungen/:id/abschliessen", async (req, res, p, k) => json(res, 200, await k.abschluss.abschliessen(p.id)));
+route("POST", "/api/planungen/:id/abschliessen", (req, res, p, k) => json(res, 202, k.abschluss.starten(p.id)));
 
 const TYP = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
 // Für Vorschaubilder im Chat: klein=1 liefert die verkleinerte Fassung, wenn es sie gibt.

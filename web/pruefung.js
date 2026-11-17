@@ -38,29 +38,47 @@ export async function pruefAnsicht(el, id, signal) {
   el.addEventListener("input", () => { $("#gespeichert", el).textContent = "…"; clearTimeout(timer); timer = setTimeout(jetztSpeichern, 700); });
   $("[data-pdf]", el).addEventListener("click", async (ev) => { clearTimeout(timer); ev.preventDefault(); const ziel = ev.currentTarget.href; await jetztSpeichern().catch(() => {}); window.open(ziel, "_blank", "noopener"); });
 
-  const zeigeErgebnis = (r) => {
-    const zeilen = [
-      [r.ziel.umgeleitet ? "Gespeichert im Testprojekt UNB-1149 (Testmodus)" : "Gespeichert im Projekt", ""],
-      ["Logbuch-Eintrag für die Monteure", "✓"],
-      r.hochgeladen ? ["Dateien hochgeladen", r.hochgeladen] : null,
-      r.offen ? ["Fotos und Protokoll folgen", r.offen + " offen"] : null,
-      ...r.fehler.map((f) => ["Fehler", f]),
+  // Gesendet wird auf dem Server im Hintergrund. Hier nur den Stand zeigen und nachladen, solange die Seite offen ist.
+  const knopf = $("[data-senden]", el);
+  let zuletzt = planung.senden?.status, warte = null;
+  const zeigeStand = (s) => {
+    if (!s) return;
+    const r = s.ergebnis;
+    const zeilen = s.status === "laeuft" ? [["Wird im Hintergrund gesendet …", "⏳"], ["Du kannst die App schließen, es läuft auf dem Server weiter.", ""]] : [
+      r && [r.ziel.umgeleitet ? "Gespeichert im Testprojekt UNB-1149 (Testmodus)" : "Gespeichert im Projekt", ""],
+      r && ["Logbuch-Eintrag für die Monteure", "✓"],
+      r?.hochgeladen && ["Dateien hochgeladen", r.hochgeladen],
+      r?.offen && ["Fotos und Protokoll folgen", r.offen + " offen"],
+      s.status === "fehler" && ["Fehler", s.meldung || "Senden fehlgeschlagen"],
     ].filter(Boolean);
     $("#ergebnis", el).innerHTML = `<div class="gruppe ergebnis">${zeilen.map(([a, b]) => `<div class="zeile"><div class="haupt">${esc(a)}</div><span class="wert">${esc(b)}</span></div>`).join("")}</div>`;
+    knopf.disabled = s.status === "laeuft";
+    knopf.innerHTML = IKON.wolke + (s.status === "laeuft" ? "Wird gesendet …" : "Erneut senden");
   };
+  const nachladen = async () => {
+    clearTimeout(warte);
+    if (!el.isConnected || signal?.aborted) return;
+    try {
+      const s = (await api("/api/planungen/" + id, { signal })).senden;
+      zeigeStand(s);
+      if (s?.status === "laeuft") warte = setTimeout(nachladen, 3000);
+      else if (zuletzt === "laeuft") toast(s?.status === "fertig" ? "In HERO gespeichert" : "Senden hat nicht ganz geklappt, bitte erneut senden", s?.status === "fertig" ? "ok" : "fehler");
+      zuletzt = s?.status;
+    } catch (e) { if (e.name !== "AbortError") warte = setTimeout(nachladen, 6000); }
+  };
+  zeigeStand(planung.senden);
+  if (zuletzt === "laeuft") warte = setTimeout(nachladen, 3000);
 
-  $("[data-senden]", el).onclick = async (ev) => {
-    const knopf = ev.currentTarget;
+  knopf.onclick = async () => {
     if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
-    knopf.disabled = true; const vorher = knopf.innerHTML; knopf.textContent = "Wird gesendet …";
+    knopf.disabled = true;
     try {
       clearTimeout(timer); await jetztSpeichern();
-      const r = await api(`/api/planungen/${id}/abschliessen`, { methode: "POST", body: {} });
-      zeigeErgebnis(r);
+      const s = await api(`/api/planungen/${id}/abschliessen`, { methode: "POST", body: {} });
+      zuletzt = "laeuft"; zeigeStand(s);
       el.scrollTo({ top: 0, behavior: "smooth" });
-      toast(r.fehler.length ? "Teilweise gesendet, bitte erneut senden" : "In HERO gespeichert", r.fehler.length ? "fehler" : "ok");
-      knopf.innerHTML = IKON.wolke + (r.fehler.length ? "Fehlende erneut senden" : "Erneut senden");
-    } catch (err) { fehlerMelden(err); knopf.innerHTML = vorher; }
-    finally { knopf.disabled = false; }
+      toast("Wird im Hintergrund gesendet. Du kannst die App schließen.", "ok");
+      warte = setTimeout(nachladen, 3000);
+    } catch (err) { fehlerMelden(err); knopf.disabled = false; }
   };
 }

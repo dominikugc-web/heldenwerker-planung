@@ -41,13 +41,30 @@ const alleDateien = (pl) => [...Object.values(pl.antworten || {}).flatMap((a) =>
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
 export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablageQuelle, nameVon = (l) => l }) {
   const laufend = new Set();
+  const vermerken = (id, senden) => { const p = planungen.laden(id); p.senden = senden; planungen.speichern(p); return senden; };
+
+  async function abschliessen(id) {
+    if (laufend.has(id)) throw fehler(409, "Wird gerade gespeichert");
+    laufend.add(id);
+    try { return await lauf(id); } finally { laufend.delete(id); }
+  }
 
   return {
-    async abschliessen(id) {
-      if (laufend.has(id)) throw fehler(409, "Wird gerade gespeichert");
-      laufend.add(id);
-      try { return await lauf(id); } finally { laufend.delete(id); }
+    abschliessen,
+    // Im Hintergrund: kommt sofort zurück, der Stand steht in planung.senden (laeuft | fertig | fehler).
+    // Die App muss dafür nicht offen bleiben; läuft es schon, wird nichts doppelt gestartet.
+    starten(id) {
+      const pl = planungen.laden(id);
+      if (!pl.ergebnis) throw fehler(409, "Erst zusammenfassen");
+      if (laufend.has(id)) return pl.senden;
+      const start = new Date().toISOString();
+      vermerken(id, { status: "laeuft", start });
+      abschliessen(id).then(
+        (r) => vermerken(id, { status: r.fehler.length ? "fehler" : "fertig", start, ende: new Date().toISOString(), ergebnis: r, ...(r.fehler.length && { meldung: r.fehler.join(", ") }) }),
+        (e) => { console.error("Senden fehlgeschlagen:", String(e.message).slice(0, 200)); vermerken(id, { status: "fehler", start, ende: new Date().toISOString(), meldung: e.eigen ? e.message : "Senden fehlgeschlagen" }); });
+      return planungen.laden(id).senden;
     },
+    laeuft: (id) => laufend.has(id),
   };
 
   async function lauf(id) {

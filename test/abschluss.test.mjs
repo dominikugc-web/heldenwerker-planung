@@ -138,26 +138,48 @@ test("ohne Ablage geht nur der Logbuch-Eintrag raus, Dateien bleiben offen", asy
   assert.equal(planungen.laden(p.id).gesendet.logbuch, true);
 });
 
-test("Route abschliessen: ohne Zusammenfassung 409, danach Logbuch-Eintrag in HERO", async () => {
+test("Route abschliessen: ohne Zusammenfassung 409, danach sofort 202 und Senden im Hintergrund mit Status", async () => {
   const { testServer } = await import("./hilfe.mjs");
   const hero = [];
-  const heroFetch = async (url, init) => { const b = JSON.parse(init.body); hero.push(b); return new Response(JSON.stringify({ data: { add_logbook_entry: { id: 5 } } })); };
+  let freigabe; const warten = new Promise((r) => (freigabe = r));
+  const heroFetch = async (url, init) => { const b = JSON.parse(init.body); hero.push(b); if (b.query.includes("add_logbook_entry")) await warten; return new Response(JSON.stringify({ data: { add_logbook_entry: { id: 5 } } })); };
   const s = await testServer({ heroKey: "k", heroFetch });
+  const J = { "Content-Type": "application/json" };
   try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 4242, projektTitel: "Fremd" }) })).json();
-    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: { "Content-Type": "application/json" } })).status, 409);
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: J, body: JSON.stringify({ projektId: 4242, projektTitel: "Fremd" }) })).json();
+    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: J })).status, 409);
     const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
     const pl = JSON.parse(fs.readFileSync(datei));
-    pl.ergebnis = { monteure: MONTEURE, felder: {}, fotos: [], fehlt: [] };
+    pl.ergebnis = { monteure: MONTEURE, fehlt: [] };
     fs.writeFileSync(datei, JSON.stringify(pl));
-    const r = await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: { "Content-Type": "application/json" } });
-    assert.equal(r.status, 200);
-    const e = await r.json();
-    assert.deepEqual(e.ziel, { id: 11541539, umgeleitet: true });
-    const logbuch = hero.filter((b) => b.query.includes("add_logbook_entry")); // beim Anlegen wird HERO zusätzlich nach Lieferscheinen gefragt
+    const r = await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: J });
+    assert.equal(r.status, 202, "kommt sofort zurück, HERO wartet noch");
+    assert.equal((await r.json()).status, "laeuft");
+    const zweit = await fetch(s.url + `/api/planungen/${p.id}/abschliessen`, { method: "POST", headers: J });
+    assert.equal(zweit.status, 202, "zweimal drücken startet nichts doppelt");
+    assert.equal((await (await fetch(s.url + "/api/planungen/" + p.id)).json()).senden.status, "laeuft");
+    freigabe();
+    let st;
+    for (let i = 0; i < 50 && (st = (await (await fetch(s.url + "/api/planungen/" + p.id)).json()).senden).status === "laeuft"; i++) await new Promise((x) => setTimeout(x, 20));
+    assert.equal(st.status, "fertig");
+    assert.deepEqual(st.ergebnis.ziel, { id: 11541539, umgeleitet: true });
+    const logbuch = hero.filter((b) => b.query.includes("add_logbook_entry"));
     assert.equal(logbuch.length, 1);
     assert.equal(logbuch[0].variables.e.target_id, 11541539);
     assert.match(logbuch[0].variables.e.custom_text, /Freileitung am Giebel/);
+  } finally { await s.stop(); }
+});
+
+test("Server neu gestartet, während gesendet wurde: Status zeigt unterbrochen statt ewig laufend", async () => {
+  const { testServer } = await import("./hilfe.mjs");
+  const s = await testServer();
+  try {
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "X" }) })).json();
+    const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei)), senden: { status: "laeuft", start: "2026-11-17T10:00:00Z" } }));
+    const st = (await (await fetch(s.url + "/api/planungen/" + p.id)).json()).senden;
+    assert.equal(st.status, "fehler");
+    assert.match(st.meldung, /unterbrochen/i);
   } finally { await s.stop(); }
 });
 
