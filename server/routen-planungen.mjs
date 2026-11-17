@@ -4,7 +4,7 @@ import { feedbackNeu } from "./feedback.mjs";
 import { audioMime } from "./transkribieren.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
-import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf, PFLICHTFOTOS, BEREICHE } from "./protokoll.mjs";
+import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
 
 const mitName = (k, pl) => ({ ...pl, personName: k.profile.nameVon(pl.person) });
 route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste().map((pl) => mitName(k, pl))));
@@ -22,47 +22,20 @@ route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {
   json(res, 201, d);
 });
 
-// Antwort kommt als text/plain-Stream; danach liegen beide Nachrichten im Verlauf.
-route("POST", "/api/planungen/:id/nachricht", async (req, res, p, k) => {
-  const pl = k.planungen.laden(p.id);
-  const b = await leseJson(req);
-  const claude = k.claude();
-  if (!claude) throw fehler(503, "Claude-Schlüssel fehlt");
-  const dateien = k.planungen.dateienPruefen(pl, b.dateien);
-  if (!String(b.text || "").trim() && !dateien.length) throw fehler(400, "Nachricht ist leer");
-  // Sprachnachrichten vor dem Claude-Aufruf in Text umwandeln (Whisper auf dem PC, ein paar Sekunden).
-  for (const d of dateien.filter((x) => x.art === "audio" && !x.text)) {
-    try { d.text = (await k.transkribieren(k.planungen.dateiPfad(pl.id, d.id))) || undefined; } catch (e) { console.error("Whisper:", String(e.message).slice(0, 200)); }
-    if (d.text) k.planungen.textMerken(pl.id, d.id, d.text);
-  }
-  k.planungen.pruefeGrenzen(pl, dateien);
-  await k.planungen.pruefePdfs(pl, dateien);
+const ABSCHNITTE = ["wasWirdGemacht", "woKommtWasHin", "achtung", "material", "offen"];
+const monteurePruefen = (m) => {
+  if (!m || ABSCHNITTE.some((k) => !Array.isArray(m[k]) || m[k].some((x) => typeof x !== "string"))) throw fehler(400, "Monteur-Text unvollständig");
+  return Object.fromEntries(ABSCHNITTE.map((k) => [k, m[k].map((x) => x.trim().slice(0, 500)).filter(Boolean)]));
+};
 
-  pl.verlauf.push({ rolle: "planer", text: String(b.text || ""), dateien, zeit: new Date().toISOString() });
-  k.planungen.speichern(pl);
-
-  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" });
-  const r = await claude.chat(k.planungen.alsNachrichten(pl), (t) => res.write(t));
-  pl.verlauf.push({ rolle: "claude", text: r.text, dateien: [], zeit: new Date().toISOString() });
-  pl.kostenCent = Math.round(((pl.kostenCent || 0) + kostenSchaetzen(r.usage)) * 100) / 100;
-  k.planungen.speichern(pl);
-  res.end();
-});
-
-const mitFehlt = (e) => ({ ...e, fehlt: fehltBerechnen(e.fotos) });
-const fotoIds = (pl) => pl.verlauf.flatMap((n) => n.dateien).filter((d) => d.art === "bild").map((d) => d.id);
-
+// Claude schreibt aus den Antworten den kurzen Text für die Monteure.
 route("POST", "/api/planungen/:id/zusammenfassen", async (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
   const claude = k.claude();
   if (!claude) throw fehler(503, "Claude-Schlüssel fehlt");
-  const felder = await ladeFelder();
-  const { ergebnis, usage } = await claude.zusammenfassen(k.planungen.alsNachrichten(pl), felder, fotoIds(pl));
-  ergebnisPruefen(ergebnis, felder);
-  const ids = new Set(fotoIds(pl));
-  ergebnis.fotos = ergebnis.fotos.filter((f) => ids.has(f.dateiId));
-  const neu = k.planungen.laden(p.id); // frisch laden: der Aufruf dauert, in der Zeit kann eine Nachricht dazugekommen sein
-  neu.ergebnis = mitFehlt(ergebnis);
+  const { monteure, usage } = await claude.monteurText(berichtText(pl));
+  const neu = k.planungen.laden(p.id);
+  neu.ergebnis = { monteure: monteurePruefen(monteure), fehlt: fehltPflichtfotos(neu) };
   neu.status = "zusammengefasst";
   neu.kostenCent = Math.round(((neu.kostenCent || 0) + kostenSchaetzen(usage)) * 100) / 100;
   k.planungen.speichern(neu);
@@ -71,21 +44,19 @@ route("POST", "/api/planungen/:id/zusammenfassen", async (req, res, p, k) => {
 
 route("PUT", "/api/planungen/:id/ergebnis", async (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
-  const e = ergebnisPruefen(await leseJson(req), await ladeFelder());
-  const ids = new Set(fotoIds(pl));
-  if (e.fotos.some((f) => !ids.has(f.dateiId))) throw fehler(400, "Unbekanntes Foto");
-  pl.ergebnis = mitFehlt({ monteure: e.monteure, felder: e.felder, fotos: e.fotos });
+  pl.ergebnis = { monteure: monteurePruefen((await leseJson(req)).monteure), fehlt: fehltPflichtfotos(pl) };
   k.planungen.speichern(pl);
   json(res, 200, pl.ergebnis);
 });
 
+// PDF zur Vorschau: Fotos aus der verkleinerten Fassung, Links von Dateien, die schon auf Drive liegen.
 route("GET", "/api/planungen/:id/protokoll.pdf", async (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
-  if (!pl.ergebnis) throw fehler(409, "Erst zusammenfassen");
-  const pdf = await protokollPdf(pl.ergebnis, await ladeFelder());
+  const pdf = await berichtPdf(pl, { links: linksAus(pl), bild: (id) => k.planungen.bildFuerPdf(pl.id, id) });
   res.writeHead(200, { "Content-Type": "application/pdf", "Content-Length": pdf.length });
   res.end(pdf);
 });
+export const linksAus = (pl) => Object.fromEntries(Object.entries(pl.gesendet?.dateien || {}).map(([id, d]) => [id, d.link]));
 
 route("POST", "/api/planungen/:id/abschliessen", async (req, res, p, k) => json(res, 200, await k.abschluss.abschliessen(p.id)));
 
@@ -107,8 +78,6 @@ route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
   inhaber: istAdmin(k),
   ...(istAdmin(k) && { feedbackNeu: feedbackNeu(k) }),
 }));
-
-route("GET", "/api/protokoll-felder", async (req, res, p, k) => json(res, 200, { felder: await ladeFelder(), pflichtfotos: PFLICHTFOTOS, bereiche: BEREICHE }));
 
 // Fehler aus der Oberfläche (z. B. Aufnahme am iPhone) ins Server-Log, damit man sie ohne Gerät nachlesen kann.
 route("POST", "/api/fehlerbericht", async (req, res, p, k) => {

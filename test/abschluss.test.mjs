@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { erstellePlanungen } from "../server/planungen.mjs";
 import { erstelleAbschluss, monteurText, dateiNamen } from "../server/abschluss.mjs";
-import { ladeFelder } from "../server/protokoll.mjs";
 import { tempDir } from "./hilfe.mjs";
 
 const MONTEURE = { wasWirdGemacht: ["PV 9,9 kWp Süddach"], woKommtWasHin: ["WR Keller links"], achtung: ["Freileitung am Giebel"], material: [], offen: ["Zählernummer"] };
@@ -21,9 +20,9 @@ async function aufbau({ projektId = 11541539, fotos = 5, ablageFehlerBei = null 
     fs.writeFileSync(path.join(dir, id), "JPEG" + i);
     dateien.push({ id, name: `IMG_${i}.jpg`, art: "bild" });
   }
-  p.verlauf.push({ rolle: "planer", text: "", zeit: "t", dateien });
-  const felder = await ladeFelder();
-  p.ergebnis = { monteure: MONTEURE, felder: Object.fromEntries(felder.map((f) => [f.name, ""])), fotos: dateien.map((d, i) => ({ dateiId: d.id, pflichtfoto: i === 0 ? "Zählerschrank" : "Weitere" })), fehlt: [] };
+  const antwort = (wert, dateienListe = []) => ({ wert, uebersprungen: false, dateien: dateienListe, notiz: "" });
+  p.antworten = { ...p.antworten, typ: antwort("PV"), dachbelag: antwort("Pfanne"), foto_zaehlerschrank: antwort("", dateien.slice(0, 1)), foto_dach_gesamt: antwort("", dateien.slice(1)) };
+  p.ergebnis = { monteure: MONTEURE, fehlt: [] };
   p.status = "zusammengefasst";
   planungen.speichern(p);
 
@@ -46,9 +45,13 @@ test("Logbuch nennt, wer die Besichtigung aufgenommen hat", async () => {
   assert.match(log.logbuch[0].text, /^Für die Monteure \(Besichtigung\)\nAufgenommen von Max Muster am \d\d\.\d\d\.\d{4}\n/);
 });
 
-test("Dateinamen: Pflichtfoto mit Nummer, Umlaute bleiben", () => {
-  const n = dateiNamen([{ dateiId: "a", pflichtfoto: "Zählerschrank" }, { dateiId: "b", pflichtfoto: "Zählerschrank" }, { dateiId: "c", pflichtfoto: "Weitere" }, { dateiId: "d", pflichtfoto: "Sparren/Lattung" }]);
-  assert.deepEqual(n, { a: "Zählerschrank 1.jpg", b: "Zählerschrank 2.jpg", c: "Weitere 1.jpg", d: "Sparren-Lattung 1.jpg" });
+test("Dateinamen: Fotos nach ihrer Frage nummeriert, Umlaute bleiben, andere Dateien behalten ihren Namen", () => {
+  const bild = (id) => ({ id, art: "bild", name: id + ".jpg" });
+  const n = dateiNamen({ antworten: {
+    foto_zaehlerschrank: { dateien: [bild("a"), bild("b")] }, foto_sparren_lattung: { dateien: [bild("d")] },
+    dachbelag: { dateien: [bild("c"), { id: "v", art: "video", name: "Rundgang.mp4" }] },
+  } });
+  assert.deepEqual(n, { a: "Zählerschrank 1.jpg", b: "Zählerschrank 2.jpg", d: "Sparren-Lattung 1.jpg", c: "Dachbelag 1.jpg", v: "Rundgang.mp4" });
 });
 
 test("Monteur-Text hat feste Abschnitte und Links, leere Abschnitte fehlen", () => {
@@ -130,7 +133,8 @@ test("ohne Ablage geht nur der Logbuch-Eintrag raus, Dateien bleiben offen", asy
   assert.equal((await mit.abschliessen(p.id)).hochgeladen, 6);
   assert.equal(log.logbuch.length, 2);
   assert.match(log.logbuch[1].t, /^Nachtrag zur Besichtigung: Fotos und Protokoll\n\nDateien\n/);
-  assert.match(log.logbuch[1].t, /Z%C3%A4hlerschrank%201\.jpg/);
+  assert.match(log.logbuch[1].t, /Besichtigungsprotokoll \d\d\.\d\d\.\d{4}\.pdf: https:\/\/link\//);
+  assert.doesNotMatch(log.logbuch[1].t, /Z%C3%A4hlerschrank/, "Fotos stehen im Protokoll, nicht einzeln im Logbuch");
   assert.equal(planungen.laden(p.id).gesendet.logbuch, true);
 });
 

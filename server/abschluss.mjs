@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fehler } from "./router.mjs";
-import { ladeFelder, protokollPdf, protokollText } from "./protokoll.mjs";
+import { berichtPdf, berichtText } from "./bericht.mjs";
+import { frageNach } from "./fragen.mjs";
 import { audioMime } from "./transkribieren.mjs";
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
@@ -19,15 +20,22 @@ export function monteurText(monteure, links = [], hinweis = "", protokoll = "", 
   return teile.join("\n\n");
 }
 
-// "Zählerschrank 1.jpg", "Weitere 2.jpg"; Schrägstriche gehen in Dateinamen nicht.
-export function dateiNamen(fotos) {
-  const zaehler = {};
-  return Object.fromEntries(fotos.map((f) => {
-    const basis = f.pflichtfoto.replaceAll("/", "-");
-    zaehler[basis] = (zaehler[basis] || 0) + 1;
-    return [f.dateiId, `${basis} ${zaehler[basis]}.jpg`];
-  }));
+// Fotos heißen nach ihrer Frage („Zählerschrank 1.jpg“, „Dachbelag 2.jpg“), andere Dateien behalten ihren Namen.
+// Schrägstriche und Satzzeichen gehen in Dateinamen nicht.
+export function dateiNamen(pl) {
+  const zaehler = {}, namen = {};
+  for (const [frageId, a] of Object.entries(pl.antworten || {})) {
+    const f = frageNach(frageId);
+    for (const d of a.dateien || []) {
+      if (d.art !== "bild") { namen[d.id] = d.name; continue; }
+      const basis = String(f?.titel || f?.frage || "Foto").replaceAll("/", "-").replace(/[?:]/g, "").trim();
+      zaehler[basis] = (zaehler[basis] || 0) + 1;
+      namen[d.id] = `${basis} ${zaehler[basis]}.jpg`;
+    }
+  }
+  return namen;
 }
+const alleDateien = (pl) => [...Object.values(pl.antworten || {}).flatMap((a) => a.dateien || []), ...(pl.verlauf || []).flatMap((n) => n.dateien || [])];
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
@@ -47,12 +55,12 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     let pl = planungen.laden(id);
     if (!pl.ergebnis) throw fehler(409, "Erst zusammenfassen");
     const ziel = schreiber.zielProjekt(pl.projektId);
-    const namen = dateiNamen(pl.ergebnis.fotos);
-    const alle = pl.verlauf.flatMap((n) => n.dateien);
+    const namen = dateiNamen(pl);
+    const alle = alleDateien(pl);
     const datum = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" });
     const aufgenommen = `Aufgenommen von ${nameVon(pl.person)} am ${new Date(pl.erstellt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" })}`;
 
-    // Was hochgeladen werden muss: Fotos (mit Zeichnung), PDFs und Videos aus dem Chat, das Protokoll.
+    // Was hochgeladen werden muss: alle Fotos, Videos, Sprachnotizen und PDFs, zuletzt das Protokoll (es braucht deren Links).
     const auftraege = alle.map((d) => ({ schluessel: d.id, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
     const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
     auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
@@ -62,7 +70,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       if (pl.gesendet.dateien[a.schluessel]) { r.uebersprungen++; continue; }
       if (!ablage) { r.offen++; continue; }
       try {
-        if (a.protokoll) fs.writeFileSync(a.pfad, await protokollPdf(pl.ergebnis, await ladeFelder()));
+        if (a.protokoll) fs.writeFileSync(a.pfad, await berichtPdf(pl, { links: Object.fromEntries(Object.entries(pl.gesendet.dateien).map(([k, v]) => [k, v.link])), bild: (d) => planungen.bildFuerPdf(id, d) }));
         const link = await ablage.hochladen(a.pfad, a.name, a.mime, pl.projektTitel.split(", ").slice(0, 2).join(" "));
         pl = planungen.laden(id);
         pl.gesendet.dateien[a.schluessel] = { name: a.name, link };
@@ -75,14 +83,17 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     }
 
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
-    const links = auftraege.filter((a) => pl.gesendet.dateien[a.schluessel]).map((a) => [a.name, pl.gesendet.dateien[a.schluessel].link]);
+    // Ins Logbuch: das Protokoll und Videos/Sprachnotizen/PDFs. Die Fotos stecken im Protokoll.
+    const fotoIds = new Set(alle.filter((d) => d.art === "bild").map((d) => d.id));
+    const links = auftraege.filter((a) => pl.gesendet.dateien[a.schluessel] && !fotoIds.has(a.schluessel)).sort((x, y) => (y.protokoll ? 1 : 0) - (x.protokoll ? 1 : 0))
+      .map((a) => [a.name, pl.gesendet.dateien[a.schluessel].link]);
     if (fertig && pl.gesendet.logbuch !== true) {
       const nachtrag = "Nachtrag zur Besichtigung: Fotos und Protokoll\n\nDateien\n" + links.map(([n, l]) => `${n}: ${l}`).join("\n");
-      const text = pl.gesendet.logbuch === "vorlaeufig" ? nachtrag :monteurText(pl.ergebnis.monteure, links, "", protokollText(pl.ergebnis.felder, await ladeFelder()), aufgenommen);
+      const text = pl.gesendet.logbuch === "vorlaeufig" ? nachtrag :monteurText(pl.ergebnis.monteure, links, "", "", aufgenommen);
       await dateien.logbuchEintrag(ziel.id, text);
       pl.gesendet.logbuch = true;
     } else if (!ablage && !pl.gesendet.logbuch) {
-      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll-PDF folgen.", protokollText(pl.ergebnis.felder, await ladeFelder()), aufgenommen));
+      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll-PDF folgen.", berichtText(pl), aufgenommen));
       pl.gesendet.logbuch = "vorlaeufig";
     }
     if (pl.gesendet.logbuch) pl.status = "gesendet";

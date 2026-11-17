@@ -1,94 +1,58 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { erstelleClaude } from "../server/claude.mjs";
-import { ladeFelder } from "../server/protokoll.mjs";
 import { testServer } from "./hilfe.mjs";
 
-async function antwortVon(felder, extra = {}) {
-  return {
-    monteure: { wasWirdGemacht: ["PV 9,9 kWp auf Süddach"], woKommtWasHin: ["WR im Keller links"], achtung: ["Freileitung am Giebel"], material: [], offen: [] },
-    felder: [{ feld: "dachbelag", wert: "Pfanne" }],
-    fotos: [{ dateiId: "bild0001", pflichtfoto: "Dach gesamt" }],
-    ...extra,
-  };
-}
-
-function client(antwort, stop = "end_turn") {
+const J = { "Content-Type": "application/json" };
+const MONTEURE = { wasWirdGemacht: ["PV 9,9 kWp auf Süddach"], woKommtWasHin: ["WR im Keller"], achtung: ["Freileitung am Giebel"], material: [], offen: [] };
+function client() {
   const anfragen = [];
-  return { anfragen, beta: { messages: {
-    create: async (p) => { anfragen.push(p); return { stop_reason: stop, content: [{ type: "text", text: JSON.stringify(antwort) }], usage: { input_tokens: 10, output_tokens: 10 } }; },
-  } } };
+  return { anfragen, beta: { messages: { create: async (p) => { anfragen.push(p); return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ monteure: MONTEURE }) }], usage: { input_tokens: 10, output_tokens: 10 } }; } } } };
+}
+async function planungMitAntworten(s) {
+  const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: J, body: JSON.stringify({ projektId: 11541539, projektTitel: "UNB-1149, Müller", kunde: "Jörg Müller" }) })).json();
+  const put = (id, body) => fetch(s.url + `/api/planungen/${p.id}/antworten/${id}`, { method: "PUT", headers: J, body: JSON.stringify(body) });
+  await put("typ", { wert: "PV" });
+  await put("dachbelag", { wert: "Pfanne", notiz: "Ziegel brüchig" });
+  return p;
 }
 
-test("zusammenfassen nutzt festes JSON-Format und hohen Aufwand", async () => {
-  const felder = await ladeFelder();
-  const c = client(await antwortVon(felder));
-  const r = await erstelleClaude({ client: c }).zusammenfassen([{ role: "user", content: "x" }], felder, ["bild0001"]);
-  const a = c.anfragen[0];
-  assert.equal(a.output_config.effort, "high");
-  assert.equal(a.output_config.format.type, "json_schema");
-  assert.deepEqual(a.output_config.format.schema.properties.fotos.items.properties.dateiId.enum, ["bild0001"]);
-  assert.equal(a.messages.at(-1).role, "user");
-  assert.equal(r.ergebnis.felder.dachbelag, "Pfanne");
-});
-
-test("zusammenfassen bei Ablehnung wirft einen verständlichen Fehler", async () => {
-  const felder = await ladeFelder();
-  await assert.rejects(erstelleClaude({ client: client({}, "refusal") }).zusammenfassen([{ role: "user", content: "x" }], felder, []), (e) => e.status === 502);
-});
-
-test("Route: zusammenfassen speichert Ergebnis mit fehlt, PUT prüft Änderungen", async () => {
-  const felder = await ladeFelder();
-  const s = await testServer({ claudeClient: client(await antwortVon(felder)) });
+test("zusammenfassen: Claude bekommt die Antworten als Text, Ergebnis mit fehlenden Pflichtfotos", async () => {
+  const c = client();
+  const s = await testServer({ claudeClient: c });
   try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
-    const dir = path.join(s.datenDir, "planungen", p.id, "dateien");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "bild0001"), "JPEG");
-    fs.writeFileSync(path.join(dir, "bild0001.json"), JSON.stringify({ id: "bild0001", name: "Dach.jpg", art: "bild", groesse: 4 }));
-    const pl = JSON.parse(fs.readFileSync(path.join(s.datenDir, "planungen", p.id, "planung.json")));
-    pl.verlauf.push({ rolle: "planer", text: "Dach", zeit: "t", dateien: [{ id: "bild0001", name: "Dach.jpg", art: "bild" }] });
-    fs.writeFileSync(path.join(s.datenDir, "planungen", p.id, "planung.json"), JSON.stringify(pl));
-
-    const r = await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    const p = await planungMitAntworten(s);
+    const r = await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: J, body: "{}" });
     assert.equal(r.status, 200);
     const e = await r.json();
-    assert.equal(e.fehlt.length, 9);
-    const gespeichert = await (await fetch(s.url + `/api/planungen/${p.id}`)).json();
-    assert.equal(gespeichert.status, "zusammengefasst");
-
-    const kaputt = { ...e, felder: { ...e.felder, dachbelag: "Stroh" } };
-    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/ergebnis`, { method: "PUT", body: JSON.stringify(kaputt) })).status, 400);
-    const geaendert = { ...e, fotos: [{ dateiId: "bild0001", pflichtfoto: "Zählerschrank" }] };
-    const r2 = await fetch(s.url + `/api/planungen/${p.id}/ergebnis`, { method: "PUT", body: JSON.stringify(geaendert) });
-    assert.equal(r2.status, 200);
-    assert.ok((await r2.json()).fehlt.includes("Dach gesamt"));
+    assert.deepEqual(e.monteure, MONTEURE);
+    assert.equal(e.fehlt.length, 10);
+    assert.match(c.anfragen[0].messages[0].content, /Dachbelag: Pfanne \(Notiz: Ziegel brüchig\)/);
+    const pl = await (await fetch(s.url + `/api/planungen/${p.id}`)).json();
+    assert.equal(pl.status, "zusammengefasst");
+    assert.ok(pl.kostenCent > 0);
   } finally { await s.stop(); }
 });
 
-test("Route: Protokoll-PDF zur Vorschau", async () => {
-  const felder = await ladeFelder();
-  const s = await testServer({ claudeClient: client(await antwortVon(felder)) });
+test("Monteur-Text bearbeiten: nur Listen aus Text, sonst 400", async () => {
+  const s = await testServer({ claudeClient: client() });
   try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
-    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/protokoll.pdf`)).status, 409);
-    await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } });
+    const p = await planungMitAntworten(s);
+    await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: J, body: "{}" });
+    const put = (body) => fetch(s.url + `/api/planungen/${p.id}/ergebnis`, { method: "PUT", headers: J, body: JSON.stringify(body) });
+    assert.equal((await put({ monteure: { wasWirdGemacht: "kein Array" } })).status, 400);
+    const r = await put({ monteure: { ...MONTEURE, offen: ["Zählernummer"] } });
+    assert.equal(r.status, 200);
+    assert.deepEqual((await r.json()).monteure.offen, ["Zählernummer"]);
+  } finally { await s.stop(); }
+});
+
+test("Protokoll-PDF geht auch vor dem Zusammenfassen", async () => {
+  const s = await testServer();
+  try {
+    const p = await planungMitAntworten(s);
     const r = await fetch(s.url + `/api/planungen/${p.id}/protokoll.pdf`);
     assert.equal(r.status, 200);
     assert.equal(r.headers.get("content-type"), "application/pdf");
-  } finally { await s.stop(); }
-});
-
-test("Route: Fotos mit unbekannter ID aus Claudes Antwort werden verworfen", async () => {
-  const felder = await ladeFelder();
-  const s = await testServer({ claudeClient: client(await antwortVon(felder, { fotos: [{ dateiId: "", pflichtfoto: "Weitere" }] })) });
-  try {
-    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
-    const e = await (await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } })).json();
-    assert.deepEqual(e.fotos, []);
-    const r = await fetch(s.url + `/api/planungen/${p.id}/ergebnis`, { method: "PUT", body: JSON.stringify(e) });
-    assert.equal(r.status, 200);
+    assert.equal(Buffer.from(await r.arrayBuffer()).subarray(0, 4).toString(), "%PDF");
   } finally { await s.stop(); }
 });
