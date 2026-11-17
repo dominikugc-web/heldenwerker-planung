@@ -48,10 +48,12 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
     },
     async projektLaden(id) {
       const d = await abfrage(`query($id:Int){ project_match(project_match_id:$id){ ${PROJEKT_FELDER}
-        contact { full_name company_name phone_mobile phone_home email } file_uploads { id filename url } } }`, { id: Number(id) });
+        contact { full_name company_name phone_mobile phone_home email } file_uploads { id filename url }
+        histories { created custom_title custom_text } } }`, { id: Number(id) });
       if (!d.project_match) throw Object.assign(new Error("Projekt nicht gefunden"), { status: 404 });
       const p = d.project_match, k = p.contact || p.customer || {};
-      const h = await abfrage(`query($id:Int){ project_histories(project_match_id:$id, last:30, orderBy:"created"){ created custom_title custom_text } }`, { id: Number(id) });
+      // histories kommt neueste zuerst und enthält auch per API geschriebene Einträge (project_histories nicht).
+      const h = { project_histories: (p.histories || []).slice(0, 30) };
       return {
         ...alsProjekt(p),
         kontakt: { name: name(k), telefon: k.phone_mobile || k.phone_home || "", email: k.email || "" },

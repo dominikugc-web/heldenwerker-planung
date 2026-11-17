@@ -58,3 +58,14 @@ test("Termine bekommen Zeitraum als Variablen und werden abgebildet", async () =
   assert.equal(f.aufrufe[0].body.variables.von, "2026-11-18T00:00:00Z");
   assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kategorie: "Besichtigung" });
 });
+
+test("projektLaden nimmt das Logbuch aus histories, neueste zuerst, höchstens 30", async () => {
+  const histories = Array.from({ length: 40 }, (_, i) => ({ created: `2026-11-${String(40 - i).padStart(2, "0")}`, custom_title: "", custom_text: "Eintrag " + i }));
+  const f = attrappe({ data: { project_match: { ...PM, contact: { full_name: "Jörg Müller", phone_mobile: "0170", email: "j@x.de" }, file_uploads: [{ id: 3, filename: "Dach.jpg", url: "u" }], histories } } });
+  const p = await erstelleHero({ key: "k", fetch: f }).projektLaden(7);
+  assert.equal(f.aufrufe.length, 1);
+  assert.equal(p.logbuch.length, 30);
+  assert.deepEqual(p.logbuch[0], { datum: "2026-11-40", text: "Eintrag 0" });
+  assert.deepEqual(p.kontakt, { name: "Jörg Müller", telefon: "0170", email: "j@x.de" });
+  assert.deepEqual(p.dateien, [{ id: 3, name: "Dach.jpg", url: "u" }]);
+});
