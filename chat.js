@@ -121,6 +121,13 @@ export async function chatAnsicht(el, id) {
   const verlauf = $("#verlauf", el), steuerung = $("#steuerung", el);
   $("[data-zurueck]", el).onclick = () => gehe("home");
   $("[data-uebersicht]", el).onclick = uebersicht;
+  // Tastatur geht auf (oder die Eingabe wächst): Verlauf wird kleiner, also um genau so viel mit nach oben schieben.
+  let verlaufH = 0;
+  const anheften = () => { const h = verlauf.clientHeight, d = verlaufH - h; verlaufH = h; if (d > 0) verlauf.scrollTop += d; };
+  new ResizeObserver(anheften).observe(verlauf);
+  const vv = window.visualViewport;
+  const beiTastatur = () => (verlauf.isConnected ? anheften() : vv.removeEventListener("resize", beiTastatur));
+  vv?.addEventListener("resize", beiTastatur); // nach sichtbarerBereich() in app.js, die Höhe ist dann schon gesetzt
 
   const aktuelleFrage = () => (bearbeite && fragen.find((f) => f.id === bearbeite)) || sichtbar(fragen, antworten()).find((f) => !erledigt(antworten()[f.id])) || null;
 
@@ -311,6 +318,7 @@ export async function chatAnsicht(el, id) {
   }
 
   zeichne();
+  verlaufH = verlauf.clientHeight;
 }
 
 // Diktieren in ein Textfeld: der Browser wandelt live in Text um (am iPhone die Apple-Spracherkennung).
