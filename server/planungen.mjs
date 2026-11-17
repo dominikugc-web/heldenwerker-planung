@@ -20,9 +20,17 @@ export function erstellePlanungen({ datenDir }) {
   const dateiPfad = (id, dateiId, klein = false) => path.join(ordner(id), "dateien", dateiId + (klein ? ".klein" : ""));
 
   const api = {
-    neu({ projektId, projektTitel, person }) {
-      const p = { id: crypto.randomUUID(), projektId: Number(projektId), projektTitel: String(projektTitel || ""), person, erstellt: new Date().toISOString(),
-        status: "offen", kostenCent: 0, verlauf: [], ergebnis: null, gesendet: { dateien: {}, logbuch: false, pdf: false } };
+    neu({ projektId, projektTitel, person, kunde = "", adresse = "", nummer = "" }) {
+      // Kundendaten aus HERO und das heutige Datum sind schon beantwortet (änderbar wie jede Antwort).
+      const jetzt = new Date();
+      const heute = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
+      const vor = (wert) => ({ wert: String(wert || "").trim(), uebersprungen: false, dateien: [], notiz: "", zeit: jetzt.toISOString() });
+      const antworten = { datum: vor(heute) };
+      if (kunde) antworten.kunde = vor(kunde);
+      if (nummer) antworten.projektnr = vor(nummer);
+      if (adresse) antworten.adresse = vor(adresse);
+      const p = { id: crypto.randomUUID(), projektId: Number(projektId), projektTitel: String(projektTitel || ""), person, erstellt: jetzt.toISOString(),
+        status: "offen", kostenCent: 0, verlauf: [], antworten, ergebnis: null, gesendet: { dateien: {}, logbuch: false, pdf: false } };
       speichereJson(path.join(ordner(p.id), "planung.json"), p);
       return p;
     },

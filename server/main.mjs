@@ -16,6 +16,7 @@ import { erstelleTranskription } from "./transkribieren.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
 import "./routen-planungen.mjs";
+import "./routen-ablauf.mjs";
 import "./feedback.mjs";
 import { erstelleProfile } from "./profile.mjs";
 

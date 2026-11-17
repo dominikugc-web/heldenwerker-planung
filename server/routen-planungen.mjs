@@ -13,7 +13,7 @@ route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k,
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
-  json(res, 201, k.planungen.neu({ projektId: b.projektId, projektTitel: b.projektTitel, person: k.person }));
+  json(res, 201, k.planungen.neu({ projektId: b.projektId, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer: b.nummer }));
 });
 
 route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {
