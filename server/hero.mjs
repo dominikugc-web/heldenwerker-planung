@@ -79,9 +79,18 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
         logbuch: h.project_histories.map((e) => ({ datum: e.created, text: alsText(e.custom_text) || alsText(e.custom_title) })).filter((e) => e.text),
       };
     },
+    // personen = wer eingeteilt ist (Mitarbeiter oder Team). E-Mail nur für die Zuordnung auf dem Server, nicht für die Oberfläche.
     async termineLaden(von, bis) {
-      const d = await abfrage(`query($von:DateTime,$bis:DateTime){ calendar_events(start:$von, end:$bis, first:500){ id title start end all_day project_match_id category { name } } }`, { von, bis });
-      return d.calendar_events.map((t) => ({ id: t.id, titel: t.title, start: t.start, ende: t.end, projektId: t.project_match_id || null, kategorie: t.category?.name || "", ganztags: !!t.all_day }));
+      const d = await abfrage(`query($von:DateTime,$bis:DateTime){ calendar_events(start:$von, end:$bis, first:500){ id title start end all_day project_match_id category { name } partners { id full_name email } } }`, { von, bis });
+      return d.calendar_events.map((t) => ({ id: t.id, titel: t.title, start: t.start, ende: t.end, projektId: t.project_match_id || null, kategorie: t.category?.name || "", ganztags: !!t.all_day,
+        personen: (t.partners || []).map((p) => ({ id: p.id, name: trim(p.full_name), email: trim(p.email) })) }));
+    },
+    // HERO hat keine Mitarbeiterliste in der API; wer in Terminen eingeteilt ist (60 Tage zurück, 120 voraus), reicht für die Zuordnung.
+    async personen() {
+      const tag = 86_400_000, jetzt = Date.now();
+      const t = await this.termineLaden(new Date(jetzt - 60 * tag).toISOString(), new Date(jetzt + 120 * tag).toISOString());
+      const alle = new Map(t.flatMap((x) => x.personen).map((p) => [p.id, { id: p.id, name: p.name }]));
+      return [...alle.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
     },
     async terminKategorien() {
       const d = await abfrage(`{ calendar_event_categories { id name } }`);

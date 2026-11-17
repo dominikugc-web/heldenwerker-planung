@@ -92,7 +92,7 @@ test("ich: Name aus dem Tailscale-Login und ob Inhaber", async () => {
   const s = await testServer({ lokal: false, inhaber: "chef@x.de" });
   try {
     const r = await (await fetch(s.url + "/api/ich", { headers: { "Tailscale-User-Login": "chef@x.de", "Tailscale-User-Name": "Max Muster" } })).json();
-    assert.deepEqual(r, { login: "chef@x.de", name: "Max Muster", rolle: "admin", inhaber: true, feedbackNeu: 0 });
+    assert.deepEqual(r, { login: "chef@x.de", name: "Max Muster", rolle: "admin", heroPerson: null, inhaber: true, feedbackNeu: 0 });
   } finally { await s.stop(); }
 });
 

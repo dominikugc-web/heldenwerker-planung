@@ -83,6 +83,7 @@ route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
   login: k.person,
   name: k.profil.name,
   rolle: k.profil.rolle,
+  heroPerson: k.profil.heroPerson || null,
   inhaber: istAdmin(k),
   ...(istAdmin(k) && { feedbackNeu: feedbackNeu(k) }),
 }));

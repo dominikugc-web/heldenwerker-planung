@@ -56,7 +56,7 @@ test("Termine bekommen Zeitraum als Variablen und werden abgebildet", async () =
   const f = attrappe({ data: { calendar_events: [{ id: 1, title: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", end: "2026-11-18T10:00:00+01:00", project_match_id: 7, all_day: false, category: { name: "Besichtigung" } }] } });
   const t = await erstelleHero({ key: "k", fetch: f }).termineLaden("2026-11-18T00:00:00Z", "2026-11-19T00:00:00Z");
   assert.equal(f.aufrufe[0].body.variables.von, "2026-11-18T00:00:00Z");
-  assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kategorie: "Besichtigung", ganztags: false });
+  assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kategorie: "Besichtigung", ganztags: false, personen: [] });
 });
 
 test("projektLaden nimmt das Logbuch aus histories, neueste zuerst, höchstens 30", async () => {

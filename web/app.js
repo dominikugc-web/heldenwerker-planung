@@ -52,7 +52,7 @@ async function home(el, _, signal) {
   el.innerHTML = `${banner()}<h1>Hallo${vorname && vorname !== "Lokal" ? " " + esc(vorname) : ""}</h1><p class="unter">${esc(new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }))}</p>
     <button class="gross" data-neu>${IKON.plus}Neue Besichtigung</button>
     <div class="label">Offene Planungen</div><div class="gruppe" id="offen"><div class="leer">Lädt …</div></div>
-    <div class="label">Besichtigungen heute und morgen</div><div class="gruppe" id="termine"><div class="leer">Lädt …</div></div>
+    <div class="label" id="termineLabel">Besichtigungen heute und morgen</div><div class="gruppe" id="termine"><div class="leer">Lädt …</div></div>
     <div class="label">Zuletzt gesendet</div><div class="gruppe" id="gesendet"><div class="leer">Lädt …</div></div>`;
   $("[data-neu]", el).onclick = plusSheet;
 
@@ -65,9 +65,12 @@ async function home(el, _, signal) {
   $("#offen", el).innerHTML = offen.length ? offen.map(planungZeile).join("") : `<div class="leer">Keine offenen Planungen. Tipp auf „Neue Besichtigung“.</div>`;
   const gesendet = planungen.filter((p) => p.status === "gesendet").slice(0, 5);
   $("#gesendet", el).innerHTML = gesendet.length ? gesendet.map(planungZeile).join("") : `<div class="leer">Noch nichts gesendet.</div>`;
-  const bes = (termine || []).filter(istBesichtigung);
+  // Zugeordnete Planer sehen ihre eigenen Besichtigungen, alle anderen die der ganzen Firma.
+  const eigene = !!zustand.ich?.heroPerson || (termine || []).some((t) => t.meins);
+  const bes = (termine || []).filter((t) => istBesichtigung(t) && (!eigene || t.meins)).sort((a, b) => a.start.localeCompare(b.start));
+  if (eigene) $("#termineLabel", el).textContent = "Meine Besichtigungen heute und morgen";
   $("#termine", el).innerHTML = termine === null ? `<div class="leer">Termine nicht erreichbar.</div>`
-    : bes.length ? bes.map(terminZeile).join("") : `<div class="leer">Keine Besichtigungen eingetragen.</div>`;
+    : bes.length ? bes.map((t) => terminZeile(t, !eigene)).join("") : `<div class="leer">Keine Besichtigungen eingetragen.</div>`;
 }
 
 const STATUS = { offen: ["Offen", "blau"], zusammengefasst: ["Zum Prüfen", "orange"], gesendet: ["In HERO", "gruen"] };
@@ -79,15 +82,20 @@ function planungZeile(p) {
   const person = (p.personName || p.person || "").split(/[\s@]/)[0];
   return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc(person)}</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
 }
-function terminZeile(t) {
+function terminZeile(t, mitPersonen = false) {
   const ziel = t.projektId ? `href="#projekt/${t.projektId}"` : "";
-  return `<a class="zeile" ${ziel}><span class="zeit">${t.ganztags ? "Ganz-<br>tags" : esc(uhrzeit(t.start))}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(tagSchluessel(t.start) === tagSchluessel(Date.now()) ? "Heute" : "Morgen")} · ${esc(t.kategorie)}</div></div>${t.projektId ? `<span class="pfeil">${IKON.pfeil}</span>` : ""}</a>`;
+  return `<a class="zeile" ${ziel}><span class="zeit">${t.ganztags ? "Ganz-<br>tags" : esc(uhrzeit(t.start))}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(tagSchluessel(t.start) === tagSchluessel(Date.now()) ? "Heute" : "Morgen")} · ${esc(t.kategorie)}${mitPersonen ? esc(personenText(t)) : ""}</div></div>${t.projektId ? `<span class="pfeil">${IKON.pfeil}</span>` : ""}</a>`;
 }
 
 // ---------- Kalender ----------
 let kalenderTag = tagSchluessel(Date.now());
-let nurBesichtigungen = true;
+// Filter: meine (ich bin in HERO eingeteilt) | besichtigungen | alle; gemerkt pro Gerät.
+const FILTER = [["meine", "Meine"], ["besichtigungen", "Besichtigungen"], ["alle", "Alle"]];
+let kalenderFilter = speicher.get("planung-kalender-filter");
+const filterTermin = (t) => (kalenderFilter === "meine" ? t.meins : kalenderFilter === "besichtigungen" ? istBesichtigung(t) : true);
+const personenText = (t) => (t.personen?.length ? " · " + t.personen.join(", ") : "");
 async function kalender(el, _, signal) {
+  kalenderFilter ??= zustand.ich?.heroPerson ? "meine" : "besichtigungen";
   const tag = new Date(kalenderTag + "T12:00:00");
   const montag = new Date(tag); montag.setDate(tag.getDate() - ((tag.getDay() + 6) % 7));
   const tage = Array.from({ length: 7 }, (_, i) => { const d = new Date(montag); d.setDate(montag.getDate() + i); return d; });
@@ -95,15 +103,15 @@ async function kalender(el, _, signal) {
   el.innerHTML = `${banner()}<div class="kopf"><h1>Kalender</h1><button class="pill rund" data-w="-7" aria-label="Woche zurück">${IKON.zurueck}</button><button class="pill rund" data-w="7" aria-label="Woche vor" style="transform:scaleX(-1)">${IKON.zurueck}</button></div>
     <p class="unter">${esc(kw)}</p>
     <div class="woche">${tage.map((d) => `<button data-tag="${tagSchluessel(d)}" aria-pressed="${tagSchluessel(d) === kalenderTag}" class="${tagSchluessel(d) === tagSchluessel(Date.now()) ? "heute" : ""}"><small>${esc(tagName(d))}</small><b>${d.getDate()}</b><span class="punkt" hidden></span></button>`).join("")}</div>
-    <div class="segctl" role="group" aria-label="Filter"><button data-f="1" aria-pressed="${nurBesichtigungen}">Besichtigungen</button><button data-f="0" aria-pressed="${!nurBesichtigungen}">Alle Termine</button></div>
+    <div class="segctl" role="group" aria-label="Filter">${FILTER.map(([k, t]) => `<button data-f="${k}" aria-pressed="${kalenderFilter === k}">${t}</button>`).join("")}</div>
     <div class="gruppe" id="liste"><div class="leer">Lädt …</div></div>`;
   $$("[data-w]", el).forEach((b) => (b.onclick = () => { const d = new Date(kalenderTag + "T12:00:00"); d.setDate(d.getDate() + Number(b.dataset.w)); kalenderTag = tagSchluessel(d); zeigen(); }));
   $$("[data-tag]", el).forEach((b) => (b.onclick = () => { kalenderTag = b.dataset.tag; zeigen(); }));
-  $$("[data-f]", el).forEach((b) => (b.onclick = () => { nurBesichtigungen = b.dataset.f === "1"; zeigen(); }));
+  $$("[data-f]", el).forEach((b) => (b.onclick = () => { kalenderFilter = b.dataset.f; speicher.set("planung-kalender-filter", kalenderFilter); zeigen(); }));
 
   const von = new Date(tagSchluessel(montag) + "T00:00:00"), bis = new Date(+von + 7 * 864e5);
   const alle = await api(`/api/termine?von=${von.toISOString()}&bis=${bis.toISOString()}`, { signal });
-  const termine = alle.filter((t) => !nurBesichtigungen || istBesichtigung(t)).sort((a, b) => a.start.localeCompare(b.start));
+  const termine = alle.filter(filterTermin).sort((a, b) => a.start.localeCompare(b.start));
   // Mehrtägige Termine (in HERO häufig, z. B. Montage Mo bis Fr) gehören zu jedem Tag, den sie abdecken.
   const ersterTag = (t) => tagSchluessel(t.start), letzterTag = (t) => tagSchluessel(new Date(t.ende).getTime() - 1);
   const anTag = (t, tag) => ersterTag(t) <= tag && tag <= letzterTag(t);
@@ -114,8 +122,10 @@ async function kalender(el, _, signal) {
     const mehrtaegig = ersterTag(t) !== letzterTag(t);
     const zeit = t.ganztags ? "Ganz-<br>tags" : ersterTag(t) < kalenderTag ? "läuft" : esc(uhrzeit(t.start));
     const neben = t.ganztags ? "" : mehrtaegig ? ` · ${esc(datumKurz(t.start))} bis ${esc(datumKurz(t.ende))}` : " · bis " + esc(uhrzeit(t.ende));
-    return `<a class="zeile" ${ziel}><span class="zeit">${zeit}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(t.kategorie || "Termin")}${neben}</div></div>${t.projektId ? `<span class="pfeil">${IKON.pfeil}</span>` : ""}</a>`;
-  }).join("") : `<div class="leer">${nurBesichtigungen ? "Keine Besichtigungen an diesem Tag." : "Keine Termine an diesem Tag."}</div>`;
+    return `<a class="zeile" ${ziel}><span class="zeit">${zeit}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(t.kategorie || "Termin")}${neben}${kalenderFilter === "meine" ? "" : esc(personenText(t))}</div></div>${t.projektId ? `<span class="pfeil">${IKON.pfeil}</span>` : ""}</a>`;
+  }).join("") : `<div class="leer">${kalenderFilter === "meine" && !alle.some((t) => t.meins) && !zustand.ich?.heroPerson
+    ? "Dir ist noch keine Person aus HERO zugeordnet. Ein Admin stellt das unter Einstellungen → Team ein."
+    : { meine: "Keine eigenen Termine an diesem Tag.", besichtigungen: "Keine Besichtigungen an diesem Tag.", alle: "Keine Termine an diesem Tag." }[kalenderFilter]}</div>`;
 }
 
 // ---------- Projekte ----------
@@ -212,7 +222,7 @@ async function adminBereich(el, signal) {
     <div class="gruppe">${sichtbar.length ? sichtbar.map((f) => `<div class="zeile"><span aria-hidden="true">${ART[f.art]}</span><div class="haupt"><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(f.text)}</div><div class="neben">${esc(f.name || f.person)} · ${esc(relativ(f.zeit))}${f.bild ? ` · <a href="${serverUrl("/api/feedback/bild/" + f.bild)}" target="_blank" rel="noopener">Bild</a>` : ""}</div></div>
       <button class="pill" data-status="${f.id}" data-ziel="${status(f) === "neu" ? "erledigt" : "neu"}">${status(f) === "neu" ? "Erledigt" : "Zurück"}</button></div>`).join("") : `<div class="leer">${feedbackFilter === "neu" ? "Nichts Neues." : "Noch nichts erledigt."}</div>`}</div>
     <div class="label">Team</div>
-    <div class="gruppe">${team.map((p) => `<button class="zeile" data-login="${esc(p.login)}"><div class="haupt"><div class="titel">${esc(p.name)}</div><div class="neben">zuletzt ${esc(relativ(p.zuletzt))}</div></div><span class="badge ${p.rolle === "admin" ? "blau" : ""}">${p.rolle === "admin" ? "Admin" : "Planer"}</span><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>
+    <div class="gruppe">${team.map((p) => `<button class="zeile" data-login="${esc(p.login)}"><div class="haupt"><div class="titel">${esc(p.name)}</div><div class="neben">zuletzt ${esc(relativ(p.zuletzt))} · ${p.heroPerson ? "HERO: " + esc(p.heroPerson.name) : "keine HERO-Person"}</div></div><span class="badge ${p.rolle === "admin" ? "blau" : ""}">${p.rolle === "admin" ? "Admin" : "Planer"}</span><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>
     <p class="hinweis">Jeder, der die App über Tailscale öffnet, erscheint hier automatisch.</p>`;
   $$("[data-fb]", el).forEach((b) => (b.onclick = () => { feedbackFilter = b.dataset.fb; adminBereich(el, signal); }));
   $$("[data-status]", el).forEach((b) => (b.onclick = async () => {
@@ -228,15 +238,25 @@ function profilSheet(p, fertig) {
   let rolle = p.rolle;
   const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Profil</h2><span></span></div>
     <div class="gruppe"><label class="feld"><span>Name</span><input id="pname" value="${esc(p.name)}" maxlength="80" autocomplete="off"></label>
-      <div class="zeile"><div class="haupt"><div class="neben">Login</div><div>${esc(p.login)}</div></div></div></div>
+      <div class="zeile"><div class="haupt"><div class="neben">Login</div><div>${esc(p.login)}</div></div></div>
+      <label class="feld"><span>HERO-Person (für „Meine Termine“)</span><select id="pheld"><option value="">${p.heroPerson ? esc(p.heroPerson.name) : "Lädt …"}</option></select></label></div>
     <div class="label">Rolle</div>
     <div class="segctl" role="group" aria-label="Rolle"><button data-rolle="planer" aria-pressed="${rolle === "planer"}">Planer</button><button data-rolle="admin" aria-pressed="${rolle === "admin"}">Admin</button></div>
     <p class="hinweis">Admins sehen Feedback und Team. Weitere Rechte kommen später.</p>
     <button class="gross" data-speichern>Speichern</button>`);
   $("[data-zu]", d).onclick = () => d.close();
   $$("[data-rolle]", d).forEach((b) => (b.onclick = () => { rolle = b.dataset.rolle; $$("[data-rolle]", d).forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+  // Wer in HERO-Terminen eingeteilt ist; die aktuelle Zuordnung bleibt wählbar, auch wenn sie gerade keine Termine hat.
+  const wahl = $("#pheld", d);
+  let personen = [];
+  api("/api/hero-personen").then((liste) => {
+    personen = p.heroPerson && !liste.some((x) => x.id === p.heroPerson.id) ? [p.heroPerson, ...liste] : liste;
+    wahl.innerHTML = `<option value="">Keine Zuordnung</option>${personen.map((x) => `<option value="${x.id}" ${x.id === p.heroPerson?.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}`;
+  }).catch(() => { wahl.innerHTML = `<option value="">${p.heroPerson ? esc(p.heroPerson.name) : "HERO nicht erreichbar"}</option>`; wahl.disabled = true; });
   $("[data-speichern]", d).onclick = async () => {
-    try { await api("/api/team/" + encodeURIComponent(p.login), { methode: "PUT", body: { name: $("#pname", d).value, rolle } }); d.close(); toast("Gespeichert", "ok"); fertig(); }
+    const body = { name: $("#pname", d).value, rolle };
+    if (!wahl.disabled) body.heroPerson = personen.find((x) => String(x.id) === wahl.value) || null;
+    try { await api("/api/team/" + encodeURIComponent(p.login), { methode: "PUT", body }); d.close(); toast("Gespeichert", "ok"); fertig(); }
     catch (e) { fehlerMelden(e); }
   };
 }

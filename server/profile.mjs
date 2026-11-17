@@ -27,11 +27,15 @@ export function erstelleProfile({ datenDir, inhaber, uhr = Date.now }) {
     },
     alle: () => Object.values(laden()).sort((a, b) => a.name.localeCompare(b.name, "de")),
     nameVon: (login) => laden()[login]?.name || login,
-    aendern(login, { name, rolle }) {
+    // heroPerson: wer diese Person in HERO ist (für „Meine Termine“); null löst die Zuordnung.
+    aendern(login, { name, rolle, heroPerson }) {
       const alle = laden();
       const p = alle[login];
       if (!p) throw fehler(404, "Profil nicht gefunden");
       if (rolle !== undefined && !ROLLEN.includes(rolle)) throw fehler(400, "Unbekannte Rolle");
+      if (heroPerson !== undefined && heroPerson !== null && !Number.isInteger(heroPerson?.id)) throw fehler(400, "Ungültige HERO-Person");
+      if (heroPerson === null) delete p.heroPerson;
+      else if (heroPerson) p.heroPerson = { id: heroPerson.id, name: String(heroPerson.name || "").trim().slice(0, 80) };
       if (rolle === "planer" && p.rolle === "admin" && Object.values(alle).filter((x) => x.rolle === "admin").length === 1) throw fehler(400, "Mindestens ein Admin muss bleiben");
       if (typeof name === "string" && name.trim()) p.name = name.trim().slice(0, 80);
       if (rolle) p.rolle = rolle;
