@@ -64,13 +64,14 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
   const planungen = erstellePlanungen({ datenDir });
   // Einmal pro Server, damit der Schutz gegen doppeltes Absenden greift; HERO wird je Aufruf frisch gebaut.
   // shortcut: ablage null, bis Drive (Task 13) oder der HERO-Upload steht; dann gehen nur Logbuch-Einträge raus.
+  const profile = erstelleProfile({ datenDir, inhaber });
   const abschluss = erstelleAbschluss({
+    nameVon: (login) => profile.nameVon(login),
     planungen,
     schreiber: { zielProjekt: (id) => schreiber().zielProjekt(id) },
     dateien: { logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text) },
     ablage: null,
   });
-  const profile = erstelleProfile({ datenDir, inhaber });
   const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;

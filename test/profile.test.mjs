@@ -70,3 +70,14 @@ test("ich: Name aus dem Profil, Rolle und Inhaber-Flag für die Oberfläche", as
     assert.deepEqual([r.login, r.name, r.rolle, r.inhaber], ["chef@x.de", "Max Muster", "admin", true]);
   } finally { await s.stop(); }
 });
+
+test("Planungen zeigen den Namen des Anlegers aus dem Profil", async () => {
+  const s = await testServer({ lokal: false, inhaber: "chef@x.de" });
+  try {
+    const p = await (await fetch(s.url + "/api/planungen", { method: "POST", headers: { ...J, ...wer("max@x.de", "Max Muster") }, body: JSON.stringify({ projektId: 11541539, projektTitel: "T" }) })).json();
+    const liste = await (await fetch(s.url + "/api/planungen", { headers: wer("chef@x.de", "Dominik") })).json();
+    assert.equal(liste[0].personName, "Max Muster");
+    const eine = await (await fetch(s.url + "/api/planungen/" + p.id, { headers: wer("chef@x.de") })).json();
+    assert.equal(eine.personName, "Max Muster");
+  } finally { await s.stop(); }
+});

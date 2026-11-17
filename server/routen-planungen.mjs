@@ -4,8 +4,9 @@ import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf, PFLICHTFOTOS, BEREICHE } from "./protokoll.mjs";
 
-route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste()));
-route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, k.planungen.laden(p.id)));
+const mitName = (k, pl) => ({ ...pl, personName: k.profile.nameVon(pl.person) });
+route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste().map((pl) => mitName(k, pl))));
+route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k, k.planungen.laden(p.id))));
 
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);

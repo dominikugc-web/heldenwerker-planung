@@ -8,8 +8,8 @@ const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "W
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
 
 // Logbuch-Text für HERO: feste Abschnitte, nur gefüllte, danach die Links.
-export function monteurText(monteure, links = [], hinweis = "", protokoll = "") {
-  const teile = ["Für die Monteure (Besichtigung)"];
+export function monteurText(monteure, links = [], hinweis = "", protokoll = "", aufgenommen = "") {
+  const teile = ["Für die Monteure (Besichtigung)" + (aufgenommen ? "\n" + aufgenommen : "")];
   for (const [k, titel] of ABSCHNITTE) if (monteure?.[k]?.length) teile.push(titel + "\n" + monteure[k].map((s) => "• " + s).join("\n"));
   if (links.length) teile.push("Dateien\n" + links.map(([n, l]) => `${n}: ${l}`).join("\n"));
   if (hinweis) teile.push(hinweis);
@@ -30,7 +30,7 @@ export function dateiNamen(fotos) {
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
-export function erstelleAbschluss({ planungen, schreiber, dateien, ablage }) {
+export function erstelleAbschluss({ planungen, schreiber, dateien, ablage, nameVon = (l) => l }) {
   const laufend = new Set();
 
   return {
@@ -48,6 +48,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage }) {
     const namen = dateiNamen(pl.ergebnis.fotos);
     const alle = pl.verlauf.flatMap((n) => n.dateien);
     const datum = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" });
+    const aufgenommen = `Aufgenommen von ${nameVon(pl.person)} am ${new Date(pl.erstellt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" })}`;
 
     // Was hochgeladen werden muss: Fotos (mit Zeichnung), PDFs und Videos aus dem Chat, das Protokoll.
     const auftraege = alle.map((d) => ({ schluessel: d.id, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: MIME[d.art] }));
@@ -74,11 +75,11 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage }) {
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
     const links = auftraege.filter((a) => pl.gesendet.dateien[a.schluessel]).map((a) => [a.name, pl.gesendet.dateien[a.schluessel].link]);
     if (fertig && pl.gesendet.logbuch !== true) {
-      const text = pl.gesendet.logbuch === "vorlaeufig" ? monteurText({}, links, "Nachtrag zur Besichtigung: Fotos und Protokoll") : monteurText(pl.ergebnis.monteure, links, "", protokollText(pl.ergebnis.felder, await ladeFelder()));
+      const text = pl.gesendet.logbuch === "vorlaeufig" ? monteurText({}, links, "Nachtrag zur Besichtigung: Fotos und Protokoll") : monteurText(pl.ergebnis.monteure, links, "", protokollText(pl.ergebnis.felder, await ladeFelder()), aufgenommen);
       await dateien.logbuchEintrag(ziel.id, text);
       pl.gesendet.logbuch = true;
     } else if (!ablage && !pl.gesendet.logbuch) {
-      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll-PDF folgen.", protokollText(pl.ergebnis.felder, await ladeFelder())));
+      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll-PDF folgen.", protokollText(pl.ergebnis.felder, await ladeFelder()), aufgenommen));
       pl.gesendet.logbuch = "vorlaeufig";
     }
     if (pl.gesendet.logbuch) pl.status = "gesendet";

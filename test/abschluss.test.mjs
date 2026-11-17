@@ -37,8 +37,14 @@ async function aufbau({ projektId = 11541539, fotos = 5, ablageFehlerBei = null 
   } };
   const dateienHero = { async logbuchEintrag(id, text) { log.logbuch.push({ id, text }); return { id: 1 }; } };
   const schreiber = { zielProjekt: (id) => (Number(id) === 11541539 ? { id: 11541539, umgeleitet: false } : { id: 11541539, umgeleitet: true }) };
-  return { p, planungen, log, abschluss: erstelleAbschluss({ planungen, schreiber, dateien: dateienHero, ablage }) };
+  return { p, planungen, log, abschluss: erstelleAbschluss({ planungen, schreiber, dateien: dateienHero, ablage, nameVon: () => "Max Muster" }) };
 }
+
+test("Logbuch nennt, wer die Besichtigung aufgenommen hat", async () => {
+  const { p, log, abschluss } = await aufbau();
+  await abschluss.abschliessen(p.id);
+  assert.match(log.logbuch[0].text, /^Für die Monteure \(Besichtigung\)\nAufgenommen von Max Muster am \d\d\.\d\d\.\d{4}\n/);
+});
 
 test("Dateinamen: Pflichtfoto mit Nummer, Umlaute bleiben", () => {
   const n = dateiNamen([{ dateiId: "a", pflichtfoto: "Zählerschrank" }, { dateiId: "b", pflichtfoto: "Zählerschrank" }, { dateiId: "c", pflichtfoto: "Weitere" }, { dateiId: "d", pflichtfoto: "Sparren/Lattung" }]);
