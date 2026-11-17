@@ -71,10 +71,13 @@ async function home(el, _, signal) {
 }
 
 const STATUS = { offen: ["Offen", "blau"], zusammengefasst: ["Zum Prüfen", "orange"], gesendet: ["In HERO", "gruen"] };
+// Sende-Stand geht vor: läuft gerade im Hintergrund, oder hat nicht geklappt (dann in der Prüfansicht erneut senden).
+const SENDEN = { laeuft: ["Wird gesendet …", "orange"], fehler: ["Senden fehlgeschlagen", "rot"] };
 function planungZeile(p) {
-  const [text, farbe] = STATUS[p.status] || STATUS.offen;
+  const [text, farbe] = SENDEN[p.senden?.status] || STATUS[p.status] || STATUS.offen;
   const ziel = p.status === "offen" ? "chat/" + p.id : "pruefung/" + p.id;
-  return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc((p.personName || p.person || "").split(/[s@]/)[0])} · ${p.nachrichten} Nachrichten</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
+  const person = (p.personName || p.person || "").split(/[\s@]/)[0];
+  return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc(person)}</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
 }
 function terminZeile(t) {
   const ziel = t.projektId ? `href="#projekt/${t.projektId}"` : "";
