@@ -7,7 +7,7 @@ import { ladeJson, speichereJson } from "./speicher.mjs";
 import { fehler } from "./router.mjs";
 
 const ID = /^[a-z0-9-]{8,40}$/i;
-const ARTEN = ["bild", "video", "pdf"];
+const ARTEN = ["bild", "video", "pdf", "audio"];
 export const MAX_FOTOS = 60, MAX_PDF_SEITEN = 30;
 
 // Planungs-Chats als JSON unter daten/planungen/<id>/, Dateien daneben unter dateien/.
@@ -66,8 +66,13 @@ export function erstellePlanungen({ datenDir }) {
       return refs.map((r) => {
         const meta = ID.test(r.id || "") && ladeJson(dateiPfad(p.id, r.id) + ".json", null);
         if (!meta) throw fehler(400, "Datei fehlt: " + (r.name || r.id));
-        return { id: meta.id, name: meta.name, art: meta.art, groesse: meta.groesse, klein: fs.existsSync(dateiPfad(p.id, r.id, true)) };
+        return { id: meta.id, name: meta.name, art: meta.art, groesse: meta.groesse, klein: fs.existsSync(dateiPfad(p.id, r.id, true)), ...(meta.text && { text: meta.text }) };
       });
+    },
+    // Umgewandelter Text einer Sprachnachricht, damit sie nur einmal durch Whisper muss.
+    textMerken(id, dateiId, text) {
+      const metaDatei = dateiPfad(id, dateiId) + ".json";
+      speichereJson(metaDatei, { ...ladeJson(metaDatei, {}), text });
     },
     pruefeGrenzen(p, neue) {
       const fotos = p.verlauf.flatMap((n) => n.dateien).concat(neue).filter((d) => d.art === "bild").length;
@@ -105,6 +110,7 @@ export function erstellePlanungen({ datenDir }) {
 
   function dateiBlock(p, d) {
     if (d.art === "video") return { type: "text", text: `[Video: ${d.name}, Inhalt unbekannt]` };
+    if (d.art === "audio") return { type: "text", text: d.text ? `[Sprachnachricht: ${d.text}]` : "[Sprachnachricht, nicht verstanden]" };
     if (d.art === "pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data: fs.readFileSync(dateiPfad(p.id, d.id)).toString("base64") } };
     const klein = dateiPfad(p.id, d.id, true);
     const datei = fs.existsSync(klein) ? klein : dateiPfad(p.id, d.id);

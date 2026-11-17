@@ -12,6 +12,7 @@ import { erstelleClaude } from "./claude.mjs";
 import { erstelleDateien } from "./hero-dateien.mjs";
 import { erstelleAbschluss } from "./abschluss.mjs";
 import { ladeDrive } from "./drive.mjs";
+import { erstelleTranskription } from "./transkribieren.mjs";
 import Anthropic from "@anthropic-ai/sdk";
 import "./routen-hero.mjs";
 import "./routen-planungen.mjs";
@@ -53,7 +54,7 @@ route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
   claude: !!ladeSchluessel(...SCHLUESSEL.claude, k.homeDir),
 }));
 
-export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient, inhaber = null }) {
+export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient, inhaber = null, transkribieren = erstelleTranskription() }) {
   // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
   const hero = () => erstelleHero({ key: heroKey ?? heroSchluessel(homeDir), fetch: heroFetch });
   const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir });
@@ -73,7 +74,7 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     dateien: { logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text) },
     ablage: () => ladeDrive(homeDir),
   });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile };
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);

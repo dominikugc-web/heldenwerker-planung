@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { istAdmin } from "./profile.mjs";
 import { feedbackNeu } from "./feedback.mjs";
+import { audioMime } from "./transkribieren.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf, PFLICHTFOTOS, BEREICHE } from "./protokoll.mjs";
@@ -29,6 +30,11 @@ route("POST", "/api/planungen/:id/nachricht", async (req, res, p, k) => {
   if (!claude) throw fehler(503, "Claude-Schlüssel fehlt");
   const dateien = k.planungen.dateienPruefen(pl, b.dateien);
   if (!String(b.text || "").trim() && !dateien.length) throw fehler(400, "Nachricht ist leer");
+  // Sprachnachrichten vor dem Claude-Aufruf in Text umwandeln (Whisper auf dem PC, ein paar Sekunden).
+  for (const d of dateien.filter((x) => x.art === "audio" && !x.text)) {
+    try { d.text = (await k.transkribieren(k.planungen.dateiPfad(pl.id, d.id))) || undefined; } catch (e) { console.error("Whisper:", String(e.message).slice(0, 200)); }
+    if (d.text) k.planungen.textMerken(pl.id, d.id, d.text);
+  }
   k.planungen.pruefeGrenzen(pl, dateien);
   await k.planungen.pruefePdfs(pl, dateien);
 
@@ -90,7 +96,7 @@ route("GET", "/api/planungen/:id/dateien/:dateiId", (req, res, p, k) => {
   let meta;
   try { [meta] = k.planungen.dateienPruefen({ id: p.id }, [{ id: p.dateiId }]); } catch { throw fehler(404, "Datei nicht gefunden"); }
   const datei = k.query.get("klein") === "1" && meta.klein ? k.planungen.dateiPfad(p.id, p.dateiId, true) : k.planungen.dateiPfad(p.id, p.dateiId);
-  res.writeHead(200, { "Content-Type": TYP[meta.art] || "application/octet-stream", "Cache-Control": "private, max-age=3600" });
+  res.writeHead(200, { "Content-Type": meta.art === "audio" ? audioMime(meta.name) : TYP[meta.art] || "application/octet-stream", "Cache-Control": "private, max-age=3600" });
   fs.createReadStream(datei).pipe(res);
 });
 

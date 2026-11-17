@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fehler } from "./router.mjs";
 import { ladeFelder, protokollPdf, protokollText } from "./protokoll.mjs";
+import { audioMime } from "./transkribieren.mjs";
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
   ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
@@ -52,7 +53,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const aufgenommen = `Aufgenommen von ${nameVon(pl.person)} am ${new Date(pl.erstellt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" })}`;
 
     // Was hochgeladen werden muss: Fotos (mit Zeichnung), PDFs und Videos aus dem Chat, das Protokoll.
-    const auftraege = alle.map((d) => ({ schluessel: d.id, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: MIME[d.art] }));
+    const auftraege = alle.map((d) => ({ schluessel: d.id, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
     const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
     auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
 

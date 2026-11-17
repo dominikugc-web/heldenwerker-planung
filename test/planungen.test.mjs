@@ -185,3 +185,43 @@ test("ich: Name aus dem Tailscale-Login und ob Inhaber", async () => {
     assert.deepEqual(r, { login: "chef@x.de", name: "Max Muster", rolle: "admin", inhaber: true, feedbackNeu: 0 });
   } finally { await s.stop(); }
 });
+
+function claudeMerker() {
+  const anfragen = [];
+  return { anfragen, beta: { messages: { stream: (p) => { anfragen.push(p); return {
+    async *[Symbol.asyncIterator]() { yield { type: "content_block_delta", delta: { type: "text_delta", text: "Ok" } }; },
+    finalMessage: async () => ({ stop_reason: "end_turn", content: [], usage: { input_tokens: 1, output_tokens: 1 } }),
+  }; } } } };
+}
+
+test("Sprachnachricht: wird einmal umgewandelt, Claude bekommt den Text, Verlauf speichert ihn", async () => {
+  const client = claudeMerker();
+  const gehoert = [];
+  const s = await testServer({ claudeClient: client, transkribieren: async (pfad) => { gehoert.push(pfad); return "Zählerschrank im Keller"; } });
+  try {
+    const p = await neuePlanung(s);
+    const up = await fetch(s.url + `/api/planungen/${p.id}/dateien/audio0001?name=Sprachnachricht%201.m4a&art=audio&klein=0`, { method: "PUT", body: "AUDIO" });
+    assert.equal(up.status, 201);
+    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "", dateien: [{ id: "audio0001", name: "Sprachnachricht 1.m4a", art: "audio" }] }) });
+    assert.equal(r.status, 200); await r.text();
+    assert.equal(gehoert.length, 1);
+    const inhalt = JSON.stringify(client.anfragen[0].messages);
+    assert.match(inhalt, /\[Sprachnachricht: Zählerschrank im Keller\]/);
+    const pl = await (await fetch(s.url + `/api/planungen/${p.id}`)).json();
+    assert.equal(pl.verlauf[0].dateien[0].text, "Zählerschrank im Keller");
+    const a = await fetch(s.url + `/api/planungen/${p.id}/dateien/audio0001`);
+    assert.equal(a.headers.get("content-type"), "audio/mp4");
+  } finally { await s.stop(); }
+});
+
+test("Sprachnachricht: klappt die Umwandlung nicht, geht es trotzdem weiter", async () => {
+  const client = claudeMerker();
+  const s = await testServer({ claudeClient: client, transkribieren: async () => { throw new Error("kein Python"); } });
+  try {
+    const p = await neuePlanung(s);
+    await fetch(s.url + `/api/planungen/${p.id}/dateien/audio0002?name=Sprachnachricht.webm&art=audio&klein=0`, { method: "PUT", body: "AUDIO" });
+    const r = await fetch(s.url + `/api/planungen/${p.id}/nachricht`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "Hier noch was", dateien: [{ id: "audio0002", name: "Sprachnachricht.webm", art: "audio" }] }) });
+    assert.equal(r.status, 200); await r.text();
+    assert.match(JSON.stringify(client.anfragen[0].messages), /Sprachnachricht, nicht verstanden/);
+  } finally { await s.stop(); }
+});
