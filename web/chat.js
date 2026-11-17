@@ -93,12 +93,15 @@ export async function chatAnsicht(el, id) {
       <button class="pill akzent" data-zusammen>Zusammenfassen</button></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
     <div class="vorschau" id="vorschau" hidden></div>
-    <div class="chatleiste" id="leiste">
-      <label class="pill rund" aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}<input type="file" id="datei" accept="image/*,video/*,application/pdf" multiple hidden></label>
-      <div class="eingabe"><textarea id="text" rows="1" placeholder="Nachricht schreiben …" aria-label="Nachricht" enterkeyhint="send"></textarea>
-        <button class="diktat" id="diktat" aria-label="Diktieren: Gesprochenes wird zu Text" aria-pressed="false" hidden>${IKON.mikro}</button></div>
-      <button class="sendbtn" id="senden" aria-label="Senden">${IKON.senden}</button>
-    </div>
+    <div class="chatleiste" id="leiste"><div class="eingabebox">
+      <textarea id="text" rows="1" placeholder="Nachricht schreiben …" aria-label="Nachricht" enterkeyhint="send"></textarea>
+      <div class="eingabezeile">
+        <label class="rundknopf" aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}<input type="file" id="datei" accept="image/*,video/*,application/pdf" multiple hidden></label>
+        <span class="platz"></span>
+        <button class="rundknopf diktat" id="diktat" aria-label="Diktieren: Gesprochenes wird zu Text" aria-pressed="false" hidden>${IKON.mikro}</button>
+        <button class="sendbtn" id="senden" aria-label="Senden">${IKON.senden}</button>
+      </div>
+    </div></div>
     <div class="chatleiste aufnahme" id="aufnahme" hidden>
       <button class="pill" id="aufnahmeAbbrechen">Abbrechen</button>
       <div class="aufnahmeanzeige" role="status"><span class="rotpunkt" aria-hidden="true"></span><span id="aufnahmeZeit">0:00</span></div>

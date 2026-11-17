@@ -37,7 +37,8 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
-html, body { margin: 0; height: 100%; overflow: hidden; }
+html, body { margin: 0; height: var(--appH, 100%); overflow: hidden; }
+body { position: relative; }
 html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; }
 body { background: var(--bgimg), var(--bg); color: var(--txt); font: 17px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
 button, a, label, input, select, textarea { touch-action: manipulation; }
@@ -117,7 +118,7 @@ textarea { resize: vertical; line-height: 1.4; }
 .segctl button[aria-pressed="true"] { background: light-dark(#fff, rgba(255,255,255,.16)); color: var(--txt); font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 
 /* Schwebende Tab-Leiste */
-.tabs { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, calc(env(safe-area-inset-bottom) - 10px)); width: min(calc(100% - 100px), 380px);
+.tabs { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(12px, calc(env(safe-area-inset-bottom) - 12px)); width: min(calc(100% - 100px), 380px);
   display: flex; padding: 5px; border-radius: 32px; background: var(--leiste); backdrop-filter: blur(16px) saturate(1.8); -webkit-backdrop-filter: blur(16px) saturate(1.8);
   box-shadow: 0 10px 30px rgba(0,0,0,.3); z-index: 5; }
 .tabs button { position: relative; z-index: 1; flex: 1; height: 50px; border-radius: 26px; display: flex; align-items: center; justify-content: center; color: var(--mut); transition: color .25s, transform .2s; }
@@ -127,7 +128,7 @@ textarea { resize: vertical; line-height: 1.4; }
 .tabs .plus { color: #fff; }
 .tabs .plus span { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 50%, transparent); }
 .tabs .plus[aria-current="page"] { background: none; color: #fff; }
-.fbbtn { position: fixed; right: max(12px, calc(50% - 190px - 72px)); bottom: max(12px, calc(env(safe-area-inset-bottom) - 10px)); z-index: 5; width: 60px; height: 60px; border-radius: 50%;
+.fbbtn { position: absolute; right: max(12px, calc(50% - 190px - 72px)); bottom: max(12px, calc(env(safe-area-inset-bottom) - 12px)); z-index: 5; width: 60px; height: 60px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; color: #f5c33b; background: var(--leiste); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .fbbtn svg { width: 27px; height: 27px; } .fbbtn:active { transform: scale(.88); }
 @media (max-width: 480px) { .tabs { left: 12px; transform: none; width: calc(100% - 96px); } .fbbtn { right: 12px; } }
@@ -167,7 +168,7 @@ dialog.sheet.voll .panel { top: 0; max-height: none; border-radius: 0; padding-t
 .zeit { font-variant-numeric: tabular-nums; font-weight: 600; width: 52px; flex: none; font-size: 15px; line-height: 1.2; }
 
 /* Chat */
-.chatseite { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 10px) max(12px, calc(50% - 320px)) 0; }
+.chatseite { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, var(--appH, 100%)); z-index: 4; background: var(--bgimg), var(--bg); display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top) + 8px) max(12px, calc(50% - 320px)) 0; }
 .chatkopf { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; }
 .chatkopf .haupt { flex: 1; min-width: 0; } .chatkopf .titel { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chatkopf .neben { color: var(--mut); font-size: 13px; }
@@ -185,8 +186,9 @@ dialog.sheet.voll .panel { top: 0; max-height: none; border-radius: 0; padding-t
 .anhang .fortschritt { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); transition: width .2s; }
 .vorschau { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px; }
 .vorschau .anhang { flex: none; width: 76px; height: 76px; }
-.chatleiste { display: flex; gap: 8px; align-items: flex-end; padding: 8px 0 calc(env(safe-area-inset-bottom) + 10px); }
-.chatleiste textarea { flex: 1; border-radius: 22px; padding: 11px 16px; max-height: 160px; resize: none; }
+.chatleiste { display: flex; gap: 8px; align-items: flex-end; padding: 6px 0 max(8px, calc(env(safe-area-inset-bottom) - 10px)); }
+body.tastatur .chatleiste { padding-bottom: 8px; }
+
 .chatleiste .pill { flex: none; }
 .sendbtn { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; }
 .sendbtn svg { width: 22px; height: 22px; } .sendbtn:disabled { opacity: .4; }
@@ -223,10 +225,9 @@ details.bereich[open] summary { border-bottom: 1px solid var(--line); }
 .fbbtn.ungelesen::after { content: ""; position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--err); box-shadow: 0 0 0 2px var(--panel); }
 
 /* Sprache: Diktieren im Feld, Aufnahme-Leiste, Sprachblasen */
-.eingabe { flex: 1; min-width: 0; position: relative; display: flex; }
-.eingabe textarea { flex: 1; padding-right: 48px; }
-.diktat { position: absolute; right: 4px; bottom: 4px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--mut); }
-.diktat svg { width: 20px; height: 20px; }
+
+
+
 .diktat[aria-pressed="true"] { color: #fff; background: var(--err); animation: puls 1.2s ease-in-out infinite; }
 @keyframes puls { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--err) 30%, transparent); } }
 .chatleiste.aufnahme { align-items: center; }
@@ -235,3 +236,16 @@ details.bereich[open] summary { border-bottom: 1px solid var(--line); }
 .sprachblase { align-self: flex-end; max-width: 84%; display: grid; gap: 6px; padding: 8px; border-radius: 22px; border-bottom-right-radius: 6px; background: var(--accent); color: #fff; }
 .sprachblase audio { width: min(260px, 70vw); height: 40px; }
 .sprachblase .transkript { font-size: 15px; padding: 0 8px 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Eingabe wie in der Claude-App: eine runde Box, oben Text, unten die Knöpfe */
+.eingabebox { flex: 1; min-width: 0; display: grid; gap: 6px; padding: 10px 10px 8px 14px; border-radius: 26px; background: light-dark(#fff, #2a2a2a); box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 6px 20px rgba(0,0,0,.25); }
+.eingabebox textarea { background: none; border-radius: 0; padding: 4px 2px; min-height: 28px; max-height: 160px; resize: none; }
+.eingabezeile { display: flex; align-items: center; gap: 8px; }
+.eingabezeile .platz { flex: 1; }
+.rundknopf { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--txt); background: light-dark(rgba(0,0,0,.06), rgba(255,255,255,.08)); cursor: pointer; flex: none; }
+.rundknopf svg { width: 20px; height: 20px; }
+.diktat[aria-pressed="true"] { color: #fff; background: var(--err); animation: puls 1.2s ease-in-out infinite; }
+.eingabezeile .sendbtn { width: 38px; height: 38px; }
+#peek { visibility: hidden; pointer-events: none; }
+#peek.an { visibility: visible; }
+body.wischt main { overflow: hidden; }
