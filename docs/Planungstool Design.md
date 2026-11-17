@@ -46,7 +46,7 @@ Planer und Vertriebler bei Heldenwerker sollen eine Besichtigung (PV und Wärmep
 - **HERO-API** (GraphQL v7, Schlüssel mit Vollzugriff in `~/.hero/graphql.env`). Vorhanden und geprüft: `upload_image` und `upload_document` (Ziel Projekt, brauchen eine `file_upload_uuid`), `add_logbook_entry` (Text an ein Projekt), `FileUploadFolder_*` (Dateiordner). Videos kann HERO nicht aufnehmen. Wie man an eine `file_upload_uuid` kommt (eigener Upload-Endpunkt?), ist noch nicht geprüft.
 - **Schreiben nur ins Testprojekt UNB-1149** (interne ID 11541539), bis Dominik es ausdrücklich anders sagt. Lesen ist überall erlaubt. Nie Mails senden, nie löschen.
 - **GitHub Pages ist öffentlich.** In die Seite kommen nur Oberfläche und Demodaten (so wie bei der Klartext-Vorschau).
-- **Der Server läuft auf Dominiks PC** und ist nur über Tailscale erreichbar (wie Klartext unter pc-dominik.taile03b4a.ts.net). Nur er hält den HERO-Schlüssel, den Claude-Schlüssel und den Google-Zugang.
+- **Der Server läuft auf Dominiks PC** und ist nur über Tailscale erreichbar (wie Klartext). Nur er hält den HERO-Schlüssel, den Claude-Schlüssel und den Google-Zugang.
 - **Videos gehen auf Google Drive**, in HERO steht der Link.
 - **Schreibstil in der App:** Heldenwerker, also siezen, sachlich, modern, keine Gedankenstriche. Die App-Oberfläche selbst ist intern und darf duzen. Siehe offene Frage.
 
