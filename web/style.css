@@ -45,6 +45,8 @@ button, a, label, input, select, textarea { touch-action: manipulation; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* In Textfeldern zeigt der Cursor den Fokus, kein blauer Rahmen (Dominik, 17.11.) */
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
 
 main { position: absolute; inset: 0; top: env(safe-area-inset-top); overflow-y: auto; overscroll-behavior: contain;
   padding: 18px max(16px, calc(50% - 280px)) calc(env(safe-area-inset-bottom) + 94px); }

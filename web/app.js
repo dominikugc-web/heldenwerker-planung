@@ -355,15 +355,19 @@ function sichtbarerBereich() {
   const wurzel = document.documentElement.style;
   wurzel.setProperty("--vv-top", vv.offsetTop + "px");
   wurzel.setProperty("--vv-h", vv.height + "px");
-  document.body.classList.toggle("tastatur", innerHeight - vv.height > 120);
 }
 window.visualViewport?.addEventListener("resize", sichtbarerBereich);
 window.visualViewport?.addEventListener("scroll", sichtbarerBereich);
 sichtbarerBereich();
+// Tastatur offen = Textfeld aktiv auf einem Touch-Gerät. (iOS verkleinert beim Öffnen auch innerHeight,
+// ein Höhenvergleich erkennt die Tastatur dort nicht.) Dann fällt der Abstand zur Home-Leiste unter dem Eingabefeld weg.
+const textfeldAktiv = () => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
+document.addEventListener("focusin", () => document.body.classList.toggle("tastatur", textfeldAktiv() && matchMedia("(pointer: coarse)").matches));
 // iOS: Nach dem Schließen der Tastatur bleibt die Seite manchmal verschoben.
 document.addEventListener("focusout", () => setTimeout(() => {
-  const a = document.activeElement;
-  if (!a || !/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) window.scrollTo(0, 0);
+  if (textfeldAktiv()) return;
+  document.body.classList.remove("tastatur");
+  window.scrollTo(0, 0);
 }, 60));
 
 // ---------- Start ----------
