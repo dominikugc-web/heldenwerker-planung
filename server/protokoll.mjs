@@ -4,11 +4,29 @@ import { fehler } from "./router.mjs";
 
 const VORLAGE = new URL("../vorlagen/besichtigung.pdf", import.meta.url);
 
-export const PFLICHTFOTOS = ["Dach gesamt", "Dacheindeckung", "Pfannentyp", "Sparren/Lattung", "Dachmaße", "Störer/Gauben",
-  "Gerüstfläche", "Kabelweg", "WR-Standort", "Speicher-Standort", "Zählerschrank", "HAK/Zähler"];
-// Foto-Haken im PDF in derselben Reihenfolge wie PFLICHTFOTOS.
-const FOTO_FELDER = ["foto_Dach_gesamt", "foto_Dacheindeckung", "foto_Pfannentyp", "foto_Sparren_Lattung", "foto_Dachmaße", "foto_Störer_Gauben",
-  "foto_Gerüstflaeche", "foto_Kabelweg", "foto_WR-Standort", "foto_Speicher-Standort", "foto_Zaehlerschrank", "foto_HAK_Zaehler"];
+// Pflichtfotos wie im Online-Formular „Technische Besichtigung“ (Stand 17.11.2026, Screenshots von Dominik).
+export const PFLICHTFOTOS = ["Dach gesamt", "Pfannentyp", "Sparren/Lattung", "Erdung", "Störer", "Gerüstfläche", "Kabelweg", "WR/SP Standort", "Zählerschrank", "HAK"];
+// Foto-Haken im PDF je Pflichtfoto (Erdung hat im PDF keinen Haken).
+const FOTO_FELDER = { "Dach gesamt": ["foto_Dach_gesamt"], "Pfannentyp": ["foto_Pfannentyp"], "Sparren/Lattung": ["foto_Sparren_Lattung"], "Erdung": [],
+  "Störer": ["foto_Störer_Gauben"], "Gerüstfläche": ["foto_Gerüstflaeche"], "Kabelweg": ["foto_Kabelweg"], "WR/SP Standort": ["foto_WR-Standort", "foto_Speicher-Standort"],
+  "Zählerschrank": ["foto_Zaehlerschrank"], "HAK": ["foto_HAK_Zaehler"] };
+// Felder, die das Online-Formular abfragt, das PDF aber nicht hat. Sie stehen in Prüfansicht und Logbuch, nicht im PDF.
+const ZUSATZ = [
+  [3, "sat_schluessel", "SAT-Schlüssel o. Ä. einbauen?", "text"],
+  [4, "wandmontage", "Wandmontage?", "janein"],
+  [4, "geruest_notiz", "Notiz Gerüst", "text"],
+  [5, "uess_innen", "Kabelweg innen über 10 m: ÜSS", "text"],
+  [5, "kabelweg_zs_wr", "Kabelweglänge ZS zum WR", "text"],
+  [5, "mehrkosten", "Mehrkosten", "text"],
+  [5, "zs_plaetze", "Plätze im neuen ZS", "text"],
+  [5, "kabelweg_zs_zs", "Kabelweglänge ZS zu ZS", "text"],
+  [5, "kabelweg_hak_zs", "Kabelweglänge HAK zum neuen ZS", "text"],
+  [5, "elektro_notiz", "Notiz Heizstab, Potentialausgleich, Erdspieß", "text"],
+  [6, "tank_art", "Art vom Tank", "text"],
+  [7, "kondensat_wohin", "Kondensat wohin", "auswahl", ["Abfluss", "Erde"]],
+  [7, "solarthermie_vorhanden", "Solarthermie vorhanden?", "janein"],
+  [7, "wp_notiz", "Notiz Wärmepumpe", "text"],
+];
 export const FOTO_ARTEN = [...PFLICHTFOTOS, "Weitere"];
 
 // Bereich und Beschriftung je Feld, wie im Protokoll gedruckt.
@@ -57,7 +75,19 @@ export async function ladeFelder() {
     felder.delete(name);
   }
   if (felder.size) throw new Error("Feld ohne Beschriftung: " + [...felder.keys()].join(", "));
-  return (cache = liste);
+  for (const [bereich, name, label, art, optionen] of ZUSATZ) liste.push({ name, art, ...(optionen && { optionen }), bereich, label, zusatz: true });
+  // Nach Bereich sortiert, damit Zusatzfelder in ihrem Bereich stehen (sort ist stabil).
+  return (cache = liste.sort((a, b) => a.bereich - b.bereich));
+}
+
+export const BEREICHE = ["Objekt und Kunde", "PV-System und Angebot", "DC und Dachmontage", "Gerüst, Sicherheit, Dachfreigabe", "AC und Elektro PV", "Wärmepumpe Bestand", "WP-Standort und Leitungsweg"];
+
+// Kurzfassung der ausgefüllten Felder für das HERO-Logbuch, solange das PDF nicht hochgeladen werden kann.
+export function protokollText(werte, felder) {
+  return BEREICHE.map((titel, i) => {
+    const zeilen = felder.filter((f) => f.bereich === i + 1 && werte[f.name]).map((f) => `• ${f.label}: ${werte[f.name]}`);
+    return zeilen.length ? `${titel}\n${zeilen.join("\n")}` : "";
+  }).filter(Boolean).join("\n\n");
 }
 
 const erlaubt = (f) => (f.art === "janein" ? ["ja", "nein", ""] : f.art === "auswahl" ? [...f.optionen, ""] : null);
@@ -121,7 +151,7 @@ export async function protokollPdf(ergebnis, felder) {
   const form = doc.getForm();
   for (const f of felder) {
     const wert = ergebnis.felder[f.name] || "";
-    if (!wert) continue;
+    if (!wert || f.zusatz) continue; // Zusatzfelder haben kein PDF-Feld
     if (f.name === "datum") {
       const [t, m, j] = wert.split(".");
       for (const [n, v] of [["datum_tag", t], ["datum_monat", m], ["datum_jahr", j]]) { try { form.getDropdown(n).select(v); } catch { /* Wert nicht in der Liste */ } }
@@ -130,7 +160,7 @@ export async function protokollPdf(ergebnis, felder) {
     else if (f.art === "auswahl") form.getDropdown(f.name).select(wert);
     else form.getTextField(f.name).setText(winAnsi(wert));
   }
-  PFLICHTFOTOS.forEach((p, i) => { if (ergebnis.fotos.some((x) => x.pflichtfoto === p)) form.getCheckBox(FOTO_FELDER[i]).check(); });
+  for (const p of PFLICHTFOTOS) if (ergebnis.fotos.some((x) => x.pflichtfoto === p)) for (const n of FOTO_FELDER[p]) form.getCheckBox(n).check();
   form.flatten();
   return Buffer.from(await doc.save());
 }

@@ -1,18 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fehler } from "./router.mjs";
-import { ladeFelder, protokollPdf } from "./protokoll.mjs";
+import { ladeFelder, protokollPdf, protokollText } from "./protokoll.mjs";
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
   ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
 
 // Logbuch-Text für HERO: feste Abschnitte, nur gefüllte, danach die Links.
-export function monteurText(monteure, links = [], hinweis = "") {
+export function monteurText(monteure, links = [], hinweis = "", protokoll = "") {
   const teile = ["Für die Monteure (Besichtigung)"];
   for (const [k, titel] of ABSCHNITTE) if (monteure?.[k]?.length) teile.push(titel + "\n" + monteure[k].map((s) => "• " + s).join("\n"));
   if (links.length) teile.push("Dateien\n" + links.map(([n, l]) => `${n}: ${l}`).join("\n"));
   if (hinweis) teile.push(hinweis);
+  // Solange das PDF nicht in HERO landet, stehen die Protokoll-Werte hier.
+  if (protokoll) teile.push("Aus dem Besichtigungsprotokoll\n\n" + protokoll);
   return teile.join("\n\n");
 }
 
@@ -72,11 +74,11 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage }) {
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
     const links = auftraege.filter((a) => pl.gesendet.dateien[a.schluessel]).map((a) => [a.name, pl.gesendet.dateien[a.schluessel].link]);
     if (fertig && pl.gesendet.logbuch !== true) {
-      const text = pl.gesendet.logbuch === "vorlaeufig" ? monteurText({}, links, "Nachtrag zur Besichtigung: Fotos und Protokoll") : monteurText(pl.ergebnis.monteure, links);
+      const text = pl.gesendet.logbuch === "vorlaeufig" ? monteurText({}, links, "Nachtrag zur Besichtigung: Fotos und Protokoll") : monteurText(pl.ergebnis.monteure, links, "", protokollText(pl.ergebnis.felder, await ladeFelder()));
       await dateien.logbuchEintrag(ziel.id, text);
       pl.gesendet.logbuch = true;
     } else if (!ablage && !pl.gesendet.logbuch) {
-      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll folgen."));
+      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll-PDF folgen.", protokollText(pl.ergebnis.felder, await ladeFelder())));
       pl.gesendet.logbuch = "vorlaeufig";
     }
     if (pl.gesendet.logbuch) pl.status = "gesendet";

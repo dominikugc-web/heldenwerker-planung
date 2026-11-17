@@ -55,6 +55,11 @@ test("Monteur-Text hat feste Abschnitte und Links, leere Abschnitte fehlen", () 
   assert.doesNotMatch(t, /–|—/);
 });
 
+test("Monteur-Text hängt die Protokoll-Kurzfassung an", () => {
+  const t = monteurText(MONTEURE, [], "", "DC und Dachmontage\n• Dachbelag: Pfanne");
+  assert.match(t, /Aus dem Besichtigungsprotokoll\n\nDC und Dachmontage\n• Dachbelag: Pfanne/);
+});
+
 test("zweiter Lauf lädt nichts doppelt und schreibt keinen zweiten Logbuch-Eintrag", async () => {
   const { p, log, abschluss } = await aufbau();
   const r1 = await abschluss.abschliessen(p.id);
@@ -107,7 +112,7 @@ test("ohne Ablage geht nur der Logbuch-Eintrag raus, Dateien bleiben offen", asy
   const r = await ohne.abschliessen(p.id);
   assert.equal(r.hochgeladen, 0);
   assert.equal(r.offen, 6);
-  assert.match(log.logbuch[0].t, /Fotos und Protokoll folgen/);
+  assert.match(log.logbuch[0].t, /Fotos und Protokoll-PDF folgen/);
   assert.equal(planungen.laden(p.id).gesendet.logbuch, "vorlaeufig");
   assert.equal(planungen.laden(p.id).status, "gesendet");
   assert.equal((await ohne.abschliessen(p.id)).offen, 6);

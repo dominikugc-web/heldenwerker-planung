@@ -55,7 +55,7 @@ test("Route: zusammenfassen speichert Ergebnis mit fehlt, PUT prüft Änderungen
     const r = await fetch(s.url + `/api/planungen/${p.id}/zusammenfassen`, { method: "POST", headers: { "Content-Type": "application/json" } });
     assert.equal(r.status, 200);
     const e = await r.json();
-    assert.equal(e.fehlt.length, 11);
+    assert.equal(e.fehlt.length, 9);
     const gespeichert = await (await fetch(s.url + `/api/planungen/${p.id}`)).json();
     assert.equal(gespeichert.status, "zusammengefasst");
 
