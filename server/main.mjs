@@ -4,37 +4,12 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { GITHUB_ORIGIN, ladeSchluessel, SCHLUESSEL } from "./konfig.mjs";
+import { erstelleHero } from "./hero.mjs";
+import { route, finde, json } from "./router.mjs";
+import "./routen-hero.mjs";
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json", ".pdf": "application/pdf" };
-
-const routen = [];
-// muster wie "/api/projekte/:id"; handler(req, res, params, kontext)
-export function route(methode, muster, handler) {
-  const teile = muster.split("/");
-  routen.push({ methode, teile, handler });
-}
-
-function finde(methode, pfad) {
-  const ist = pfad.split("/");
-  for (const r of routen) {
-    if (r.methode !== methode || r.teile.length !== ist.length) continue;
-    const params = {};
-    if (r.teile.every((t, i) => (t.startsWith(":") ? ((params[t.slice(1)] = decodeURIComponent(ist[i])), true) : t === ist[i]))) return { r, params };
-  }
-  return null;
-}
-
-export function json(res, status, obj) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(obj));
-}
-
-export async function leseJson(req, max = 1_000_000) {
-  let text = "";
-  for await (const c of req) { text += c; if (text.length > max) throw Object.assign(new Error("Anfrage zu groß"), { status: 413 }); }
-  try { return text ? JSON.parse(text) : {}; } catch { throw Object.assign(new Error("Ungültiges JSON"), { status: 400 }); }
-}
 
 export function person(req, lokal) {
   return req.headers["tailscale-user-login"] || (lokal ? "Lokal" : null);
@@ -67,8 +42,10 @@ route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
   claude: !!ladeSchluessel(...SCHLUESSEL.claude, k.homeDir),
 }));
 
-export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false }) {
-  const kontext = { webDir, datenDir, homeDir, lokal };
+export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey }) {
+  // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
+  const hero = () => erstelleHero({ key: heroKey ?? ladeSchluessel(...SCHLUESSEL.hero, homeDir), fetch: heroFetch });
+  const kontext = { webDir, datenDir, homeDir, lokal, hero };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
@@ -99,3 +76,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   });
   console.log("Planung läuft auf http://127.0.0.1:" + s.address().port);
 }
+
