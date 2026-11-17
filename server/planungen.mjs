@@ -88,7 +88,11 @@ export function erstellePlanungen({ datenDir }) {
       for (const n of p.verlauf) {
         const role = n.rolle === "claude" ? "assistant" : "user";
         const bloecke = [];
-        if (role === "user") for (const d of n.dateien) bloecke.push(dateiBlock(p, d));
+        if (role === "user") for (const d of n.dateien) {
+          // Beschriftung vor jedem Foto, damit Claude beim Zusammenfassen Fotos per ID zuordnen kann.
+          if (d.art === "bild") bloecke.push({ type: "text", text: `[Foto ${d.id}: ${d.name}]` });
+          bloecke.push(dateiBlock(p, d));
+        }
         if (n.text?.trim()) bloecke.push({ type: "text", text: n.text });
         if (!bloecke.length) continue;
         const letzte = msgs[msgs.length - 1];

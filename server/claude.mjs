@@ -1,5 +1,12 @@
 import fs from "node:fs";
 import { EURO_JE_DOLLAR } from "./konfig.mjs";
+import { ergebnisSchema } from "./protokoll.mjs";
+import { fehler } from "./router.mjs";
+
+const ZUSAMMENFASSEN = `Die Besichtigung ist fertig. Fasse jetzt alles zusammen.
+monteure: kurze Stichpunkte ohne Anrede, so dass ein Monteur auf der Baustelle sofort versteht, was gemacht wird (wasWirdGemacht), wo was hinkommt (woKommtWasHin), worauf er achten muss (achtung), Material und Besonderheiten (material) und was noch offen ist (offen). Keine Gedankenstriche. Nur was im Chat steht, nichts erfinden.
+felder: die Felder des Besichtigungsprotokolls. Leerer Text, wenn ein Wert nicht im Chat vorkommt. Datum als TT.MM.JJJJ.
+fotos: ordne jedes Foto (ID aus der Beschriftung [Foto ID: Name]) genau einem Pflichtfoto zu, sonst "Weitere".`;
 
 export const MODELL = "claude-sonnet-5-5";
 const PROMPT = fs.readFileSync(new URL("./prompt-besichtigung.md", import.meta.url), "utf8");
@@ -36,6 +43,21 @@ export function erstelleClaude({ client }) {
       // Bei einer Ablehnung (auch mitten im Stream) wird der Teiltext verworfen.
       if (m.stop_reason === "refusal") return { text: ABGELEHNT, abgelehnt: true, usage: m.usage };
       return { text, abgelehnt: false, usage: m.usage };
+    },
+
+    // Ein Aufruf mit festem JSON-Format: Monteur-Text, Protokoll-Felder, Foto-Zuordnung.
+    async zusammenfassen(messages, felder, dateiIds) {
+      const auftrag = { role: "user", content: [{ type: "text", text: ZUSAMMENFASSEN }] };
+      const letzte = messages.at(-1);
+      const msgs = letzte?.role === "user" ? [...messages.slice(0, -1), { role: "user", content: [...letzte.content, ...auftrag.content] }] : [...messages, auftrag];
+      const m = await client.beta.messages.create({
+        ...basis("high"), max_tokens: 16000, messages: msgs,
+        output_config: { effort: "high", format: { type: "json_schema", schema: ergebnisSchema(felder, dateiIds) } },
+      });
+      if (m.stop_reason === "refusal") throw fehler(502, "Claude hat die Zusammenfassung abgelehnt");
+      if (m.stop_reason === "max_tokens") throw fehler(502, "Die Zusammenfassung war zu lang, bitte noch einmal versuchen");
+      const text = m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+      try { return { ergebnis: JSON.parse(text), usage: m.usage }; } catch { throw fehler(502, "Claude hat kein gültiges Ergebnis geliefert"); }
     },
     basis,
   };

@@ -89,10 +89,11 @@ test("Verlauf wird zu Claude-Nachrichten: Bild, PDF, Video als Text", () => {
   p.verlauf.push({ rolle: "planer", text: "Noch was", zeit: "t", dateien: [] });
   const m = pl.alsNachrichten(p);
   assert.equal(m[0].role, "user");
-  assert.deepEqual(m[0].content.map((b) => b.type), ["text", "image", "document", "text", "text"]);
+  assert.deepEqual(m[0].content.map((b) => b.type), ["text", "text", "image", "document", "text", "text"]);
   assert.match(m[0].content[0].text, /UNB-1 Müller/);
-  assert.equal(m[0].content[1].source.data, Buffer.from("JPEGKLEIN").toString("base64"));
-  assert.equal(m[0].content[3].text, "[Video: Rundgang.mp4, Inhalt unbekannt]");
+  assert.equal(m[0].content[1].text, "[Foto bild0001: Dach.jpg]");
+  assert.equal(m[0].content[2].source.data, Buffer.from("JPEGKLEIN").toString("base64"));
+  assert.equal(m[0].content[4].text, "[Video: Rundgang.mp4, Inhalt unbekannt]");
   assert.deepEqual(m.map((x) => x.role), ["user", "assistant", "user"]);
 });
 
