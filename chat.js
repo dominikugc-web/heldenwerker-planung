@@ -116,6 +116,7 @@ export async function chatAnsicht(el, id) {
     <div class="steuerung" id="steuerung"></div>
     <input type="file" id="kamera" accept="image/*" capture="environment" hidden>
     <input type="file" id="galerie" accept="image/*,video/*,application/pdf" multiple hidden>
+    <input id="halter" class="halter" aria-hidden="true" tabindex="-1" autocomplete="off">
   </div>`;
   const verlauf = $("#verlauf", el), steuerung = $("#steuerung", el);
   $("[data-zurueck]", el).onclick = () => gehe("home");
@@ -183,6 +184,8 @@ export async function chatAnsicht(el, id) {
       </div>`;
     const feld = $("#wert", steuerung);
     $$("[data-wert]", steuerung).forEach((b) => (b.onclick = () => speichern(f, { wert: b.dataset.wert })));
+    // Der Senden-Knopf nimmt dem Feld den Fokus nicht weg, sonst geht am Handy die Tastatur zu.
+    $("[data-weiter]", steuerung)?.addEventListener("pointerdown", (e) => e.preventDefault());
     $("[data-weiter]", steuerung)?.addEventListener("click", () => feld.value.trim() ? speichern(f, { wert: feld.value }) : toast("Bitte etwas eintragen oder überspringen", "fehler"));
     feld?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && f.art !== "text") { e.preventDefault(); $("[data-weiter]", steuerung).click(); } });
     if (f.art === "text") { feld.style.height = "auto"; feld.addEventListener("input", () => { feld.style.height = "auto"; feld.style.height = Math.min(feld.scrollHeight, 140) + "px"; }); diktieren(feld, $("[data-diktat]", steuerung)); }
@@ -200,6 +203,9 @@ export async function chatAnsicht(el, id) {
 
   async function speichern(f, body) {
     if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
+    // Tastatur offen: Fokus solange auf ein verstecktes Feld parken, das beim Neuzeichnen bleibt, dann ans nächste Feld geben.
+    const halter = $("#halter", el), tastatur = steuerung.contains(document.activeElement) && document.activeElement.matches("input, textarea");
+    if (tastatur) halter.focus({ preventScroll: true });
     try {
       const r = await api(`/api/planungen/${planung.id}/antworten/${f.id}`, { methode: "PUT", body });
       planung.antworten = r.antworten;
@@ -207,6 +213,7 @@ export async function chatAnsicht(el, id) {
       bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
       zeichne();
     } catch (e) { bericht("antwort", e); fehlerMelden(e); }
+    if (tastatur) { const neu = $("input#wert, textarea#wert", steuerung); neu ? neu.focus({ preventScroll: true }) : halter.blur(); }
   }
 
   // ---------- Dateien an der aktuellen Frage ----------
