@@ -167,8 +167,10 @@ export async function chatAnsicht(el, id) {
     const fertig = liste.filter((f) => erledigt(antworten()[f.id])).length;
     $("#balken", el).style.width = Math.round((fertig / Math.max(liste.length, 1)) * 100) + "%";
     $("#stand", el).textContent = akt ? `${bereiche[akt.bereich]} · ${fertig} von ${liste.length}` : `Alles erfasst · ${fertig} von ${liste.length}`;
-    // Verlauf: alle erledigten Fragen mit Antwort, dazu die aktuelle Frage an ihrer Stelle.
-    verlauf.innerHTML = liste.filter((f) => erledigt(antworten()[f.id]) || f === akt).map((f) => {
+    // Verlauf: erledigte Fragen bis zur nächsten offenen, dazu die aktuelle an ihrer Stelle. Spätere, schon vorausgefüllte
+    // Antworten (Lieferschein) kommen erst, wenn man dort ankommt; sonst stünden sie unter der aktuellen Frage.
+    const offen = liste.findIndex((f) => !erledigt(antworten()[f.id])), grenze = offen < 0 ? Infinity : offen;
+    verlauf.innerHTML = liste.filter((f, i) => (erledigt(antworten()[f.id]) && i <= grenze) || f === akt).map((f) => {
       const a = antworten()[f.id];
       const frage = `<div class="blase claude frageblase${f === akt ? " aktiv" : ""}" id="f-${f.id}">${f.pflicht ? "📷 " : ""}${esc(f.frage)}${f === akt && bearbeite ? '<span class="badge orange">wird geändert</span>' : ""}</div>`;
       if (!erledigt(a) || f === akt && bearbeite) return frage + (f === akt && a ? antwortHtml(f, a) : "");
@@ -189,6 +191,7 @@ export async function chatAnsicht(el, id) {
     if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(bildSrc(d))}" alt="" loading="lazy">`).join("")}</span>`);
     for (const d of andere) teile.push(d.art === "audio" ? `<span class="klein">🎙 ${esc(d.text || "Sprachnotiz")}</span>` : `<span class="klein">${d.art === "video" ? "🎬" : "📄"} ${esc(d.name)}</span>`);
     if (a.notiz) teile.push(`<span class="klein">✎ ${esc(a.notiz)}</span>`);
+    if (a.quelle) teile.push(`<span class="quelle">📄 aus ${esc(a.quelle)}, bitte prüfen</span>`);
     return `<button class="blase planer antwortblase" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
   }
   verlauf.addEventListener("click", (e) => { const b = e.target.closest("[data-bearbeite]"); if (b) { bearbeite = b.dataset.bearbeite; zeichne(); } });

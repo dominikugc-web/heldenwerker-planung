@@ -43,6 +43,7 @@ export function antwortAnwenden(antworten, f, body, meta = {}) {
   const neu = { ...alt };
   if ("wert" in body) { neu.wert = wertNormal(f, body.wert); if (neu.wert) neu.uebersprungen = false; }
   if ("uebersprungen" in body) neu.uebersprungen = !!body.uebersprungen;
+  if ("wert" in body || "uebersprungen" in body) delete neu.quelle; // selbst beantwortet, nicht mehr "aus Lieferschein"
   if ("notiz" in body) neu.notiz = String(body.notiz || "").trim().slice(0, 4000);
   if ("dateien" in body) neu.dateien = body.dateien.map((d) => ({ ...(alt.dateien || []).find((x) => x.id === d.id), ...meta[d.id], id: d.id }));
   return { ...antworten, [f.id]: neu };
