@@ -23,7 +23,9 @@ const NUR = { pv: "pv", dc: "pv", geruest: "pv", fotos: "pv", ac: "pv", wp_besta
 const reihe = (name, werte, einheit) => werte.map((w) => `${name} ${w} ${einheit}`);
 const MODULE = [...reihe("Aiko Neostar", [440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500], "W"),
   ...reihe("Trina Vertex S+", [425, 430, 435, 440, 445, 450], "W"), ...reihe("Longi Hi-MO X6", [425, 430, 435, 440, 445, 450, 460], "W"),
-  ...reihe("Longi Hi-MO X10", [475, 480, 485, 490, 495, 500, 505], "W"), ...reihe("Bauer Glas-Glas", [420, 425, 430, 440, 445, 450, 460, 470, 475], "W"), "Sonstige (Notiz)"];
+  ...reihe("Longi Hi-MO X10", [475, 480, 485, 490, 495, 500, 505], "W"), ...reihe("Bauer Glas-Glas", [420, 425, 430, 440, 445, 450, 460, 470, 475], "W"),
+  "Longi EcoLife 475 W", // häufigstes Modul in den HERO-Lieferscheinen (17.11.2026)
+  "Sonstige (Notiz)"];
 const kw = (name, werte) => reihe(name, werte.map((w) => w.toFixed(1).replace(".", ",")), "kW");
 const WECHSELRICHTER = [...kw("Sungrow", [3, 3.6, 4, 5, 6, 8, 10, 12, 15, 20, 25]), ...kw("Fronius", [3, 4, 5, 6, 8, 10, 12]),
   ...kw("SMA", [3, 4, 5, 6, 8, 10, 12, 15, 20, 25]), ...kw("GoodWe", [3, 5, 6, 8, 10, 12, 15, 20, 25]),

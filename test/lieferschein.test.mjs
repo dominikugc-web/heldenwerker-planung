@@ -20,10 +20,16 @@ const werte = (a) => Object.fromEntries(Object.entries(a).map(([k, v]) => [k, v.
 
 test("PV-Lieferschein füllt Typ, Leistung, Module, Wechselrichter, Speicher, Wallbox, Zählerschrank", () => {
   const a = antwortenAusLieferscheinen([PV]);
-  assert.deepEqual(werte(a), { typ: "PV", anlagenleistung: "11,4", anzahl_module: "24", modul: "Sonstige (Notiz)", wechselrichter: "GoodWe 12,0 kW",
+  assert.deepEqual(werte(a), { typ: "PV", anlagenleistung: "11,4", anzahl_module: "24", modul: "Longi EcoLife 475 W", wechselrichter: "GoodWe 12,0 kW",
     speicher: "GoodWe ESA Batteriemodul 8.3 kWh - GW8.3-BAT-D-G20", wallbox: "EcoFlow PowerPulse Wallbox 11KW", wallbox_wunsch: "ja", neuer_zs: "ja", neuer_zs_ac: "ja" });
-  assert.equal(a.modul.notiz, "Laut Lieferschein: Longi EcoLife 475 Watt");
+  assert.equal(a.modul.notiz, undefined);
   assert.equal(a.anlagenleistung.quelle, "LS-883");
+});
+
+test("Modul nicht in der Liste: Sonstige mit genauer Bezeichnung in der Notiz", () => {
+  const a = antwortenAusLieferscheinen([{ nr: "LS-4", produkte: [p("Meyer Burger White 400 Watt", "PV Anlage DC Seitig 8 kWp 20 x Solarmodule")] }]);
+  assert.equal(a.modul.wert, "Sonstige (Notiz)");
+  assert.equal(a.modul.notiz, "Laut Lieferschein: Meyer Burger White 400 Watt");
 });
 
 test("Modul aus der Liste wird erkannt (Hersteller, Serie, Watt)", () => {
