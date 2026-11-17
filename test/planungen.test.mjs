@@ -162,3 +162,26 @@ test("Nachricht mit unbekannter Datei wird abgewiesen", async () => {
     assert.equal(r.status, 400);
   } finally { await s.stop(); }
 });
+
+test("hochgeladene Datei lässt sich wieder abrufen, klein bevorzugt, fremde IDs nicht", async () => {
+  const s = await testServer();
+  try {
+    const p = await neuePlanung(s);
+    const put = (klein, body) => fetch(s.url + `/api/planungen/${p.id}/dateien/bild0001?name=Dach.jpg&art=bild&klein=${klein}`, { method: "PUT", body });
+    assert.equal((await put(0, "GROSS")).status, 201);
+    assert.equal((await put(1, "KLEIN")).status, 201);
+    const k = await fetch(s.url + `/api/planungen/${p.id}/dateien/bild0001?klein=1`);
+    assert.equal(k.headers.get("content-type"), "image/jpeg");
+    assert.equal(await k.text(), "KLEIN");
+    assert.equal(await (await fetch(s.url + `/api/planungen/${p.id}/dateien/bild0001`)).text(), "GROSS");
+    assert.equal((await fetch(s.url + `/api/planungen/${p.id}/dateien/fehlt0001`)).status, 404);
+  } finally { await s.stop(); }
+});
+
+test("ich: Name aus dem Tailscale-Login und ob Inhaber", async () => {
+  const s = await testServer({ lokal: false, inhaber: "chef@x.de" });
+  try {
+    const r = await (await fetch(s.url + "/api/ich", { headers: { "Tailscale-User-Login": "chef@x.de", "Tailscale-User-Name": "Dominik Kononenko" } })).json();
+    assert.deepEqual(r, { login: "chef@x.de", name: "Dominik Kononenko", inhaber: true });
+  } finally { await s.stop(); }
+});

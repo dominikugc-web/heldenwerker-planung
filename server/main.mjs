@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { GITHUB_ORIGIN, ladeSchluessel, SCHLUESSEL } from "./konfig.mjs";
+import { GITHUB_ORIGIN, ladeSchluessel, heroSchluessel, SCHLUESSEL } from "./konfig.mjs";
 import { erstelleHero } from "./hero.mjs";
 import { erstelleSchreiber } from "./hero-schreiben.mjs";
 import { route, finde, json } from "./router.mjs";
@@ -46,13 +46,13 @@ function statisch(webDir, pfad, res) {
 
 route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
   ok: true,
-  hero: !!ladeSchluessel(...SCHLUESSEL.hero, k.homeDir),
+  hero: !!heroSchluessel(k.homeDir),
   claude: !!ladeSchluessel(...SCHLUESSEL.claude, k.homeDir),
 }));
 
 export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient, inhaber = null }) {
   // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
-  const hero = () => erstelleHero({ key: heroKey ?? ladeSchluessel(...SCHLUESSEL.hero, homeDir), fetch: heroFetch });
+  const hero = () => erstelleHero({ key: heroKey ?? heroSchluessel(homeDir), fetch: heroFetch });
   const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir });
   const claude = () => {
     const key = !claudeClient && ladeSchluessel(...SCHLUESSEL.claude, homeDir);

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { ladeFelder, ergebnisPruefen, fehltBerechnen, protokollPdf } from "./protokoll.mjs";
@@ -78,3 +79,20 @@ route("GET", "/api/planungen/:id/protokoll.pdf", async (req, res, p, k) => {
 });
 
 route("POST", "/api/planungen/:id/abschliessen", async (req, res, p, k) => json(res, 200, await k.abschluss.abschliessen(p.id)));
+
+const TYP = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
+// Für Vorschaubilder im Chat: klein=1 liefert die verkleinerte Fassung, wenn es sie gibt.
+route("GET", "/api/planungen/:id/dateien/:dateiId", (req, res, p, k) => {
+  k.planungen.laden(p.id);
+  let meta;
+  try { [meta] = k.planungen.dateienPruefen({ id: p.id }, [{ id: p.dateiId }]); } catch { throw fehler(404, "Datei nicht gefunden"); }
+  const datei = k.query.get("klein") === "1" && meta.klein ? k.planungen.dateiPfad(p.id, p.dateiId, true) : k.planungen.dateiPfad(p.id, p.dateiId);
+  res.writeHead(200, { "Content-Type": TYP[meta.art] || "application/octet-stream", "Cache-Control": "private, max-age=3600" });
+  fs.createReadStream(datei).pipe(res);
+});
+
+route("GET", "/api/ich", (req, res, p, k) => json(res, 200, {
+  login: k.person,
+  name: String(req.headers["tailscale-user-name"] || "").trim() || k.person,
+  inhaber: !!k.inhaber && k.person === k.inhaber,
+}));

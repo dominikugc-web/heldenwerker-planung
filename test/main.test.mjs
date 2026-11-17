@@ -90,3 +90,16 @@ test("fremde Fehler mit status (z. B. aus dem SDK) gehen nur allgemein raus", as
     assert.match(text, /Claude/);
   } finally { await s.stop(); }
 });
+
+test("HERO-Schlüssel: eigener aus planung.env vor dem allgemeinen", async () => {
+  const { heroSchluessel } = await import("../server/konfig.mjs");
+  const home = tempDir();
+  fs.mkdirSync(path.join(home, ".hero"));
+  assert.equal(heroSchluessel(home), null);
+  fs.writeFileSync(path.join(home, ".hero", "graphql.env"), "HERO_GRAPHQL_KEY=allgemein\n");
+  assert.equal(heroSchluessel(home), "allgemein");
+  fs.writeFileSync(path.join(home, ".hero", "planung.env"), "HERO_GRAPHQL_KEY=\n");
+  assert.equal(heroSchluessel(home), "allgemein", "leere planung.env zählt nicht");
+  fs.writeFileSync(path.join(home, ".hero", "planung.env"), "HERO_GRAPHQL_KEY=planung\n");
+  assert.equal(heroSchluessel(home), "planung");
+});

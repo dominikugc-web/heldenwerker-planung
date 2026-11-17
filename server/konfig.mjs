@@ -18,3 +18,8 @@ export const SCHLUESSEL = {
   hero: [".hero/graphql.env", "HERO_GRAPHQL_KEY"],
   claude: [".anthropic/planung.env", "ANTHROPIC_API_KEY"],
 };
+
+// Eigener Schlüssel fürs Planungstool (planung.env) vor dem allgemeinen (graphql.env).
+export function heroSchluessel(homeDir = os.homedir()) {
+  return ladeSchluessel(".hero/planung.env", "HERO_GRAPHQL_KEY", homeDir) ?? ladeSchluessel(...SCHLUESSEL.hero, homeDir);
+}
