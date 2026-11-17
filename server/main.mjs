@@ -5,6 +5,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { GITHUB_ORIGIN, ladeSchluessel, SCHLUESSEL } from "./konfig.mjs";
 import { erstelleHero } from "./hero.mjs";
+import { erstelleSchreiber } from "./hero-schreiben.mjs";
 import { route, finde, json } from "./router.mjs";
 import "./routen-hero.mjs";
 
@@ -45,7 +46,8 @@ route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
 export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey }) {
   // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
   const hero = () => erstelleHero({ key: heroKey ?? ladeSchluessel(...SCHLUESSEL.hero, homeDir), fetch: heroFetch });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero };
+  const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir });
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
