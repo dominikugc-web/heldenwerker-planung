@@ -221,3 +221,17 @@ details.bereich[open] summary { border-bottom: 1px solid var(--line); }
 
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 .fbbtn.ungelesen::after { content: ""; position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--err); box-shadow: 0 0 0 2px var(--panel); }
+
+/* Sprache: Diktieren im Feld, Aufnahme-Leiste, Sprachblasen */
+.eingabe { flex: 1; min-width: 0; position: relative; display: flex; }
+.eingabe textarea { flex: 1; padding-right: 48px; }
+.diktat { position: absolute; right: 4px; bottom: 4px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--mut); }
+.diktat svg { width: 20px; height: 20px; }
+.diktat[aria-pressed="true"] { color: #fff; background: var(--err); animation: puls 1.2s ease-in-out infinite; }
+@keyframes puls { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--err) 30%, transparent); } }
+.chatleiste.aufnahme { align-items: center; }
+.aufnahmeanzeige { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; font-variant-numeric: tabular-nums; font-size: 18px; }
+.rotpunkt { width: 12px; height: 12px; border-radius: 50%; background: var(--err); animation: blink 1s steps(2) infinite; }
+.sprachblase { align-self: flex-end; max-width: 84%; display: grid; gap: 6px; padding: 8px; border-radius: 22px; border-bottom-right-radius: 6px; background: var(--accent); color: #fff; }
+.sprachblase audio { width: min(260px, 70vw); height: 40px; }
+.sprachblase .transkript { font-size: 15px; padding: 0 8px 4px; white-space: pre-wrap; overflow-wrap: anywhere; }

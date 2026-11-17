@@ -93,10 +93,16 @@ export async function chatAnsicht(el, id) {
       <button class="pill akzent" data-zusammen>Zusammenfassen</button></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
     <div class="vorschau" id="vorschau" hidden></div>
-    <div class="chatleiste">
+    <div class="chatleiste" id="leiste">
       <label class="pill rund" aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}<input type="file" id="datei" accept="image/*,video/*,application/pdf" multiple hidden></label>
-      <textarea id="text" rows="1" placeholder="Nachricht oder Diktat …" aria-label="Nachricht" enterkeyhint="send"></textarea>
+      <div class="eingabe"><textarea id="text" rows="1" placeholder="Nachricht schreiben …" aria-label="Nachricht" enterkeyhint="send"></textarea>
+        <button class="diktat" id="diktat" aria-label="Diktieren: Gesprochenes wird zu Text" aria-pressed="false" hidden>${IKON.mikro}</button></div>
       <button class="sendbtn" id="senden" aria-label="Senden">${IKON.senden}</button>
+    </div>
+    <div class="chatleiste aufnahme" id="aufnahme" hidden>
+      <button class="pill" id="aufnahmeAbbrechen">Abbrechen</button>
+      <div class="aufnahmeanzeige" role="status"><span class="rotpunkt" aria-hidden="true"></span><span id="aufnahmeZeit">0:00</span></div>
+      <button class="sendbtn" id="aufnahmeSenden" aria-label="Sprachnachricht senden">${IKON.senden}</button>
     </div></div>`;
   const verlauf = $("#verlauf", el), vorschau = $("#vorschau", el), text = $("#text", el), senden = $("#senden", el);
   $("[data-zurueck]", el).onclick = () => gehe("home");
@@ -104,15 +110,16 @@ export async function chatAnsicht(el, id) {
   function zeichneVerlauf() {
     $("#kosten", el).textContent = planung.kostenCent ? "Claude bisher " + euro(planung.kostenCent) : "Neue Besichtigung";
     verlauf.innerHTML = planung.verlauf.length ? planung.verlauf.map((n) => {
-      const anh = n.dateien?.length ? `<div class="anhaenge">${n.dateien.map((d) => anhangHtml(d, dateiUrl(planung.id, d.id))).join("")}</div>` : "";
-      return anh + (n.text ? `<div class="blase ${n.rolle === "claude" ? "claude" : "planer"}">${esc(n.text)}</div>` : "");
+      const sichtbar = (n.dateien || []).filter((d) => d.art !== "audio");
+      const anh = sichtbar.length ? `<div class="anhaenge">${sichtbar.map((d) => anhangHtml(d, dateiUrl(planung.id, d.id))).join("")}</div>` : "";
+      return anh + (n.dateien || []).filter((d) => d.art === "audio").map((d) => sprachHtml(d, dateiUrl(planung.id, d.id, false))).join("") + (n.text ? `<div class="blase ${n.rolle === "claude" ? "claude" : "planer"}">${esc(n.text)}</div>` : "");
     }).join("") : `<div class="start-hilfe"><b>Erzähl mir von der Besichtigung</b>Schick Fotos, Videos, PDFs oder Notizen. Ich frage nach, was fürs Protokoll noch fehlt.</div>`;
     verlauf.scrollTop = verlauf.scrollHeight;
   }
-  function zeichneVorschau() {
+  let zeichneVorschau = function () {
     vorschau.hidden = !wartend.length;
     vorschau.innerHTML = wartend.map((w, i) => anhangHtml(w, w.vorschau, i)).join("");
-  }
+  };
   zeichneVerlauf();
 
   $("#datei", el).addEventListener("change", async (e) => {
@@ -142,14 +149,77 @@ export async function chatAnsicht(el, id) {
     zeichneVorschau();
   });
 
-  text.addEventListener("input", () => { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 160) + "px"; });
+  text.addEventListener("input", () => { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 160) + "px"; knopfZustand(); });
+
+  // Senden-Knopf: bei leerem Feld wird er zum Mikrofon für eine Sprachnachricht (wie bei WhatsApp).
+  const kannAufnehmen = !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+  const leer = () => !text.value.trim() && !wartend.length;
+  function knopfZustand() {
+    const mikro = leer() && kannAufnehmen;
+    senden.innerHTML = mikro ? IKON.mikro : IKON.senden;
+    senden.setAttribute("aria-label", mikro ? "Sprachnachricht aufnehmen" : "Senden");
+  }
+  knopfZustand();
+  const altesZeichnen = zeichneVorschau;
+  zeichneVorschau = () => { altesZeichnen(); knopfZustand(); };
+
+  // Diktieren: der Browser wandelt live in Text um (am iPhone die Apple-Spracherkennung).
+  const Erkennung = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const diktat = $("#diktat", el);
+  let erkennung = null;
+  if (Erkennung) {
+    diktat.hidden = false;
+    diktat.onclick = () => {
+      if (erkennung) return erkennung.stop();
+      erkennung = new Erkennung();
+      Object.assign(erkennung, { lang: "de-DE", continuous: true, interimResults: true });
+      const vorher = text.value.trim() ? text.value.trimEnd() + " " : "";
+      erkennung.onresult = (e) => { text.value = vorher + [...e.results].map((r) => r[0].transcript).join(""); text.dispatchEvent(new Event("input")); };
+      erkennung.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Mikrofon ist nicht erlaubt. In den Einstellungen des Browsers freigeben.", "fehler"); };
+      erkennung.onend = () => { erkennung = null; diktat.setAttribute("aria-pressed", "false"); };
+      erkennung.start();
+      diktat.setAttribute("aria-pressed", "true");
+    };
+  }
+
+  // Sprachnachricht aufnehmen: Audio geht an den Server, Whisper macht daraus Text für Claude.
+  const leiste = $("#leiste", el), aufnahmeLeiste = $("#aufnahme", el);
+  let aufnahme = null;
+  async function aufnahmeStarten() {
+    let strom;
+    try { strom = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { return toast("Mikrofon ist nicht erlaubt. In den Einstellungen des Browsers freigeben.", "fehler"); }
+    const typ = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t));
+    const rec = new MediaRecorder(strom, typ ? { mimeType: typ } : {});
+    const teile = [];
+    rec.ondataavailable = (e) => e.data.size && teile.push(e.data);
+    const start = Date.now();
+    const uhr = setInterval(() => { const s = Math.floor((Date.now() - start) / 1000); $("#aufnahmeZeit", el).textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }, 250);
+    aufnahme = { rec, verwerfen: false };
+    rec.onstop = () => {
+      clearInterval(uhr); strom.getTracks().forEach((t) => t.stop());
+      leiste.hidden = false; aufnahmeLeiste.hidden = true; $("#aufnahmeZeit", el).textContent = "0:00";
+      const { verwerfen } = aufnahme; aufnahme = null;
+      if (verwerfen || !teile.length) return;
+      const mime = rec.mimeType || typ || "audio/webm";
+      const endung = mime.includes("mp4") ? "m4a" : "webm";
+      const nr = planung.verlauf.flatMap((n) => n.dateien).filter((d) => d.art === "audio").length + 1;
+      wartend.push({ id: neueId(), name: `Sprachnachricht ${nr}.${endung}`, art: "audio", file: new Blob(teile, { type: mime }), fortschritt: 0, fertig: false });
+      senden.click();
+    };
+    rec.start(1000);
+    leiste.hidden = true; aufnahmeLeiste.hidden = false;
+  }
+  $("#aufnahmeSenden", el).onclick = () => aufnahme?.rec.stop();
+  $("#aufnahmeAbbrechen", el).onclick = () => { if (aufnahme) { aufnahme.verwerfen = true; aufnahme.rec.stop(); } };
   // Enter sendet nur mit echter Tastatur; während einer Eingabe-Komposition (z. B. Diktat) nie.
   text.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) { e.preventDefault(); senden.click(); } });
 
   senden.onclick = async () => {
     if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
     const nachricht = text.value.trim();
-    if (!nachricht && !wartend.length) return;
+    if (!nachricht && !wartend.length) return kannAufnehmen && aufnahmeStarten();
+    erkennung?.stop();
     senden.disabled = true;
     try {
       // Bereits hochgeladene Dateien (fertig) werden beim erneuten Senden übersprungen.
@@ -196,8 +266,12 @@ export async function chatAnsicht(el, id) {
   };
 }
 
+function sprachHtml(d, src) {
+  return `<div class="sprachblase"><audio controls preload="none" src="${esc(src)}" aria-label="${esc(d.name)}"></audio>${d.text ? `<div class="transkript">${esc(d.text)}</div>` : ""}</div>`;
+}
+
 function anhangHtml(d, src, index) {
-  const label = { bild: "Foto", video: "Video", pdf: "PDF" }[d.art];
+  const label = { bild: "Foto", video: "Video", pdf: "PDF", audio: "Sprache" }[d.art];
   const innen = d.art === "bild" && src ? `<img src="${esc(src)}" alt="${esc(d.name)}" loading="lazy">` : `<span>${esc(d.name)}</span>`;
   const extra = index === undefined ? "" : `<span class="fortschritt" style="width:${Math.round((d.fortschritt || 0) * 100)}%"></span><button class="weg" data-weg="${index}" aria-label="${esc(d.name)} entfernen">×</button>`;
   const tag = index === undefined ? "div" : "div";
