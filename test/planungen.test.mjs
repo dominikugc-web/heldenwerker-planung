@@ -56,10 +56,10 @@ test("großer Upload wird gestreamt statt im Speicher gesammelt", async () => {
       const req = http.request(u, { method: "PUT", headers: { "Content-Length": 50 * MB } }, (r) => { r.resume(); ok(r.statusCode); });
       req.on("error", fail);
       for (let i = 0; i < 25; i++) req.write(block);
+      const notfall = setTimeout(() => { clearInterval(warte); fail(new Error("Nach 25 MB lag nichts auf der Platte")); }, 5000);
       const warte = setInterval(() => {
-        if (aufPlatte() >= 10 * MB) { clearInterval(warte); for (let i = 0; i < 25; i++) req.write(block); req.end(); }
+        if (aufPlatte() >= 10 * MB) { clearInterval(warte); clearTimeout(notfall); for (let i = 0; i < 25; i++) req.write(block); req.end(); }
       }, 20);
-      setTimeout(() => { clearInterval(warte); fail(new Error("Nach 25 MB lag nichts auf der Platte")); }, 5000);
     });
     assert.equal(status, 201);
     assert.equal(fs.statSync(path.join(dir, "video0001")).size, 50 * MB);
