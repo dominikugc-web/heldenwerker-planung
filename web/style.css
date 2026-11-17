@@ -3,18 +3,18 @@
   color-scheme: light dark;
   --accent: #2f9ee8; --ok: #8cc63f; --warn: #f0a03c; --err: #e8667e;
   --pad: 18px; --gap: 12px; --gap-s: 8px; --gap-l: 22px; --r-lg: 24px; --r-sm: 14px;
-  --txt: light-dark(#1c1c1e, #eef3f8);
-  --mut: light-dark(rgba(28,28,30,.62), rgba(238,243,248,.6));
+  --txt: light-dark(#1c1c1e, #f2f2f2);
+  --mut: light-dark(rgba(28,28,30,.62), rgba(242,242,242,.58));
   --line: light-dark(rgba(0,0,0,.08), rgba(255,255,255,.08));
   --feld: light-dark(rgba(0,0,0,.06), rgba(255,255,255,.09));
-  --bg: light-dark(#eef1f5, #0b0f14);
-  --panel: light-dark(#f4f6f9, #121a23);
+  --bg: light-dark(#eef1f5, #0c0c0c);
+  --panel: light-dark(#f4f6f9, #161616);
   /* Verläufe und Schatten kann light-dark() nicht, daher Dunkel als Standard und Hell unten als eigener Block. */
-  --bgimg: radial-gradient(90% 45% at 70% 0%, #12385a 0, transparent 70%), radial-gradient(70% 40% at 0% 55%, #0f2234 0, transparent 70%), radial-gradient(80% 45% at 100% 85%, #0c2a3d 0, transparent 70%);
-  --glas: linear-gradient(180deg, rgba(26,34,44,.5), rgba(8,11,15,.58));
+  --bgimg: none; /* Dunkel ist bewusst schlicht: kein farbiger Schimmer (Dominik, 17.11.) */
+  --glas: linear-gradient(180deg, rgba(40,40,40,.62), rgba(22,22,22,.7));
   --glas-schatten: inset 0 1px 2px rgba(255,255,255,.07);
   --kante: linear-gradient(160deg, rgba(255,255,255,.42), rgba(255,255,255,.07) 30%, rgba(255,255,255,.03) 62%, rgba(255,255,255,.22));
-  --leiste: linear-gradient(180deg, rgba(24,30,38,.5), rgba(9,12,16,.6));
+  --leiste: linear-gradient(180deg, rgba(36,36,36,.6), rgba(16,16,16,.72));
 }
 :root:has(meta[name="color-scheme"][content="dark"]) { color-scheme: dark; }
 :root:has(meta[name="color-scheme"][content="light"]) { color-scheme: light; }
@@ -147,7 +147,7 @@ dialog.sheet.voll .panel { top: 0; max-height: none; border-radius: 0; padding-t
 
 /* Toast oben */
 .toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 10px); transform: translateX(-50%); z-index: 50; max-width: calc(100% - 32px); padding: 12px 18px; border-radius: 20px;
-  background: light-dark(rgba(255,255,255,.96), rgba(18,24,31,.92)); backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,.3); font-size: 15px; animation: hoch .3s ease-out; }
+  background: light-dark(rgba(255,255,255,.96), rgba(28,28,28,.94)); backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,.3); font-size: 15px; animation: hoch .3s ease-out; }
 .toast.fehler { border-left: 4px solid var(--err); } .toast.ok { border-left: 4px solid var(--ok); }
 
 /* Banner Testmodus / Demo */
