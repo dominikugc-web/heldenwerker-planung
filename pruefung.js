@@ -12,7 +12,7 @@ export async function pruefAnsicht(el, id, signal) {
   const beantwortet = katalog.filter((f) => { const a = antworten[f.id]; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
   const wert = (f, a) => [a.wert && (f.art === "janein" ? a.wert[0].toUpperCase() + a.wert.slice(1) : a.wert + (f.einheit ? " " + f.einheit : "")),
     a.dateien?.length ? `${a.dateien.length} Datei${a.dateien.length > 1 ? "en" : ""}` : "", a.notiz ? "✎ Notiz" : ""].filter(Boolean).join(" · ");
-  const bild = (f) => (antworten[f.id].dateien || []).filter((d) => d.art === "bild").slice(0, 3).map((d) => `<img src="${esc(dateiUrl(planung.id, d.id))}" alt="" loading="lazy">`).join("");
+  const bild = (f) => (antworten[f.id].dateien || []).filter((d) => d.art === "bild").slice(0, 3).map((d) => `<img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt="" loading="lazy">`).join("");
 
   el.innerHTML = `<div class="kopf"><button class="pill rund" data-chat aria-label="Zurück zum Ablauf">${IKON.zurueck}</button><h1>Prüfen</h1><span class="muted small" id="gespeichert"></span></div>
     <p class="unter">${esc(antworten.kunde?.wert || planung.projektTitel)}<br>Aufgenommen von ${esc(planung.personName || planung.person)}</p>

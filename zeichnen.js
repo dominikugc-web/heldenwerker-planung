@@ -1,4 +1,4 @@
-// In Fotos zeichnen: Stift in drei Farben, Pfeil, Rückgängig. Ergebnis in voller Auflösung.
+// In Fotos zeichnen: Stift in drei Farben, Pfeil, Text, Rückgängig. Ergebnis in voller Auflösung.
 const FARBEN = [["#e8667e", "Rot"], ["#f5d020", "Gelb"], ["#ffffff", "Weiß"]];
 
 export function zeichnen(blob) {
@@ -13,7 +13,7 @@ export function zeichnen(blob) {
     el.innerHTML = `<div class="oben"><button class="pill" data-abbrechen>Abbrechen</button><button class="pill" data-fertig style="background:#fff;color:#000;font-weight:600">Fertig</button></div>
       <div class="flaeche"><canvas></canvas></div>
       <div class="werkzeuge">${FARBEN.map(([f, n], i) => `<button class="farbe" style="background:${f}" data-farbe="${f}" aria-label="${n}" aria-pressed="${i === 0}"></button>`).join("")}
-        <button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button>
+        <button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
         <button class="pill" data-rueck>Rückgängig</button></div>`;
     document.body.append(el);
     const c = el.querySelector("canvas"), ctx = c.getContext("2d");
@@ -27,7 +27,12 @@ export function zeichnen(blob) {
         ctx.strokeStyle = s.farbe; ctx.fillStyle = s.farbe; ctx.lineWidth = breite; ctx.lineCap = "round"; ctx.lineJoin = "round";
         ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = breite;
         ctx.beginPath();
-        if (s.art === "pfeil") {
+        if (s.art === "text") {
+          // Beschriftung: Farbe mit dunklem Rand, damit sie auf hellem und dunklem Untergrund lesbar bleibt.
+          ctx.shadowBlur = 0; ctx.font = `700 ${Math.round(breite * 7)}px system-ui, sans-serif`; ctx.textBaseline = "middle";
+          ctx.lineWidth = breite * 1.4; ctx.strokeStyle = "rgba(0,0,0,.8)";
+          ctx.strokeText(s.text, s.punkte[0].x, s.punkte[0].y); ctx.fillText(s.text, s.punkte[0].x, s.punkte[0].y);
+        } else if (s.art === "pfeil") {
           const [a, b] = [s.punkte[0], s.punkte.at(-1)];
           ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
           const w = Math.atan2(b.y - a.y, b.x - a.x), l = breite * 4.5;
@@ -44,7 +49,13 @@ export function zeichnen(blob) {
     malen();
 
     const punkt = (e) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
-    c.addEventListener("pointerdown", (e) => { c.setPointerCapture(e.pointerId); aktiv = { art: werkzeug, farbe, punkte: [punkt(e)] }; striche.push(aktiv); });
+    c.addEventListener("pointerdown", (e) => {
+      if (werkzeug === "text") {
+        const p = punkt(e), text = prompt("Beschriftung")?.trim();
+        if (text) { striche.push({ art: "text", farbe, punkte: [p], text: text.slice(0, 80) }); malen(); }
+        return;
+      }
+      c.setPointerCapture(e.pointerId); aktiv = { art: werkzeug, farbe, punkte: [punkt(e)] }; striche.push(aktiv); });
     c.addEventListener("pointermove", (e) => {
       if (!aktiv) return;
       if (aktiv.art === "pfeil") aktiv.punkte[1] = punkt(e); else aktiv.punkte.push(punkt(e));
