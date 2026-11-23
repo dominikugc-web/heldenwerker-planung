@@ -97,7 +97,7 @@ function sichtbar(fragen, antworten) {
   const typ = antworten.typ?.wert;
   if (!typ) return [fragen[0]];
   const pv = typ === "PV" || typ === "Beides", wp = typ === "Wärmepumpe" || typ === "Beides";
-  return fragen.filter((f) => (f.nur !== "pv" || pv) && (f.nur !== "wp" || wp) && (!f.wenn || antworten[f.wenn.frage]?.wert === f.wenn.ist));
+  return fragen.filter((f) => (f.nur !== "pv" || pv) && (f.nur !== "wp" || wp) && (!f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert)));
 }
 const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);
 const mitEinheit = (f, w) => (f.einheit && w ? (f.einheit.startsWith("°") ? w + f.einheit : `${w} ${f.einheit}`) : w);

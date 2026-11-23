@@ -3,7 +3,7 @@
 // Änderungen an Fragen, Reihenfolge oder Antworten nur hier.
 //
 // art: janein | auswahl (wenige Knöpfe) | liste (lange Auswahlliste) | zahl (mit einheit) | text | foto
-// nur: "pv" | "wp" (Bereich gilt nur dafür), wenn: { frage, ist } (Folgefrage), pflicht: true (Pflichtfoto)
+// nur: "pv" | "wp" (Bereich gilt nur dafür), wenn: { frage, ist } (Folgefrage; ist auch als Liste), pflicht: true (Pflichtfoto)
 import { fehler } from "./router.mjs";
 
 export const BEREICHE = {
@@ -82,9 +82,17 @@ const F = [
   ["ac", "uess_innen", "Wenn länger als 10 m innen: ÜSS", "text"],
   ["ac", "zs_etage", "Zählerschrank-Etage", "text"],
   ["ac", "wlan_lan", "WLAN oder LAN?", "auswahl", { optionen: ["WLAN", "LAN"] }],
-  ["ac", "zaehlernummer", "Zählernummer", "text"],
-  ["ac", "zaehlerstand_180", "Zählerstand 1.8.0", "zahl", { einheit: "kWh" }],
-  ["ac", "zaehlerstand_280", "Zählerstand 2.8.0", "zahl", { einheit: "kWh" }],
+  ["ac", "anz_zaehler", "Wie viele Zähler sind vorhanden?", "auswahl", { optionen: ["1", "2", "3", "4"] }],
+  // Zähler 1 behält die alten IDs, damit frühere Besichtigungen ihre Werte behalten; Zähler 2 bis 4 nur bei passender Anzahl.
+  ...[1, 2, 3, 4].flatMap((n) => {
+    const wenn = n > 1 && { wenn: { frage: "anz_zaehler", ist: ["1", "2", "3", "4"].slice(n - 1) } };
+    const id = (alt, neu) => (n === 1 ? alt : `zaehler${n}_${neu}`);
+    return [
+      ["ac", id("zaehlernummer", "nummer"), `Zähler ${n}: Zählernummer`, "text", { ...wenn }],
+      ["ac", id("zaehlerstand_180", "180"), `Zähler ${n}: Zählerstand 1.8.0`, "zahl", { einheit: "kWh", ...wenn }],
+      ["ac", id("zaehlerstand_280", "280"), `Zähler ${n}: Zählerstand 2.8.0`, "zahl", { einheit: "kWh", ...wenn }],
+    ];
+  }),
   ["ac", "kabelweg_zs_wr", "Kabelweglänge vom Zählerschrank zum WR", "zahl", { einheit: "m" }],
   ["ac", "waende_beurteilt", "Wände beurteilt", "auswahl", { optionen: ["Massiv", "Holz", "Gipskarton"] }],
   ["ac", "kabel_eingezeichnet", "Kabel eingezeichnet?", "janein"],
@@ -146,7 +154,7 @@ export function sichtbar(antworten = {}) {
   const typ = antworten.typ?.wert;
   if (!typ) return [KATALOG[0]];
   const pv = typ === "PV" || typ === "Beides", wp = typ === "Wärmepumpe" || typ === "Beides";
-  return KATALOG.filter((f) => (f.nur !== "pv" || pv) && (f.nur !== "wp" || wp) && (!f.wenn || antworten[f.wenn.frage]?.wert === f.wenn.ist));
+  return KATALOG.filter((f) => (f.nur !== "pv" || pv) && (f.nur !== "wp" || wp) && (!f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert)));
 }
 
 const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);

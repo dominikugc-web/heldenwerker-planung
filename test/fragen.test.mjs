@@ -75,3 +75,13 @@ test("Neuer Zählerschrank und Plätze kommen vor den Mehrkosten", () => {
   assert.ok(i("neuer_zs_ac") < i("mehrkosten") && i("zs_plaetze") < i("mehrkosten"));
   assert.equal(i("zs_plaetze"), i("neuer_zs_ac") + 1);
 });
+
+test("Zähler: Anzahl nach WLAN/LAN, je Zähler Nummer, 1.8.0 und 2.8.0", () => {
+  const i = (id) => KATALOG.findIndex((f) => f.id === id);
+  assert.equal(i("anz_zaehler"), i("wlan_lan") + 1);
+  assert.deepEqual(frageNach("anz_zaehler").optionen, ["1", "2", "3", "4"]);
+  const zaehlerFragen = (anzahl) => sichtbar({ typ: { wert: "PV" }, anz_zaehler: { wert: anzahl } }).filter((f) => /^Zähler \d/.test(f.frage)).map((f) => f.frage);
+  assert.deepEqual(zaehlerFragen("2"), ["Zähler 1: Zählernummer", "Zähler 1: Zählerstand 1.8.0", "Zähler 1: Zählerstand 2.8.0", "Zähler 2: Zählernummer", "Zähler 2: Zählerstand 1.8.0", "Zähler 2: Zählerstand 2.8.0"]);
+  assert.equal(zaehlerFragen("4").length, 12);
+  assert.equal(zaehlerFragen("1").length, 3);
+});
