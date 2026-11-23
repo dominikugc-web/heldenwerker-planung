@@ -35,3 +35,14 @@ test("offline: geänderte Antwort verliert den Lieferschein-Hinweis, Notiz oder 
   assert.equal(antwortAnwenden(a0, ZAHL, { notiz: "x" }).leistung.quelle, "LS-883");
   assert.equal(antwortAnwenden(a0, ZAHL, { wert: "12" }).leistung.quelle, undefined);
 });
+
+test("Zeitlimit: hängende Anfrage wird abgebrochen, eigener Abbruch bleibt erkennbar", async () => {
+  const { zeitSignal } = await import("../web/lokal.js");
+  const s = zeitSignal(undefined, 20);
+  await new Promise((ok) => setTimeout(ok, 60));
+  assert.equal(s.aborted, true);
+  const eigen = new AbortController(), t = zeitSignal(eigen.signal, 10_000);
+  eigen.abort();
+  assert.equal(t.aborted, true);
+  assert.equal(eigen.signal.aborted, true); // daran erkennt api(), dass der Aufrufer abgebrochen hat und nicht das Netz
+});

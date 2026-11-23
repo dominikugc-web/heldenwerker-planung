@@ -1,6 +1,7 @@
 // Verbindung zum Server auf dem PC (über Tailscale). Ohne Server: Demo mit erfundenen Daten.
 // Ohne Netz (Gerät war schon verbunden): offline, gelesen wird aus der Ablage auf dem Gerät.
-import { ablage } from "./lokal.js";
+import { ablage, zeitSignal } from "./lokal.js";
+const LESEN_MS = 12_000; // danach aus der Ablage auf dem Gerät lesen
 const speicher = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* privates Fenster */ } },
@@ -40,7 +41,7 @@ export async function verbinden() {
     const r = await fetch(zustand.server + "/api/gesund", { signal: AbortSignal.timeout(6000) });
     if (!r.ok) throw new Error();
     zustand.gesund = await r.json();
-    zustand.ich = await (await fetch(zustand.server + "/api/ich")).json();
+    zustand.ich = await (await fetch(zustand.server + "/api/ich", { signal: AbortSignal.timeout(6000) })).json();
     speicher.set("planung-ich", JSON.stringify(zustand.ich));
     zustand.verbunden = true; zustand.demo = false; zustand.offline = false;
   } catch {
@@ -59,10 +60,11 @@ export async function api(pfad, { methode = "GET", body, signal } = {}) {
   }
   let r;
   try {
-    r = await fetch(zustand.server + pfad, { method: methode, signal, headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined });
+    // Nur Lesen bekommt ein Zeitlimit; Schreiben (z. B. Zusammenfassen mit Claude) darf länger dauern.
+    r = await fetch(zustand.server + pfad, { method: methode, signal: methode === "GET" ? zeitSignal(signal, LESEN_MS) : signal,
+      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined, body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch (e) {
-    if (e.name === "AbortError") throw e;
+    if (signal?.aborted) throw e; // Seite gewechselt, kein Netzproblem
     return ohneNetz(pfad, methode);
   }
   const daten = await r.json().catch(() => ({}));

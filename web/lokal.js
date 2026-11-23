@@ -48,3 +48,6 @@ export function antwortAnwenden(antworten, f, body, meta = {}) {
   if ("dateien" in body) neu.dateien = body.dateien.map((d) => ({ ...(alt.dateien || []).find((x) => x.id === d.id), ...meta[d.id], id: d.id }));
   return { ...antworten, [f.id]: neu };
 }
+
+// Schwaches Netz (Keller, Funkloch) lässt Anfragen sonst minutenlang hängen; nach ms gilt: kein Netz.
+export const zeitSignal = (signal, ms) => signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
