@@ -69,3 +69,9 @@ test("SAT-Frage heißt einbauen/versetzen, WR- und Speicher-Standort nur noch al
   assert.ok(!KATALOG.some((x) => x.id === "wr_standort" || x.id === "speicher_standort"));
   assert.ok(KATALOG.some((x) => x.frage === "Foto: WR/SP Standort"));
 });
+
+test("Neuer Zählerschrank und Plätze kommen vor den Mehrkosten", () => {
+  const i = (id) => KATALOG.findIndex((f) => f.id === id);
+  assert.ok(i("neuer_zs_ac") < i("mehrkosten") && i("zs_plaetze") < i("mehrkosten"));
+  assert.equal(i("zs_plaetze"), i("neuer_zs_ac") + 1);
+});
