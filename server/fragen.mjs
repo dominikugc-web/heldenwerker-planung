@@ -57,7 +57,6 @@ const F = [
   ["pv", "neuer_zs", "Neuer Zählerschrank?", "janein"],
   ["pv", "wallbox_wunsch", "Wallbox-Wunsch?", "janein"],
 
-  ["ac", "wlan_lan", "WLAN oder LAN?", "auswahl", { optionen: ["WLAN", "LAN"] }],
   ["ac", "anz_zaehler", "Wie viele Zähler sind vorhanden?", "auswahl", { optionen: ["1", "2", "3", "4"] }],
   // Zähler 1 behält die alten IDs, damit frühere Besichtigungen ihre Werte behalten; Zähler 2 bis 4 nur bei passender Anzahl.
   ...[1, 2, 3, 4].flatMap((n) => {
@@ -70,6 +69,7 @@ const F = [
     ];
   }),
   pflichtfoto("ac", "WR/SP Standort"),
+  ["ac", "wlan_lan", "WLAN oder LAN?", "auswahl", { optionen: ["WLAN", "LAN"] }],
   ["ac", "kabelweg", "Kabelweg AC", "mehrfach", { optionen: KABELWEGE }],
   ["ac", "uess_innen", "Wenn länger als 10 m innen: ÜSS", "text"],
   ["ac", "zs_etage", "Zählerschrank-Etage", "text"],

@@ -81,12 +81,13 @@ test("AC-Fragen kommen vor den DC-Fragen, im Ablauf und in der Bereichsliste", (
   assert.ok(pv.indexOf("erdspiess") < pv.indexOf("dachbelag"));
 });
 
-test("AC beginnt mit den Zählern, dann Foto WR/SP-Standort, dann Kabelweg AC", () => {
+test("AC beginnt mit den Zählern, dann Foto WR/SP-Standort, WLAN/LAN und Kabelweg AC", () => {
   const i = (id) => KATALOG.findIndex((f) => f.id === id);
   const ac = KATALOG.filter((f) => f.bereich === "ac").map((f) => f.id);
-  assert.deepEqual(ac.slice(0, 2), ["wlan_lan", "anz_zaehler"]);
+  assert.equal(ac[0], "anz_zaehler");
   assert.equal(i("foto_wr_sp_standort"), i("zaehler4_280") + 1);
-  assert.equal(i("kabelweg"), i("foto_wr_sp_standort") + 1);
+  assert.equal(i("wlan_lan"), i("foto_wr_sp_standort") + 1);
+  assert.equal(i("kabelweg"), i("wlan_lan") + 1);
   assert.equal(frageNach("foto_wr_sp_standort").bereich, "ac");
 });
 
@@ -117,9 +118,7 @@ test("Neuer Zählerschrank und Plätze kommen vor den Mehrkosten", () => {
   assert.equal(i("zs_plaetze"), i("neuer_zs_ac") + 1);
 });
 
-test("Zähler: Anzahl nach WLAN/LAN, je Zähler Nummer, 1.8.0 und 2.8.0", () => {
-  const i = (id) => KATALOG.findIndex((f) => f.id === id);
-  assert.equal(i("anz_zaehler"), i("wlan_lan") + 1);
+test("Zähler: Anzahl zuerst, je Zähler Nummer, 1.8.0 und 2.8.0", () => {
   assert.deepEqual(frageNach("anz_zaehler").optionen, ["1", "2", "3", "4"]);
   const zaehlerFragen = (anzahl) => sichtbar({ typ: { wert: "PV" }, anz_zaehler: { wert: anzahl } }).filter((f) => /^Zähler \d/.test(f.frage)).map((f) => f.frage);
   assert.deepEqual(zaehlerFragen("2"), ["Zähler 1: Zählernummer", "Zähler 1: Zählerstand 1.8.0", "Zähler 1: Zählerstand 2.8.0", "Zähler 2: Zählernummer", "Zähler 2: Zählerstand 1.8.0", "Zähler 2: Zählerstand 2.8.0"]);
