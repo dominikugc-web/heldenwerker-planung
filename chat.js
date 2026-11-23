@@ -227,8 +227,13 @@ export async function chatAnsicht(el, id) {
     const feld = $("#wert", steuerung);
     $$("[data-wert]", steuerung).forEach((b) => (b.onclick = () => speichern(f, { wert: b.dataset.wert })));
     // Der Senden-Knopf nimmt dem Feld den Fokus nicht weg, sonst geht am Handy die Tastatur zu.
-    $("[data-weiter]", steuerung)?.addEventListener("pointerdown", (e) => e.preventDefault());
-    $("[data-weiter]", steuerung)?.addEventListener("click", () => feld.value.trim() ? speichern(f, { wert: feld.value }) : toast("Bitte etwas eintragen oder überspringen", "fehler"));
+    const weiter = $("[data-weiter]", steuerung);
+    const absenden = () => feld.value.trim() ? speichern(f, { wert: feld.value }) : toast("Bitte etwas eintragen oder überspringen", "fehler");
+    weiter?.addEventListener("pointerdown", (e) => e.preventDefault());
+    // iPhone: Beim Tippen auf den Knopf verliert das Feld sonst den Fokus (Tastatur zu), noch bevor click kommt.
+    // preventDefault auf touchend verhindert den Fokuswechsel und den nachgeschobenen Klick; gesendet wird hier.
+    weiter?.addEventListener("touchend", (e) => { e.preventDefault(); absenden(); });
+    weiter?.addEventListener("click", absenden);
     feld?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && f.art !== "text") { e.preventDefault(); $("[data-weiter]", steuerung).click(); } });
     if (f.art === "text") { feld.style.height = "auto"; feld.addEventListener("input", () => { feld.style.height = "auto"; feld.style.height = Math.min(feld.scrollHeight, 140) + "px"; }); diktieren(feld, $("[data-diktat]", steuerung)); }
     if (feld && matchMedia("(pointer: fine)").matches) feld.focus();
