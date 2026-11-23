@@ -32,12 +32,17 @@ export async function pruefAnsicht(el, id, signal) {
   // Änderungen am Monteur-Text automatisch speichern (kurz verzögert).
   let timer, speichern = Promise.resolve();
   const sammeln = () => ({ monteure: Object.fromEntries(ABSCHNITTE.map(([k]) => [k, $(`[data-abschnitt="${k}"]`, el).value.split("\n").map((s) => s.replace(/^[•\-*]\s*/, "").trim()).filter(Boolean)])) });
-  const jetztSpeichern = () => (speichern = speichern.then(async () => {
+  const status = (t) => { const s = $("#gespeichert", el); if (s) s.textContent = t; }; // weg, wenn die Seite schon gewechselt ist
+  // Text sofort einsammeln: beim Seitenwechsel ist er danach nicht mehr da.
+  // Ein Fehler bleibt beim Aufrufer (Senden bricht dann ab), hält aber die nächste Speicherung nicht auf.
+  const jetztSpeichern = (body = sammeln()) => (speichern = speichern.catch(() => {}).then(async () => {
     if (zustand.demo) return;
-    try { await api(`/api/planungen/${id}/ergebnis`, { methode: "PUT", body: sammeln() }); $("#gespeichert", el).textContent = "gespeichert"; pdfNeu(); }
+    try { await api(`/api/planungen/${id}/ergebnis`, { methode: "PUT", body }); status("gespeichert"); if (!signal.aborted) pdfNeu(); }
     catch (err) { fehlerMelden(err); throw err; }
   }));
-  el.addEventListener("input", () => { $("#gespeichert", el).textContent = "…"; clearTimeout(timer); timer = setTimeout(jetztSpeichern, 700); });
+  el.addEventListener("input", () => { status("…"); clearTimeout(timer); timer = setTimeout(() => { timer = null; jetztSpeichern().catch(() => {}); }, 700); }, { signal });
+  // Seite verlassen, bevor die Verzögerung abgelaufen ist: noch schnell speichern statt verlieren.
+  signal.addEventListener("abort", () => { if (timer) { clearTimeout(timer); timer = null; jetztSpeichern().catch(() => {}); } });
   // PDF aufs Handy (Dateien-App), von dort lädt man es in HERO hoch. Die Datei wird vorab geladen, weil Safari
   // das Teilen nur direkt im Tipp erlaubt, nicht erst nach dem Warten auf den Server.
   const pdfName = `Besichtigungsprotokoll ${String(antworten.kunde?.wert || planung.projektTitel || "").replace(/[\\/:*?"<>|]+/g, "-").trim().slice(0, 60)} ${new Date().toLocaleDateString("de-DE")}.pdf`;
