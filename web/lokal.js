@@ -32,6 +32,7 @@ function wertNormal(f, eingabe) {
   if (!w) return "";
   if (f.art === "janein") return w.toLowerCase();
   if (f.art === "auswahl" || f.art === "liste") return f.optionen.find((o) => o.toLowerCase() === w.toLowerCase()) || w;
+  if (f.art === "mehrfach") { const teile = w.split(",").map((t) => t.trim().toLowerCase()); return f.optionen.filter((o) => teile.includes(o.toLowerCase())).join(", "); }
   if (f.art === "zahl") return w.replace(/\s/g, "");
   return w.slice(0, 2000);
 }

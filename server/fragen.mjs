@@ -65,7 +65,8 @@ const F = [
   ["dc", "ersatzpfannen", "Ersatzpfannen", "zahl", { einheit: "Stück" }],
   ["dc", "leistungsoptimierer", "Leistungsoptimierer", "zahl", { einheit: "Stück" }],
   ["dc", "aufdachdaemmung", "Aufdachdämmung", "zahl", { einheit: "cm" }],
-  ["dc", "sat_schluessel", "SAT-Schlüssel oder Ähnliches einbauen?", "text"],
+  ["dc", "sat_schluessel", "SAT-Schlüssel oder Ähnliches einbauen/versetzen?", "text"],
+  ["dc", "kabelweg_dc", "Kabelweg DC", "mehrfach", { optionen: ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60", "Sonstige (Notiz)"] }],
   ["dc", "freileitung", "Freileitung?", "janein"],
   ["dc", "freileitung_isoliert", "Freileitung isoliert?", "janein", { wenn: { frage: "freileitung", ist: "ja" } }],
 
@@ -77,11 +78,8 @@ const F = [
 
   ...PFLICHTFOTOS.map((name) => ["fotos", "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }]),
 
-  ["ac", "wr_standort", "WR-Standort", "text"],
-  ["ac", "speicher_standort", "Speicher-Standort", "text"],
   ["ac", "kabelweg", "Kabelweg", "auswahl", { optionen: ["Schacht", "Kamin", "Alu", "Kupfer", "Sonstige (Notiz)"] }],
   ["ac", "uess_innen", "Wenn länger als 10 m innen: ÜSS", "text"],
-  ["ac", "kabelweg_dc", "Kabelweg DC", "text"],
   ["ac", "zs_etage", "Zählerschrank-Etage", "text"],
   ["ac", "wlan_lan", "WLAN oder LAN?", "auswahl", { optionen: ["WLAN", "LAN"] }],
   ["ac", "zaehlernummer", "Zählernummer", "text"],
@@ -167,6 +165,11 @@ export function pruefeAntwort(f, eingabe) {
     const treffer = f.optionen.find((o) => o.toLowerCase() === w.toLowerCase());
     if (!treffer) throw fehler(400, `„${f.frage}“: unbekannte Auswahl`);
     return treffer;
+  }
+  if (f.art === "mehrfach") {
+    const teile = w.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (teile.some((t) => !f.optionen.some((o) => o.toLowerCase() === t))) throw fehler(400, `„${f.frage}“: unbekannte Auswahl`);
+    return f.optionen.filter((o) => teile.includes(o.toLowerCase())).join(", ");
   }
   if (f.art === "zahl") {
     if (!/^-?\d+([.,]\d+)?$/.test(w.replace(/\s/g, ""))) throw fehler(400, `„${f.frage}“: bitte eine Zahl`);

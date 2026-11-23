@@ -46,3 +46,8 @@ test("Zeitlimit: hängende Anfrage wird abgebrochen, eigener Abbruch bleibt erke
   assert.equal(t.aborted, true);
   assert.equal(eigen.signal.aborted, true); // daran erkennt api(), dass der Aufrufer abgebrochen hat und nicht das Netz
 });
+
+test("offline: Mehrfachauswahl wird wie auf dem Server eingetragen", () => {
+  const f = { id: "kabelweg_dc", art: "mehrfach", optionen: ["Schacht", "Kamin", "PVC 60"] };
+  assert.equal(antwortAnwenden({}, f, { wert: "pvc 60, schacht" }).kabelweg_dc.wert, "Schacht, PVC 60");
+});

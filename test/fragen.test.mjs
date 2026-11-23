@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { KATALOG, BEREICHE, sichtbar, naechste, pruefeAntwort, frageNach } from "../server/fragen.mjs";
 
-const ARTEN = ["janein", "auswahl", "liste", "zahl", "text", "foto"];
+const ARTEN = ["janein", "auswahl", "mehrfach", "liste", "zahl", "text", "foto"];
 
 test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedankenstriche", () => {
   const ids = KATALOG.map((f) => f.id);
@@ -11,7 +11,7 @@ test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedanke
     assert.ok(ARTEN.includes(f.art), f.id);
     assert.ok(BEREICHE[f.bereich], "Bereich fehlt: " + f.id);
     assert.ok(f.frage && !/[–—]/.test(f.frage), f.id);
-    if (f.art === "auswahl" || f.art === "liste") assert.ok(f.optionen?.length >= 2, f.id);
+    if (["auswahl", "mehrfach", "liste"].includes(f.art)) assert.ok(f.optionen?.length >= 2, f.id);
     if (f.wenn) assert.ok(frageNach(f.wenn.frage), "Bedingung zeigt ins Leere: " + f.id);
   }
   assert.equal(KATALOG[0].id, "typ");
@@ -53,4 +53,19 @@ test("pruefeAntwort: Ja/Nein, Auswahl, Zahl mit Komma, Text gekürzt", () => {
   assert.throws(() => pruefeAntwort(f("dachneigung"), "steil"), (e) => e.status === 400);
   assert.equal(pruefeAntwort(f("regenrinne"), "  ok  "), "ok");
   assert.equal(pruefeAntwort(f("regenrinne"), "x".repeat(5000)).length, 2000);
+});
+
+test("Kabelweg DC: mehrere Punkte wählbar, in Katalog-Reihenfolge, Unbekanntes abgelehnt", () => {
+  const f = KATALOG.find((x) => x.id === "kabelweg_dc");
+  assert.equal(f.art, "mehrfach");
+  assert.equal(f.bereich, "dc");
+  assert.deepEqual(f.optionen.slice(0, 7), ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60"]);
+  assert.equal(pruefeAntwort(f, "pvc 60, Schacht"), "Schacht, PVC 60");
+  assert.throws(() => pruefeAntwort(f, "Schacht, Dachrinne"), (e) => e.status === 400);
+});
+
+test("SAT-Frage heißt einbauen/versetzen, WR- und Speicher-Standort nur noch als Foto", () => {
+  assert.equal(KATALOG.find((x) => x.id === "sat_schluessel").frage, "SAT-Schlüssel oder Ähnliches einbauen/versetzen?");
+  assert.ok(!KATALOG.some((x) => x.id === "wr_standort" || x.id === "speicher_standort"));
+  assert.ok(KATALOG.some((x) => x.frage === "Foto: WR/SP Standort"));
 });
