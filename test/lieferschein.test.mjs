@@ -45,10 +45,10 @@ test("Wärmepumpen-Lieferschein: Modell mit Leistungsbereich, Warmwasser, alte H
   assert.equal(b.wp_leistung.wert, "7");
 });
 
-test("PV und Wärmepumpe zusammen ergibt Beides; der neueste Lieferschein gewinnt", () => {
+test("PV und Wärmepumpe zusammen ergibt beide Typen; der neueste Lieferschein gewinnt", () => {
   const alt = { nr: "LS-100", datum: "2026-01-01", produkte: [p("Longi EcoLife 475 Watt", "PV Anlage DC Seitig 9,5 kWp 20 x Solarmodule")] };
   const a = antwortenAusLieferscheinen([PV, WP, alt]);
-  assert.equal(a.typ.wert, "Beides");
+  assert.equal(a.typ.wert, "PV, Wärmepumpe");
   assert.equal(a.anlagenleistung.wert, "11,4");
 });
 

@@ -16,9 +16,13 @@ export const BEREICHE = {
   fotos: "Pflichtfotos DC / AC",
   wp_bestand: "Wärmepumpe: Bestand / Auslegung",
   wp_standort: "WP-Standort / Leitungsweg / Elektro",
+  klima: "Klimaanlage",
   abschluss: "Abschluss",
 };
-const NUR = { pv: "pv", dc: "pv", geruest: "pv", fotos: "pv", ac: "pv", wp_bestand: "wp", wp_standort: "wp" };
+const NUR = { pv: "pv", dc: "pv", geruest: "pv", fotos: "pv", ac: "pv", wp_bestand: "wp", wp_standort: "wp", klima: "klima" };
+export const TYPEN = { pv: "PV", wp: "Wärmepumpe", klima: "Klimaanlage" };
+// Gewählte Typen einer Besichtigung. Alte Antwort "Beides" (vor dem 23.11.) heißt PV und Wärmepumpe.
+export const typen = (antworten = {}) => { const w = antworten.typ?.wert || ""; return w === "Beides" ? ["PV", "Wärmepumpe"] : w.split(",").map((t) => t.trim()).filter(Boolean); };
 
 const reihe = (name, werte, einheit) => werte.map((w) => `${name} ${w} ${einheit}`);
 const MODULE = [...reihe("Aiko Neostar", [440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500], "W"),
@@ -37,11 +41,11 @@ const KABELWEGE = ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 6
 const PFLICHTFOTOS = ["Dach gesamt", "Pfannentyp", "Sparren/Lattung", "Erdung", "Störer", "Gerüstfläche", "Kabelweg", "WR/SP Standort", "Zählerschrank", "HAK"];
 // Diese Pflichtfotos stehen direkt bei ihrer Frage statt im Fotoblock (Dominik, 23.11.). IDs bleiben, damit alte Fotos erhalten bleiben.
 const IM_ABLAUF = ["Erdung", "Gerüstfläche", "WR/SP Standort"];
-const pflichtfoto = (bereich, name) => [bereich, "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }];
+const pflichtfoto = (bereich, name) => [bereich, "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }];
 
 // [bereich, id, frage, art, extra]
 const F = [
-  ["start", "typ", "Was wird besichtigt?", "auswahl", { optionen: ["PV", "Wärmepumpe", "Beides"] }],
+  ["start", "typ", "Was wird besichtigt?", "mehrfach", { optionen: Object.values(TYPEN) }],
 
   ["objekt", "kunde", "Kundenname", "text"],
   ["objekt", "projektnr", "Projekt-Nr.", "text"],
@@ -147,6 +151,29 @@ const F = [
   ["wp_standort", "speicher_vorhanden", "Speicher vorhanden?", "janein"],
   ["wp_standort", "wp_fotos", "Fotos vom WP-Standort und Leitungsweg", "foto"],
 
+  // Klimaanlage: angelehnt an das Anfrageformular auf heldenwerker.de/klimaanlagen, vor Ort mit Messwerten statt Spannen (John prüft noch).
+  ["klima", "klima_paket", "Welches Paket?", "auswahl", { optionen: ["Basispaket (Bosch Climate 5000)", "Premiumpaket (Bosch Climate 7000)", "Noch offen"] }],
+  ["klima", "klima_anzahl", "Wie viele Räume bekommen ein Innengerät?", "auswahl", { optionen: ["1", "2", "3", "4", "5"] }],
+  ...[1, 2, 3, 4, 5].flatMap((n) => {
+    const wenn = n > 1 && { wenn: { frage: "klima_anzahl", ist: ["1", "2", "3", "4", "5"].slice(n - 1) } };
+    return [
+      ["klima", `klima_raum${n}_name`, `Raum ${n}: Welcher Raum?`, "text", { ...wenn }],
+      ["klima", `klima_raum${n}_flaeche`, `Raum ${n}: Raumgröße`, "zahl", { einheit: "m²", ...wenn }],
+      ["klima", `klima_raum${n}_leitung`, `Raum ${n}: Leitungsweg zum Außengerät`, "zahl", { einheit: "m", ...wenn }],
+      ["klima", `klima_raum${n}_foto`, `Foto: Raum ${n} Montageort Innengerät`, "foto", { titel: `Raum ${n} Innengerät`, ...wenn }],
+    ];
+  }),
+  ["klima", "klima_app", "Per App steuern?", "janein", { wenn: { frage: "klima_paket", ist: "Basispaket (Bosch Climate 5000)" } }],
+  ["klima", "klima_aussen_ort", "Wo kommt das Außengerät hin?", "auswahl", { optionen: ["An der Hauswand", "Auf dem Boden", "Sonstige (Notiz)"] }],
+  ["klima", "klima_aussen_hoehe", "Außengerät bis 2 m Höhe montierbar?", "janein", { wenn: { frage: "klima_aussen_ort", ist: "An der Hauswand" } }],
+  pflichtfoto("klima", "Außengerät Standort"),
+  ["klima", "klima_waende", "Wände", "auswahl", { optionen: ["Massiv", "Holz", "Gipskarton"] }],
+  ["klima", "klima_kernbohrungen", "Kernbohrungen", "zahl", { einheit: "Stück" }],
+  ["klima", "klima_verlegung", "Leitungen verlegen", "mehrfach", { optionen: ["Kabelkanal außen", "Kabelkanal innen", "Unterputz", "Sonstige (Notiz)"] }],
+  ["klima", "klima_kondensat", "Kondensat wohin?", "auswahl", { optionen: ["Abfluss", "Kondensatpumpe", "Nach außen", "Sonstige (Notiz)"] }],
+  ["klima", "klima_strom_weg", "Kabelweg zum Zählerschrank", "zahl", { einheit: "m" }],
+  ["klima", "klima_zs_platz", "Platz im Zählerschrank für die Absicherung?", "janein"],
+
   ["abschluss", "hinweis_monteure", "Noch etwas, das die Monteure wissen müssen?", "text"],
 ];
 
@@ -156,10 +183,9 @@ export const frageNach = (id) => NACH_ID[id];
 
 // Welche Fragen gelten bei diesen Antworten? Ohne Typ nur die Startfrage.
 export function sichtbar(antworten = {}) {
-  const typ = antworten.typ?.wert;
-  if (!typ) return [KATALOG[0]];
-  const pv = typ === "PV" || typ === "Beides", wp = typ === "Wärmepumpe" || typ === "Beides";
-  return KATALOG.filter((f) => (f.nur !== "pv" || pv) && (f.nur !== "wp" || wp) && (!f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert)));
+  const gewaehlt = typen(antworten);
+  if (!gewaehlt.length) return [KATALOG[0]];
+  return KATALOG.filter((f) => (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && (!f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert)));
 }
 
 const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);

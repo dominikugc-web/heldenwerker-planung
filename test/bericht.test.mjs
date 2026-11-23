@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument, PDFName } from "pdf-lib";
-import { berichtAbschnitte, berichtText, fehltPflichtfotos, berichtPdf } from "../server/bericht.mjs";
+import { berichtAbschnitte, berichtText, fehltPflichtfotos, berichtPdf, berichtTitel } from "../server/bericht.mjs";
 
 import fs from "node:fs";
 const JPEG = fs.readFileSync(new URL("./daten/foto.jpg", import.meta.url));
@@ -58,4 +58,10 @@ test("PDF ohne Links: Video zeigt Hinweis statt Link", async () => {
   const pl = planung({ typ: a("Wärmepumpe"), wp_fotos: a("", { dateien: [{ id: "v1", name: "Rundgang.mp4", art: "video" }] }) });
   const doc = await PDFDocument.load(await berichtPdf(pl, { links: {}, bild: async () => JPEG }));
   assert.equal(doc.getPages().flatMap((s) => s.node.Annots()?.asArray() || []).length, 0);
+});
+
+test("Titel nennt alle gewählten Typen, alte Antwort Beides bleibt PV + Wärmepumpe", () => {
+  assert.equal(berichtTitel({ typ: a("PV") }), "Technische Besichtigung PV");
+  assert.equal(berichtTitel({ typ: a("Beides") }), "Technische Besichtigung PV + Wärmepumpe");
+  assert.equal(berichtTitel({ typ: a("PV, Klimaanlage") }), "Technische Besichtigung PV + Klimaanlage");
 });

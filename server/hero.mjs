@@ -60,6 +60,20 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .map((x) => ({ nr: x.nr, datum: x.date, produkte: produkte(x.published_customer_document_draft?.data?.items) }));
     },
+    // Datei von einem HERO-Link laden (z. B. temporary_url einer Projektdatei).
+    async laden(url) {
+      const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      if (!r.ok) throw new HeroFehler("Datei aus HERO nicht ladbar");
+      return new Uint8Array(await r.arrayBuffer());
+    },
+    // Neuester Heizlastbericht (PDF) aus den Projektdateien, null wenn keiner da ist. Der Link gilt nur kurz.
+    async heizlastBericht(projektId) {
+      const d = await abfrage(`query($id:Int){ project_match(project_match_id:$id){ file_uploads { filename temporary_url created is_deleted } } }`, { id: Number(projektId) });
+      const f = (d.project_match?.file_uploads || []).filter((x) => !x.is_deleted && x.temporary_url && /heizlast/i.test(x.filename) && /.pdf$/i.test(x.filename))
+        // Autarc-Bericht ("…-Raumweise-Heizlastbericht.pdf") vor anderen Heizlast-Dateien, darin der neueste.
+        .sort((x, y) => /heizlastbericht/i.test(y.filename) - /heizlastbericht/i.test(x.filename) || String(y.created).localeCompare(String(x.created)))[0];
+      return f ? { name: f.filename, url: f.temporary_url } : null;
+    },
     async projekteSuchen(suche, { offset = 0, anzahl = 30 } = {}) {
       const d = await abfrage(`query($s:String,$f:Int,$o:Int){ project_matches(search:$s, last:$f, offset:$o, orderBy:"modified"){ ${PROJEKT_FELDER} } }`, { s: suche || null, f: anzahl, o: offset });
       return d.project_matches.map(alsProjekt);

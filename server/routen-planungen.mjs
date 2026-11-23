@@ -6,6 +6,7 @@ import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
 import { antwortenAusLieferscheinen } from "./lieferschein.mjs";
+import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
 
 // Steht "laeuft" drin, aber hier läuft nichts (Server wurde neu gestartet): als unterbrochen melden, damit man neu senden kann.
 const sendenStand = (k, pl) => (pl.senden?.status === "laeuft" && !k.abschluss.laeuft(pl.id)
@@ -17,10 +18,13 @@ route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k,
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
-  // Was schon in Lieferscheinen steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
-  let vorbefuellt = {};
-  try { vorbefuellt = antwortenAusLieferscheinen(await k.hero().lieferscheine(b.projektId)); }
-  catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
+  // Was schon in Lieferscheinen und im Heizlastbericht steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
+  // Lieferschein vor Heizlast: dort steht die echte Außeneinheit, die Heizlast ist nur der Richtwert.
+  const hero = k.hero();
+  const heizlast = async () => { const d = await hero.heizlastBericht(b.projektId); return d ? antwortenAusHeizlast(await heizlastAusPdf(await hero.laden(d.url))) : {}; };
+  const [ls, hl] = await Promise.allSettled([hero.lieferscheine(b.projektId).then(antwortenAusLieferscheinen), heizlast()]);
+  for (const [name, x] of [["Lieferscheine", ls], ["Heizlast", hl]]) if (x.status === "rejected") console.error(name + ":", String(x.reason?.message).slice(0, 200));
+  const vorbefuellt = { ...(hl.value || {}), ...(ls.value || {}) };
   json(res, 201, k.planungen.neu({ projektId: b.projektId, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer: b.nummer, vorbefuellt }));
 });
 

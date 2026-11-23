@@ -83,3 +83,17 @@ test("Projekte eines Kunden: Kunden-ID als Variable, neueste zuerst", async () =
   assert.ok(f.aufrufe[0].body.query.includes("customer_id"));
   assert.deepEqual(liste.map((x) => [x.id, x.kundeId]), [[8, 55], [9, 55]]);
 });
+
+test("Heizlastbericht: neueste PDF mit Heizlast im Namen, gelöschte und andere Dateien zählen nicht", async () => {
+  const f = attrappe({ data: { project_match: { file_uploads: [
+    { filename: "Muster-Raumweise-Heizlastbericht.pdf", temporary_url: "https://x/alt", created: "2026-09-01T10:00:00Z", is_deleted: false },
+    { filename: "Muster-Raumweise-Heizlastbericht (2).pdf", temporary_url: "https://x/neu", created: "2026-10-01T10:00:00Z", is_deleted: false },
+    { filename: "Heizlast neu.pdf", temporary_url: "https://x/weg", created: "2026-11-01T10:00:00Z", is_deleted: true },
+    { filename: "Muster-Heizungsplanungsbericht.pdf", temporary_url: "https://x/plan", created: "2026-12-01T10:00:00Z", is_deleted: false },
+  ] } } });
+  const b = await erstelleHero({ key: "k", fetch: f }).heizlastBericht(42);
+  assert.deepEqual(b, { name: "Muster-Raumweise-Heizlastbericht (2).pdf", url: "https://x/neu" });
+  assert.equal(f.aufrufe[0].body.variables.id, 42);
+  const leer = await erstelleHero({ key: "k", fetch: attrappe({ data: { project_match: { file_uploads: [] } } }) }).heizlastBericht(1);
+  assert.equal(leer, null);
+});

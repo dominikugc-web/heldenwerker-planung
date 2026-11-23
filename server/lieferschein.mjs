@@ -50,7 +50,7 @@ function ausEinem(ls) {
   return { a, pv, wp };
 }
 
-// Neuester Lieferschein gewinnt; PV und Wärmepumpe aus verschiedenen Lieferscheinen ergeben "Beides".
+// Neuester Lieferschein gewinnt; PV und Wärmepumpe aus verschiedenen Lieferscheinen ergeben beide Typen.
 export function antwortenAusLieferscheinen(liste = []) {
   const raus = {};
   let pv = null, wp = null;
@@ -60,7 +60,7 @@ export function antwortenAusLieferscheinen(liste = []) {
     if (e.pv) pv ??= ls.nr;
     if (e.wp) wp ??= ls.nr;
   }
-  if (pv || wp) raus.typ = { wert: pv && wp ? "Beides" : pv ? "PV" : "Wärmepumpe", quelle: pv || wp };
+  if (pv || wp) raus.typ = { wert: [pv && "PV", wp && "Wärmepumpe"].filter(Boolean).join(", "), quelle: pv || wp };
   // Nur was der Katalog als Antwort annimmt; alles andere lieber weglassen als falsch vorausfüllen.
   for (const [id, x] of Object.entries(raus)) {
     try { x.wert = pruefeAntwort(frageNach(id), x.wert); if (!x.wert) delete raus[id]; } catch { delete raus[id]; }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { PDFDocument, StandardFonts, rgb, PDFName, PDFString } from "pdf-lib";
-import { BEREICHE, KATALOG, sichtbar } from "./fragen.mjs";
+import { BEREICHE, KATALOG, sichtbar, typen } from "./fragen.mjs";
 
 // Bericht der Besichtigung aus den Antworten des festen Ablaufs: als Abschnitte, als Text und als PDF
 // im Stil des „DC Abnahmeprotokolls“ (Logo, Titelband, Abschnittsbalken, Frage | Antwort, Fotos darunter).
@@ -52,12 +52,14 @@ const LOGO = new URL("../vorlagen/logo.png", import.meta.url);
 // Standardschrift kann nur WinAnsi; alles andere (Emojis, fremde Schriften) wird ersetzt statt abzustürzen.
 const winAnsi = (s) => String(s ?? "").normalize("NFC").replace(/[^\x20-\x7E\xA0-\xFF€‘’‚“”„•…\n]/gu, "?").replace(/\?+/g, (m) => (m.length > 1 ? "?" : m));
 
+export const berichtTitel = (antworten = {}) => `Technische Besichtigung ${typen(antworten).join(" + ") || "PV"}`;
+
 export async function berichtPdf(pl, { links = {}, bild }) {
   const doc = await PDFDocument.create();
   const normal = await doc.embedFont(StandardFonts.Helvetica), fett = await doc.embedFont(StandardFonts.HelveticaBold), kursiv = await doc.embedFont(StandardFonts.HelveticaOblique);
   const logo = await doc.embedPng(fs.readFileSync(LOGO));
   const antworten = pl.antworten || {};
-  const titel = `Technische Besichtigung ${antworten.typ?.wert === "PV" ? "PV" : antworten.typ?.wert === "Wärmepumpe" ? "Wärmepumpe" : "PV + Wärmepumpe"}`;
+  const titel = berichtTitel(antworten);
   let seite, y;
 
   const neueSeite = () => {

@@ -15,7 +15,7 @@ test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedanke
     if (f.wenn) assert.ok(frageNach(f.wenn.frage), "Bedingung zeigt ins Leere: " + f.id);
   }
   assert.equal(KATALOG[0].id, "typ");
-  assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht).length, 10);
+  assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht).length, 11);
 });
 
 test("Typ PV blendet Wärmepumpe aus und umgekehrt", () => {
@@ -124,4 +124,32 @@ test("Zähler: Anzahl zuerst, je Zähler Nummer, 1.8.0 und 2.8.0", () => {
   assert.deepEqual(zaehlerFragen("2"), ["Zähler 1: Zählernummer", "Zähler 1: Zählerstand 1.8.0", "Zähler 1: Zählerstand 2.8.0", "Zähler 2: Zählernummer", "Zähler 2: Zählerstand 1.8.0", "Zähler 2: Zählerstand 2.8.0"]);
   assert.equal(zaehlerFragen("4").length, 12);
   assert.equal(zaehlerFragen("1").length, 3);
+});
+
+test("Startfrage: PV, Wärmepumpe und Klimaanlage frei kombinierbar, nur Gewähltes wird abgefragt", () => {
+  const typ = frageNach("typ");
+  assert.equal(typ.art, "mehrfach");
+  assert.deepEqual(typ.optionen, ["PV", "Wärmepumpe", "Klimaanlage"]);
+  const ids = (wert) => sichtbar({ typ: { wert } }).map((f) => f.id);
+  const klima = ids("Klimaanlage");
+  assert.ok(klima.includes("klima_paket") && !klima.includes("dachbelag") && !klima.includes("bosch_modell"));
+  assert.ok(klima.includes("kunde") && klima.includes("hinweis_monteure"), "Objekt und Abschluss gelten immer");
+  const pvKlima = ids("PV, Klimaanlage");
+  assert.ok(pvKlima.includes("dachbelag") && pvKlima.includes("klima_paket") && !pvKlima.includes("bosch_modell"));
+  const alt = ids("Beides");
+  assert.ok(alt.includes("dachbelag") && alt.includes("bosch_modell") && !alt.includes("klima_paket"), "alte Antwort Beides = PV und Wärmepumpe");
+  assert.ok(!ids("PV").includes("klima_paket"));
+});
+
+test("Klima: Räume je nach Anzahl, App nur beim Basispaket, Höhe nur bei Hauswand", () => {
+  const ids = (a) => sichtbar({ typ: { wert: "Klimaanlage" }, ...a }).map((f) => f.id);
+  const zwei = ids({ klima_anzahl: { wert: "2" } });
+  assert.ok(zwei.includes("klima_raum2_flaeche") && !zwei.includes("klima_raum3_flaeche"));
+  assert.ok(ids({ klima_anzahl: { wert: "5" } }).includes("klima_raum5_leitung"));
+  assert.ok(ids({}).includes("klima_raum1_flaeche"), "Raum 1 immer");
+  assert.ok(ids({ klima_paket: { wert: "Basispaket (Bosch Climate 5000)" } }).includes("klima_app"));
+  assert.ok(!ids({ klima_paket: { wert: "Premiumpaket (Bosch Climate 7000)" } }).includes("klima_app"));
+  assert.ok(ids({ klima_aussen_ort: { wert: "An der Hauswand" } }).includes("klima_aussen_hoehe"));
+  assert.ok(!ids({ klima_aussen_ort: { wert: "Auf dem Boden" } }).includes("klima_aussen_hoehe"));
+  assert.ok(frageNach("foto_aussengeraet_standort").pflicht && frageNach("foto_aussengeraet_standort").bereich === "klima");
 });
