@@ -81,6 +81,30 @@ test("AC-Fragen kommen vor den DC-Fragen, im Ablauf und in der Bereichsliste", (
   assert.ok(pv.indexOf("erdspiess") < pv.indexOf("dachbelag"));
 });
 
+test("AC beginnt mit den Zählern, dann Foto WR/SP-Standort, dann Kabelweg AC", () => {
+  const i = (id) => KATALOG.findIndex((f) => f.id === id);
+  const ac = KATALOG.filter((f) => f.bereich === "ac").map((f) => f.id);
+  assert.deepEqual(ac.slice(0, 2), ["wlan_lan", "anz_zaehler"]);
+  assert.equal(i("foto_wr_sp_standort"), i("zaehler4_280") + 1);
+  assert.equal(i("kabelweg"), i("foto_wr_sp_standort") + 1);
+  assert.equal(frageNach("foto_wr_sp_standort").bereich, "ac");
+});
+
+test("Foto Erdung sitzt direkt beim Potentialausgleich", () => {
+  const i = (id) => KATALOG.findIndex((f) => f.id === id);
+  assert.equal(i("foto_erdung"), i("potentialausgleich") + 1);
+  assert.equal(frageNach("foto_erdung").bereich, "ac");
+  assert.ok(frageNach("foto_erdung").pflicht);
+});
+
+test("Gerüst: Höhe und freie Fläche werden per Foto erfasst", () => {
+  const geruest = KATALOG.filter((f) => f.bereich === "geruest");
+  assert.deepEqual(geruest.map((f) => f.id), ["foto_geruesthoehe", "regenrinne", "foto_geruestflaeche", "wandmontage"]);
+  assert.equal(frageNach("foto_geruesthoehe").art, "foto");
+  assert.ok(!frageNach("foto_geruesthoehe").pflicht);
+  assert.ok(frageNach("foto_geruestflaeche").pflicht);
+});
+
 test("SAT-Frage heißt einbauen/versetzen, WR- und Speicher-Standort nur noch als Foto", () => {
   assert.equal(KATALOG.find((x) => x.id === "sat_schluessel").frage, "SAT-Schlüssel oder Ähnliches einbauen/versetzen?");
   assert.ok(!KATALOG.some((x) => x.id === "wr_standort" || x.id === "speicher_standort"));

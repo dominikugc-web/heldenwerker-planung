@@ -35,6 +35,9 @@ const WECHSELRICHTER = [...kw("Sungrow", [3, 3.6, 4, 5, 6, 8, 10, 12, 15, 20, 25
 
 const KABELWEGE = ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60", "Sonstige (Notiz)"]; // gilt für DC und AC
 const PFLICHTFOTOS = ["Dach gesamt", "Pfannentyp", "Sparren/Lattung", "Erdung", "Störer", "Gerüstfläche", "Kabelweg", "WR/SP Standort", "Zählerschrank", "HAK"];
+// Diese Pflichtfotos stehen direkt bei ihrer Frage statt im Fotoblock (Dominik, 23.11.). IDs bleiben, damit alte Fotos erhalten bleiben.
+const IM_ABLAUF = ["Erdung", "Gerüstfläche", "WR/SP Standort"];
+const pflichtfoto = (bereich, name) => [bereich, "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }];
 
 // [bereich, id, frage, art, extra]
 const F = [
@@ -54,9 +57,6 @@ const F = [
   ["pv", "neuer_zs", "Neuer Zählerschrank?", "janein"],
   ["pv", "wallbox_wunsch", "Wallbox-Wunsch?", "janein"],
 
-  ["ac", "kabelweg", "Kabelweg AC", "mehrfach", { optionen: KABELWEGE }],
-  ["ac", "uess_innen", "Wenn länger als 10 m innen: ÜSS", "text"],
-  ["ac", "zs_etage", "Zählerschrank-Etage", "text"],
   ["ac", "wlan_lan", "WLAN oder LAN?", "auswahl", { optionen: ["WLAN", "LAN"] }],
   ["ac", "anz_zaehler", "Wie viele Zähler sind vorhanden?", "auswahl", { optionen: ["1", "2", "3", "4"] }],
   // Zähler 1 behält die alten IDs, damit frühere Besichtigungen ihre Werte behalten; Zähler 2 bis 4 nur bei passender Anzahl.
@@ -69,6 +69,10 @@ const F = [
       ["ac", id("zaehlerstand_280", "280"), `Zähler ${n}: Zählerstand 2.8.0`, "zahl", { einheit: "kWh", ...wenn }],
     ];
   }),
+  pflichtfoto("ac", "WR/SP Standort"),
+  ["ac", "kabelweg", "Kabelweg AC", "mehrfach", { optionen: KABELWEGE }],
+  ["ac", "uess_innen", "Wenn länger als 10 m innen: ÜSS", "text"],
+  ["ac", "zs_etage", "Zählerschrank-Etage", "text"],
   ["ac", "kabelweg_zs_wr", "Kabelweglänge vom Zählerschrank zum WR", "zahl", { einheit: "m" }],
   ["ac", "waende_beurteilt", "Wände beurteilt", "auswahl", { optionen: ["Massiv", "Holz", "Gipskarton"] }],
   ["ac", "kabel_eingezeichnet", "Kabel eingezeichnet?", "janein"],
@@ -80,6 +84,7 @@ const F = [
   ["ac", "kabelweg_hak_zs", "Kabelweglänge vom HAK zum neuen Zählerschrank", "zahl", { einheit: "m", wenn: { frage: "neuer_zs_ac", ist: "ja" } }],
   ["ac", "heizstab", "Heizstab?", "janein"],
   ["ac", "potentialausgleich", "Potentialausgleich?", "janein"],
+  pflichtfoto("ac", "Erdung"),
   ["ac", "erdspiess", "Erdspieß nötig?", "janein"],
 
   ["dc", "dachbelag", "Dachbelag", "auswahl", { optionen: ["Pfanne", "Bitum", "Trapezblech", "Flachdach", "Sonstige (Notiz)"] }],
@@ -99,13 +104,12 @@ const F = [
   ["dc", "freileitung", "Freileitung?", "janein"],
   ["dc", "freileitung_isoliert", "Freileitung isoliert?", "janein", { wenn: { frage: "freileitung", ist: "ja" } }],
 
-  ["geruest", "geruesthoehe", "Gerüsthöhe", "zahl", { einheit: "m" }],
+  ["geruest", "foto_geruesthoehe", "Foto: Gerüsthöhe", "foto", { titel: "Gerüsthöhe" }],
   ["geruest", "regenrinne", "Regenrinne", "text"],
-  ["geruest", "geruestflaeche_frei", "Gerüstfläche frei?", "janein"],
-  ["geruest", "geruest_hindernis", "Was steht im Weg?", "text", { wenn: { frage: "geruestflaeche_frei", ist: "nein" } }],
+  pflichtfoto("geruest", "Gerüstfläche"),
   ["geruest", "wandmontage", "Wandmontage?", "janein"],
 
-  ...PFLICHTFOTOS.map((name) => ["fotos", "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }]),
+  ...PFLICHTFOTOS.filter((name) => !IM_ABLAUF.includes(name)).map((name) => pflichtfoto("fotos", name)),
 
   ["wp_bestand", "bosch_modell", "Bosch-Modell", "text"],
   ["wp_bestand", "wp_leistung", "WP-Leistung", "zahl", { einheit: "kW" }],
