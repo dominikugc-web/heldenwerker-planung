@@ -33,6 +33,7 @@ const WECHSELRICHTER = [...kw("Sungrow", [3, 3.6, 4, 5, 6, 8, 10, 12, 15, 20, 25
   "EcoFlow PowerStream 600 W", "EcoFlow PowerStream 800 W", "EcoFlow STREAM Microinverter 600 W", "EcoFlow STREAM Microinverter 800 W",
   "EcoFlow STREAM Ultra", "EcoFlow STREAM Max", "EcoFlow STREAM Pro", ...kw("EcoFlow PowerOcean", [5, 6, 8, 10, 12, 15]).map((s) => s.replace(",0 kW", " kW")), "Sonstige (Notiz)"];
 
+const KABELWEGE = ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60", "Sonstige (Notiz)"]; // gilt für DC und AC
 const PFLICHTFOTOS = ["Dach gesamt", "Pfannentyp", "Sparren/Lattung", "Erdung", "Störer", "Gerüstfläche", "Kabelweg", "WR/SP Standort", "Zählerschrank", "HAK"];
 
 // [bereich, id, frage, art, extra]
@@ -66,7 +67,7 @@ const F = [
   ["dc", "leistungsoptimierer", "Leistungsoptimierer", "zahl", { einheit: "Stück" }],
   ["dc", "aufdachdaemmung", "Aufdachdämmung", "zahl", { einheit: "cm" }],
   ["dc", "sat_schluessel", "SAT-Schlüssel oder Ähnliches einbauen/versetzen?", "text"],
-  ["dc", "kabelweg_dc", "Kabelweg DC", "mehrfach", { optionen: ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60", "Sonstige (Notiz)"] }],
+  ["dc", "kabelweg_dc", "Kabelweg DC", "mehrfach", { optionen: KABELWEGE }],
   ["dc", "freileitung", "Freileitung?", "janein"],
   ["dc", "freileitung_isoliert", "Freileitung isoliert?", "janein", { wenn: { frage: "freileitung", ist: "ja" } }],
 
@@ -78,7 +79,7 @@ const F = [
 
   ...PFLICHTFOTOS.map((name) => ["fotos", "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }]),
 
-  ["ac", "kabelweg", "Kabelweg", "auswahl", { optionen: ["Schacht", "Kamin", "Alu", "Kupfer", "Sonstige (Notiz)"] }],
+  ["ac", "kabelweg", "Kabelweg AC", "mehrfach", { optionen: KABELWEGE }],
   ["ac", "uess_innen", "Wenn länger als 10 m innen: ÜSS", "text"],
   ["ac", "zs_etage", "Zählerschrank-Etage", "text"],
   ["ac", "wlan_lan", "WLAN oder LAN?", "auswahl", { optionen: ["WLAN", "LAN"] }],

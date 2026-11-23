@@ -64,6 +64,15 @@ test("Kabelweg DC: mehrere Punkte wählbar, in Katalog-Reihenfolge, Unbekanntes 
   assert.throws(() => pruefeAntwort(f, "Schacht, Dachrinne"), (e) => e.status === 400);
 });
 
+test("Kabelweg AC: dieselben Punkte wie DC, mehrere wählbar, alte Einzelantwort bleibt gültig", () => {
+  const ac = KATALOG.find((x) => x.id === "kabelweg"), dc = KATALOG.find((x) => x.id === "kabelweg_dc");
+  assert.equal(ac.art, "mehrfach");
+  assert.equal(ac.frage, "Kabelweg AC");
+  assert.deepEqual(ac.optionen, dc.optionen);
+  assert.equal(pruefeAntwort(ac, "Kupfer, schacht"), "Schacht, Kupfer");
+  assert.equal(pruefeAntwort(ac, "Kamin"), "Kamin");
+});
+
 test("SAT-Frage heißt einbauen/versetzen, WR- und Speicher-Standort nur noch als Foto", () => {
   assert.equal(KATALOG.find((x) => x.id === "sat_schluessel").frage, "SAT-Schlüssel oder Ähnliches einbauen/versetzen?");
   assert.ok(!KATALOG.some((x) => x.id === "wr_standort" || x.id === "speicher_standort"));
