@@ -11,7 +11,7 @@ export class HeroFehler extends Error {
   constructor(meldung) { super(meldung); this.status = 502; this.eigen = true; }
 }
 
-const PROJEKT_FELDER = "id project_nr project_title name customer { full_name company_name } address { street zipcode city } current_project_match_status { name }";
+const PROJEKT_FELDER = "id project_nr project_title name customer { id full_name company_name } address { street zipcode city } current_project_match_status { name }";
 
 const trim = (s) => (s || "").trim();
 // HERO speichert Logbuch-Text als HTML (Zeilenumbruch = <br />).
@@ -21,7 +21,7 @@ const name = (c) => trim(c?.full_name) || trim(c?.company_name);
 export function alsProjekt(p) {
   const a = p.address || {};
   return {
-    id: p.id, nummer: p.project_nr, titel: trim(p.project_title) || trim(p.name), kunde: name(p.customer),
+    id: p.id, nummer: p.project_nr, titel: trim(p.project_title) || trim(p.name), kunde: name(p.customer), kundeId: p.customer?.id ?? null,
     adresse: [a.street, [a.zipcode, a.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),
     status: p.current_project_match_status?.name || "",
   };
@@ -62,6 +62,11 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
     },
     async projekteSuchen(suche, { offset = 0, anzahl = 30 } = {}) {
       const d = await abfrage(`query($s:String,$f:Int,$o:Int){ project_matches(search:$s, last:$f, offset:$o, orderBy:"modified"){ ${PROJEKT_FELDER} } }`, { s: suche || null, f: anzahl, o: offset });
+      return d.project_matches.map(alsProjekt);
+    },
+    // Alle Projekte eines Kunden (für die Projektseite), neueste zuerst.
+    async kundenProjekte(kundeId) {
+      const d = await abfrage(`query($k:Int){ project_matches(customer_id:$k, last:50, orderBy:"modified"){ ${PROJEKT_FELDER} } }`, { k: Number(kundeId) });
       return d.project_matches.map(alsProjekt);
     },
     async projektLaden(id) {

@@ -4,6 +4,7 @@ import { istAdmin } from "./profile.mjs";
 route("GET", "/api/projekte", async (req, res, p, k) =>
   json(res, 200, await k.hero().projekteSuchen(k.query.get("suche") || "", { offset: Number(k.query.get("offset") || 0) })));
 route("GET", "/api/projekte/:id", async (req, res, p, k) => json(res, 200, await k.hero().projektLaden(p.id)));
+route("GET", "/api/kunden/:id/projekte", async (req, res, p, k) => json(res, 200, await k.hero().kundenProjekte(p.id)));
 
 // meins: Ich bin eingeteilt, über die im Team zugeordnete HERO-Person oder dieselbe E-Mail-Adresse wie in HERO.
 route("GET", "/api/termine", async (req, res, p, k) => {

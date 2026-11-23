@@ -25,7 +25,7 @@ test("Suche geht als Variable mit, nicht im Query-Text", async () => {
 test("HERO-Objekt wird auf Projekt abgebildet", async () => {
   const f = attrappe({ data: { project_matches: [PM] } });
   const [p] = await erstelleHero({ key: "k", fetch: f }).projekteSuchen("");
-  assert.deepEqual(p, { id: 7, nummer: "UNB-7", titel: "PV Dach", kunde: "Müller & Söhne", adresse: "Hauptstraße 1, 56307 Dernbach", status: "Neu" });
+  assert.deepEqual(p, { id: 7, nummer: "UNB-7", titel: "PV Dach", kunde: "Müller & Söhne", kundeId: null, adresse: "Hauptstraße 1, 56307 Dernbach", status: "Neu" });
 });
 
 test("errors in der Antwort werden zu HeroFehler", async () => {
@@ -74,4 +74,12 @@ test("Logbuch-Text aus HERO: <br /> wird zu Zeilenumbruch, andere Tags verschwin
   const f = attrappe({ data: { project_match: { ...PM, contact: {}, file_uploads: [], histories: [{ created: "2026-11-17", custom_title: "", custom_text: "Für die Monteure<br />\n<br />\n• <b>Hund</b> &amp; Katze" }] } } });
   const p = await erstelleHero({ key: "k", fetch: f }).projektLaden(7);
   assert.equal(p.logbuch[0].text, "Für die Monteure\n\n• Hund & Katze");
+});
+
+test("Projekte eines Kunden: Kunden-ID als Variable, neueste zuerst", async () => {
+  const f = attrappe({ data: { project_matches: [{ ...PM, id: 8, customer: { id: 55, full_name: "Müller" } }, { ...PM, id: 9, customer: { id: 55, full_name: "Müller" } }] } });
+  const liste = await erstelleHero({ key: "k", fetch: f }).kundenProjekte(55);
+  assert.equal(f.aufrufe[0].body.variables.k, 55);
+  assert.ok(f.aufrufe[0].body.query.includes("customer_id"));
+  assert.deepEqual(liste.map((x) => [x.id, x.kundeId]), [[8, 55], [9, 55]]);
 });
