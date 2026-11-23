@@ -167,11 +167,19 @@ async function projekt(el, id, signal) {
       ${p.kontakt?.email ? `<a class="zeile" href="mailto:${esc(p.kontakt.email)}"><div class="haupt"><div class="neben">E-Mail</div><div class="titel">${esc(p.kontakt.email)}</div></div></a>` : ""}
     </div>
     <button class="gross" data-start>${IKON.plus}Besichtigung starten</button>
+    ${p.kundeId ? `<div class="label">Alle Projekte von ${esc(p.kunde || "diesem Kunden")}</div><div class="gruppe" id="kundenprojekte"><div class="leer">Lädt …</div></div>` : ""}
     <div class="label">Planungen</div><div class="gruppe">${eigene.length ? eigene.map(planungZeile).join("") : `<div class="leer">Noch keine Planung in der App.</div>`}</div>
     <div class="label">Logbuch in HERO</div><div class="gruppe">${p.logbuch.length ? p.logbuch.slice(0, 8).map((e) => `<div class="zeile"><div class="haupt"><div class="neben">${esc(datumKurz(e.datum))}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(e.text.length > 400 ? e.text.slice(0, 400) + " …" : e.text)}</div></div></div>`).join("") : `<div class="leer">Keine Einträge.</div>`}</div>
     <div class="label">Dateien in HERO</div><div class="gruppe">${p.dateien.length ? p.dateien.map((d) => `<a class="zeile" href="${esc(d.url)}" target="_blank" rel="noopener"><div class="haupt"><div class="titel">${esc(d.name)}</div></div><span class="pfeil">${IKON.pfeil}</span></a>`).join("") : `<div class="leer">Keine Dateien.</div>`}</div>`;
   $("[data-zurueck]", el).onclick = () => (history.length > 1 ? history.back() : gehe("projekte"));
   $("[data-start]", el).onclick = () => planungStarten(p);
+  // Alle Projekte desselben Kunden aus HERO; das offene Projekt ist markiert.
+  if (p.kundeId) api(`/api/kunden/${p.kundeId}/projekte`, { signal }).then((liste) => {
+    const box = $("#kundenprojekte", el);
+    if (box) box.innerHTML = liste.map((x) => x.id === p.id
+      ? `<div class="zeile"><div class="haupt"><div class="titel">${esc(x.nummer)}</div><div class="neben">${x.status ? esc(x.status) + " · " : ""}dieses Projekt</div></div></div>`
+      : `<a class="zeile" href="#projekt/${x.id}"><div class="haupt"><div class="titel">${esc(x.nummer)}</div><div class="neben">${esc(x.status || "")}</div><div class="neben">${esc(x.adresse || "ohne Adresse")}</div></div><span class="pfeil">${IKON.pfeil}</span></a>`).join("") || `<div class="leer">Keine weiteren Projekte.</div>`;
+  }).catch(() => { const box = $("#kundenprojekte", el); if (box) box.innerHTML = `<div class="leer">Konnte die Projekte nicht laden.</div>`; });
 }
 
 // ---------- Einstellungen ----------
