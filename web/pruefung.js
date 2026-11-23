@@ -24,6 +24,7 @@ export async function pruefAnsicht(el, id, signal) {
       `<a class="zeile" href="#chat/${esc(planung.id)}/${esc(f.id)}"><div class="haupt"><div class="titel">${esc(f.titel || f.frage)}</div><div class="neben">${esc(wert(f, antworten[f.id]))}</div></div><span class="daumen">${bild(f)}</span>${IKON.pfeil}</a>`).join("")}</div>`).join("")}
     <div class="zwei"><a class="pill" href="${esc(serverUrl(`/api/planungen/${planung.id}/protokoll.pdf`))}" target="_blank" rel="noopener" data-pdf>Protokoll ansehen</a><button class="pill" data-chat>Zum Ablauf</button></div>
     <button class="pill" data-pdfsichern style="width:100%;margin-bottom:var(--gap)">PDF in Dateien sichern</button>
+    <button class="pill" data-fotossichern style="width:100%;margin-bottom:var(--gap)">Alle Fotos aufs Handy</button>
     <button class="gross ok" data-senden>${IKON.wolke}${planung.status === "gesendet" ? "Erneut senden" : "In HERO speichern"}</button>`;
 
   $$("[data-chat]", el).forEach((b) => (b.onclick = () => (location.hash = "chat/" + id)));
@@ -59,6 +60,43 @@ export async function pruefAnsicht(el, id, signal) {
       else { const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(pdfDatei), download: pdfDatei.name }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000); }
     } catch (err) {
       if (err.name === "NotAllowedError") toast("PDF ist bereit, bitte noch einmal tippen", "ok");
+      else if (err.name !== "AbortError") fehlerMelden(err);
+    }
+  });
+  // Alle Fotos (bemalte Fassung, volle Größe) übers Teilen-Menü aufs Handy, z. B. „Bilder sichern“, um sie selbst in HERO hochzuladen.
+  // Erster Tipp lädt (das dauert, Safari erlaubt das Teilen danach nicht mehr im selben Tipp), zweiter Tipp teilt.
+  const fotoKnopf = $("[data-fotossichern]", el);
+  const fotos = katalog.flatMap((f) => { let n = 0; return (antworten[f.id]?.dateien || []).filter((d) => d.art === "bild")
+    .map((d) => ({ d, name: `${String(f.titel || f.frage).replace(/[\\/:*?"<>|]+/g, "-").trim().slice(0, 50)} ${++n}.jpg` })); });
+  let fotoDateien = null;
+  if (!fotos.length) fotoKnopf.hidden = true;
+  fotoKnopf.addEventListener("click", async () => {
+    if (zustand.demo) return toast("Demo, nicht verbunden. Keine Fotos.", "fehler");
+    if (!fotoDateien) {
+      fotoKnopf.disabled = true; fotoKnopf.textContent = `Fotos werden geladen … (0 von ${fotos.length})`;
+      try {
+        const geladen = [];
+        for (const { d, name } of fotos) {
+          const r = await fetch(dateiUrl(planung.id, d.id, false, d.v), { signal, cache: "no-cache" });
+          if (!r.ok) throw new Error("Foto fehlt auf dem Server");
+          geladen.push(new File([await r.blob()], name, { type: "image/jpeg" }));
+          fotoKnopf.textContent = `Fotos werden geladen … (${geladen.length} von ${fotos.length})`;
+        }
+        fotoDateien = geladen;
+        fotoKnopf.textContent = `${fotos.length} Foto${fotos.length > 1 ? "s" : ""} bereit: jetzt sichern`;
+        toast("Fotos bereit, bitte noch einmal tippen", "ok");
+      } catch (err) {
+        if (err.name !== "AbortError") toast("Keine Verbindung zum Server, Fotos gerade nicht verfügbar", "fehler");
+        fotoKnopf.textContent = "Alle Fotos aufs Handy";
+      }
+      fotoKnopf.disabled = false;
+      return;
+    }
+    try {
+      if (navigator.canShare?.({ files: fotoDateien })) await navigator.share({ files: fotoDateien });
+      else for (const f of fotoDateien) { const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(f), download: f.name }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000); }
+    } catch (err) {
+      if (err.name === "NotAllowedError") toast("Bitte noch einmal tippen", "ok");
       else if (err.name !== "AbortError") fehlerMelden(err);
     }
   });
