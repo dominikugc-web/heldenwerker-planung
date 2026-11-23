@@ -48,8 +48,9 @@ a { color: var(--accent); }
 /* In Textfeldern zeigt der Cursor den Fokus, kein blauer Rahmen (Dominik, 17.11.) */
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
 
-main { position: absolute; inset: 0; top: env(safe-area-inset-top); overflow-y: auto; overscroll-behavior: contain;
-  padding: 18px max(16px, calc(50% - 280px)) calc(env(safe-area-inset-bottom) + 94px); }
+/* Inhalt läuft bis ganz an den oberen Rand, ohne Streifen unter der Statusleiste (Dominik, 23.11.) */
+main { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: calc(env(safe-area-inset-top) + 18px) max(16px, calc(50% - 280px)) calc(env(safe-area-inset-bottom) + 94px); }
 h1 { font-size: 30px; font-weight: 650; margin: 6px 0 var(--gap); letter-spacing: -.01em; }
 h2 { font-size: 21px; margin: 0 0 var(--gap); }
 p { margin: 0 0 var(--gap); }
