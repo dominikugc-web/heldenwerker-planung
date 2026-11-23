@@ -250,16 +250,22 @@ export async function chatAnsicht(el, id) {
     // Tastatur offen: Fokus solange auf ein verstecktes Feld parken, das beim Neuzeichnen bleibt, dann ans nächste Feld geben.
     const halter = $("#halter", el), tastatur = steuerung.contains(document.activeElement) && document.activeElement.matches("input, textarea");
     if (tastatur) halter.focus({ preventScroll: true });
+    // Erst anzeigen und das nächste Feld fokussieren, dann speichern: Das iPhone lässt die Tastatur nur offen,
+    // wenn der Fokus noch im selben Tipp wechselt (nicht erst nach einem await).
+    const vorher = { antworten: planung.antworten, bearbeite };
+    planung.antworten = antwortAnwenden(antworten(), f, body, meta);
+    // Nach einer Antwort geht es zur nächsten Frage; nach Datei oder Notiz bleibt die Frage offen (weitere Fotos, Antwort fehlt noch).
+    bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
+    zeichne();
+    if (tastatur) { const neu = $("input#wert, textarea#wert", steuerung); neu ? neu.focus({ preventScroll: true }) : halter.blur(); }
     try {
       await einreihen({ planungId: planung.id, art: "antwort", pfad: `/api/planungen/${planung.id}/antworten/${f.id}`, body, frage: f.id, meta });
-      planung.antworten = antwortAnwenden(antworten(), f, body, meta);
       merken("/api/planungen/" + planung.id, planung);
-      // Nach einer Antwort geht es zur nächsten Frage; nach Datei oder Notiz bleibt die Frage offen (weitere Fotos, Antwort fehlt noch).
-      bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
-      zeichne();
       abarbeiten();
-    } catch (e) { bericht("antwort", e); toast("Konnte auf dem Gerät nicht speichern: " + (e.message || e), "fehler"); }
-    if (tastatur) { const neu = $("input#wert, textarea#wert", steuerung); neu ? neu.focus({ preventScroll: true }) : halter.blur(); }
+    } catch (e) {
+      planung.antworten = vorher.antworten; bearbeite = vorher.bearbeite; zeichne();
+      bericht("antwort", e); toast("Konnte auf dem Gerät nicht speichern: " + (e.message || e), "fehler");
+    }
   }
 
   // ---------- Dateien an der aktuellen Frage ----------
