@@ -73,6 +73,14 @@ test("Kabelweg AC: dieselben Punkte wie DC, mehrere wählbar, alte Einzelantwort
   assert.equal(pruefeAntwort(ac, "Kamin"), "Kamin");
 });
 
+test("AC-Fragen kommen vor den DC-Fragen, im Ablauf und in der Bereichsliste", () => {
+  const bereiche = [...new Set(KATALOG.map((f) => f.bereich))];
+  assert.deepEqual(bereiche.slice(0, 7), ["start", "objekt", "pv", "ac", "dc", "geruest", "fotos"]);
+  assert.deepEqual(Object.keys(BEREICHE).slice(0, 7), bereiche.slice(0, 7));
+  const pv = sichtbar({ typ: { wert: "PV" } }).map((f) => f.id);
+  assert.ok(pv.indexOf("erdspiess") < pv.indexOf("dachbelag"));
+});
+
 test("SAT-Frage heißt einbauen/versetzen, WR- und Speicher-Standort nur noch als Foto", () => {
   assert.equal(KATALOG.find((x) => x.id === "sat_schluessel").frage, "SAT-Schlüssel oder Ähnliches einbauen/versetzen?");
   assert.ok(!KATALOG.some((x) => x.id === "wr_standort" || x.id === "speicher_standort"));
