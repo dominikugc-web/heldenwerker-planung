@@ -207,6 +207,11 @@ export async function chatAnsicht(el, id) {
     let eingabe = "";
     if (f.art === "janein") eingabe = `<div class="knoepfe zwei">${["Ja", "Nein"].map((o) => `<button class="wahl${a.wert === o.toLowerCase() ? " gewaehlt" : ""}" data-wert="${o}">${o}</button>`).join("")}</div>`;
     else if (f.art === "auswahl") eingabe = `<div class="knoepfe">${f.optionen.map((o) => `<button class="wahl${a.wert === o ? " gewaehlt" : ""}" data-wert="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+    else if (f.art === "mehrfach") {
+      const an = (a.wert || "").split(",").map((t) => t.trim());
+      eingabe = `<div class="knoepfe">${f.optionen.map((o) => `<button class="wahl${an.includes(o) ? " gewaehlt" : ""}" data-mehr="${esc(o)}" aria-pressed="${an.includes(o)}">${esc(o)}</button>`).join("")}</div>
+        <button class="wahl gewaehlt" data-mehrweiter>Weiter</button>`;
+    }
     else if (f.art === "liste") eingabe = `<div class="feldzeile"><select id="wert" aria-label="${esc(f.frage)}"><option value="">Bitte wählen …</option>${f.optionen.map((o) => `<option ${a.wert === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
     else if (f.art === "zahl") eingabe = `<div class="feldzeile"><input id="wert" inputmode="decimal" enterkeyhint="next" value="${esc(a.wert || "")}" placeholder="Zahl" aria-label="${esc(f.frage)}">${f.einheit ? `<span class="einheit">${esc(f.einheit)}</span>` : ""}<button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
     else if (f.art === "text") eingabe = `<div class="feldzeile"><textarea id="wert" rows="1" enterkeyhint="next" placeholder="Antwort …" aria-label="${esc(f.frage)}">${esc(a.wert || "")}</textarea><button class="rundknopf diktat" data-diktat hidden aria-label="Diktieren">${IKON.mikro}</button><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
@@ -226,6 +231,12 @@ export async function chatAnsicht(el, id) {
       </div>`;
     const feld = $("#wert", steuerung);
     $$("[data-wert]", steuerung).forEach((b) => (b.onclick = () => speichern(f, { wert: b.dataset.wert })));
+    // Mehrfachauswahl: antippen schaltet an und aus, „Weiter“ speichert alle gewählten zusammen.
+    $$("[data-mehr]", steuerung).forEach((b) => (b.onclick = () => { const an = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", an); b.classList.toggle("gewaehlt", an); }));
+    $("[data-mehrweiter]", steuerung)?.addEventListener("click", () => {
+      const wahl = $$('[data-mehr][aria-pressed="true"]', steuerung).map((b) => b.dataset.mehr);
+      wahl.length ? speichern(f, { wert: wahl.join(", ") }) : toast("Bitte mindestens einen Punkt wählen oder überspringen", "fehler");
+    });
     // Der Senden-Knopf nimmt dem Feld den Fokus nicht weg, sonst geht am Handy die Tastatur zu.
     const weiter = $("[data-weiter]", steuerung);
     const absenden = () => feld.value.trim() ? speichern(f, { wert: feld.value }) : toast("Bitte etwas eintragen oder überspringen", "fehler");
