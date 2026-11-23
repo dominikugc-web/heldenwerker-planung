@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { erstellePlanungen } from "../server/planungen.mjs";
-import { erstelleAbschluss, monteurText, dateiNamen } from "../server/abschluss.mjs";
+import { erstelleAbschluss, logbuchText, dateiNamen } from "../server/abschluss.mjs";
 import { tempDir } from "./hilfe.mjs";
 
 const MONTEURE = { wasWirdGemacht: ["PV 9,9 kWp Süddach"], woKommtWasHin: ["WR Keller links"], achtung: ["Freileitung am Giebel"], material: [], offen: ["Zählernummer"] };
@@ -39,10 +39,11 @@ async function aufbau({ projektId = 11541539, fotos = 5, ablageFehlerBei = null 
   return { p, planungen, log, abschluss: erstelleAbschluss({ planungen, schreiber, dateien: dateienHero, ablage, nameVon: () => "Max Muster" }) };
 }
 
-test("Logbuch nennt, wer die Besichtigung aufgenommen hat", async () => {
+test("Logbuch: nur kurz, dass besichtigt wurde und von wem, ohne Stichpunkte und Links", async () => {
   const { p, log, abschluss } = await aufbau();
   await abschluss.abschliessen(p.id);
-  assert.match(log.logbuch[0].text, /^Für die Monteure \(Besichtigung\)\nAufgenommen von Max Muster am \d\d\.\d\d\.\d{4}\n/);
+  assert.match(log.logbuch[0].text, /^Besichtigung durchgeführt\nAufgenommen von Max Muster am \d\d\.\d\d\.\d{4}$/);
+  assert.doesNotMatch(log.logbuch[0].text, /https?:|•|Freileitung/);
 });
 
 test("Dateinamen: Fotos nach ihrer Frage nummeriert, Umlaute bleiben, andere Dateien behalten ihren Namen", () => {
@@ -54,19 +55,8 @@ test("Dateinamen: Fotos nach ihrer Frage nummeriert, Umlaute bleiben, andere Dat
   assert.deepEqual(n, { a: "Zählerschrank 1.jpg", b: "Zählerschrank 2.jpg", d: "Sparren-Lattung 1.jpg", c: "Dachbelag 1.jpg", v: "Rundgang.mp4" });
 });
 
-test("Monteur-Text hat feste Abschnitte und Links, leere Abschnitte fehlen", () => {
-  const t = monteurText(MONTEURE, [["Protokoll", "https://l/p"]]);
-  assert.match(t, /^Für die Monteure/);
-  assert.match(t, /Was wird gemacht\n• PV 9,9 kWp Süddach/);
-  assert.match(t, /Achtung auf der Baustelle\n• Freileitung am Giebel/);
-  assert.doesNotMatch(t, /Material/);
-  assert.match(t, /Protokoll: https:\/\/l\/p/);
-  assert.doesNotMatch(t, /–|—/);
-});
-
-test("Monteur-Text hängt die Protokoll-Kurzfassung an", () => {
-  const t = monteurText(MONTEURE, [], "", "DC und Dachmontage\n• Dachbelag: Pfanne");
-  assert.match(t, /Aus dem Besichtigungsprotokoll\n\nDC und Dachmontage\n• Dachbelag: Pfanne/);
+test("Logbuch-Text ohne Gedankenstriche", () => {
+  assert.doesNotMatch(logbuchText("Aufgenommen von A am 01.01.2026"), /–|—/);
 });
 
 test("zweiter Lauf lädt nichts doppelt und schreibt keinen zweiten Logbuch-Eintrag", async () => {
@@ -121,20 +111,17 @@ test("ohne Ablage geht nur der Logbuch-Eintrag raus, Dateien bleiben offen", asy
   const r = await ohne.abschliessen(p.id);
   assert.equal(r.hochgeladen, 0);
   assert.equal(r.offen, 6);
-  assert.match(log.logbuch[0].t, /Fotos und Protokoll-PDF folgen/);
-  assert.equal(planungen.laden(p.id).gesendet.logbuch, "vorlaeufig");
+  assert.match(log.logbuch[0].t, /^Besichtigung durchgeführt/);
+  assert.equal(planungen.laden(p.id).gesendet.logbuch, true);
   assert.equal(planungen.laden(p.id).status, "gesendet");
   assert.equal((await ohne.abschliessen(p.id)).offen, 6);
-  assert.equal(log.logbuch.length, 1, "kein zweiter vorläufiger Eintrag");
+  assert.equal(log.logbuch.length, 1, "kein zweiter Eintrag");
 
-  // Sobald eine Ablage da ist: Dateien nachholen und einen Nachtrag mit Links schreiben.
+  // Sobald eine Ablage da ist: Dateien nachholen, aber kein zweiter Logbuch-Eintrag.
   const mit = erstelleAbschluss({ planungen, schreiber, dateien: { logbuchEintrag: async (id, t) => log.logbuch.push({ id, t }) },
     ablage: { hochladen: async (pfad, name) => "https://link/" + encodeURIComponent(name) } });
   assert.equal((await mit.abschliessen(p.id)).hochgeladen, 6);
-  assert.equal(log.logbuch.length, 2);
-  assert.match(log.logbuch[1].t, /^Nachtrag zur Besichtigung: Fotos und Protokoll\n\nDateien\n/);
-  assert.match(log.logbuch[1].t, /Besichtigungsprotokoll \d\d\.\d\d\.\d{4}\.pdf: https:\/\/link\//);
-  assert.doesNotMatch(log.logbuch[1].t, /Z%C3%A4hlerschrank/, "Fotos stehen im Protokoll, nicht einzeln im Logbuch");
+  assert.equal(log.logbuch.length, 1);
   assert.equal(planungen.laden(p.id).gesendet.logbuch, true);
 });
 
@@ -166,7 +153,7 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach sofort 202 und Senden
     const logbuch = hero.filter((b) => b.query.includes("add_logbook_entry"));
     assert.equal(logbuch.length, 1);
     assert.equal(logbuch[0].variables.e.target_id, 11541539);
-    assert.match(logbuch[0].variables.e.custom_text, /Freileitung am Giebel/);
+    assert.match(logbuch[0].variables.e.custom_text, /^Besichtigung durchgeführt\nAufgenommen von /);
   } finally { await s.stop(); }
 });
 

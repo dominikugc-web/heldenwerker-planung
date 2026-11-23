@@ -1,24 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fehler } from "./router.mjs";
-import { berichtPdf, berichtText } from "./bericht.mjs";
+import { berichtPdf } from "./bericht.mjs";
 import { frageNach } from "./fragen.mjs";
 import { audioMime } from "./transkribieren.mjs";
 
-const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
-  ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
 
-// Logbuch-Text für HERO: feste Abschnitte, nur gefüllte, danach die Links.
-export function monteurText(monteure, links = [], hinweis = "", protokoll = "", aufgenommen = "") {
-  const teile = ["Für die Monteure (Besichtigung)" + (aufgenommen ? "\n" + aufgenommen : "")];
-  for (const [k, titel] of ABSCHNITTE) if (monteure?.[k]?.length) teile.push(titel + "\n" + monteure[k].map((s) => "• " + s).join("\n"));
-  if (links.length) teile.push("Dateien\n" + links.map(([n, l]) => `${n}: ${l}`).join("\n"));
-  if (hinweis) teile.push(hinweis);
-  // Solange das PDF nicht in HERO landet, stehen die Protokoll-Werte hier.
-  if (protokoll) teile.push("Aus dem Besichtigungsprotokoll\n\n" + protokoll);
-  return teile.join("\n\n");
-}
+// Logbuch-Text für HERO: nur, dass besichtigt wurde und von wem (Dominik, 23.11.). Details stehen im Protokoll-PDF.
+export const logbuchText = (aufgenommen) => "Besichtigung durchgeführt\n" + aufgenommen;
 
 // Fotos heißen nach ihrer Frage („Zählerschrank 1.jpg“, „Dachbelag 2.jpg“), andere Dateien behalten ihren Namen.
 // Schrägstriche und Satzzeichen gehen in Dateinamen nicht.
@@ -100,18 +90,10 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     }
 
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
-    // Ins Logbuch: das Protokoll und Videos/Sprachnotizen/PDFs. Die Fotos stecken im Protokoll.
-    const fotoIds = new Set(alle.filter((d) => d.art === "bild").map((d) => d.id));
-    const links = auftraege.filter((a) => pl.gesendet.dateien[a.schluessel] && !fotoIds.has(a.schluessel)).sort((x, y) => (y.protokoll ? 1 : 0) - (x.protokoll ? 1 : 0))
-      .map((a) => [a.name, pl.gesendet.dateien[a.schluessel].link]);
-    if (fertig && pl.gesendet.logbuch !== true) {
-      const nachtrag = "Nachtrag zur Besichtigung: Fotos und Protokoll\n\nDateien\n" + links.map(([n, l]) => `${n}: ${l}`).join("\n");
-      const text = pl.gesendet.logbuch === "vorlaeufig" ? nachtrag :monteurText(pl.ergebnis.monteure, links, "", "", aufgenommen);
-      await dateien.logbuchEintrag(ziel.id, text);
+    // Ein kurzer Logbuch-Eintrag, sobald alles abgelegt ist (ohne Ablage sofort); ein alter "vorlaeufig"-Stand gilt als erledigt.
+    if (!pl.gesendet.logbuch && (fertig || !ablage)) {
+      await dateien.logbuchEintrag(ziel.id, logbuchText(aufgenommen));
       pl.gesendet.logbuch = true;
-    } else if (!ablage && !pl.gesendet.logbuch) {
-      await dateien.logbuchEintrag(ziel.id, monteurText(pl.ergebnis.monteure, [], "Fotos und Protokoll-PDF folgen.", berichtText(pl), aufgenommen));
-      pl.gesendet.logbuch = "vorlaeufig";
     }
     if (pl.gesendet.logbuch) pl.status = "gesendet";
     pl.gesendet.ziel = ziel;
