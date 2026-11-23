@@ -8,8 +8,14 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET" || u.origin !== location.origin || u.pathname.includes("/api/")) return;
-  e.respondWith(fetch(e.request).then((r) => {
+  const gespeichert = () => caches.match(e.request, { ignoreSearch: true });
+  const netz = fetch(e.request).then((r) => {
     if (r.ok) { const kopie = r.clone(); caches.open(SPEICHER).then((c) => c.put(e.request, kopie)); }
     return r;
-  }).catch(async () => (await caches.match(e.request, { ignoreSearch: true })) || caches.match("index.html")));
+  });
+  netz.catch(() => {});
+  // Schwaches Netz: nach 4 s die gespeicherte Fassung nehmen, statt die App hängen zu lassen.
+  const warten = new Promise((ok) => setTimeout(ok, 4000));
+  e.respondWith(Promise.race([netz, warten]).then(async (r) => r || (await gespeichert()) || netz)
+    .catch(async () => (await gespeichert()) || caches.match("index.html")));
 });
