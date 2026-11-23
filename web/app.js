@@ -203,7 +203,7 @@ async function setup(el, _, signal) {
     <div class="label">Kosten Claude</div><div class="gruppe" id="kosten"><div class="leer">Lädt …</div></div>
     <div id="fbliste"></div>
     <p class="hinweis" style="margin-top:var(--gap-l)">Heldenwerker Planung · Testversion</p>`;
-  $$("[data-theme]", el).forEach((b) => (b.onclick = () => { speicher.set("planung-theme", b.dataset.theme); $('meta[name="color-scheme"]').content = b.dataset.theme; zeigen(); }));
+  $$("[data-theme]", el).forEach((b) => (b.onclick = () => { speicher.set("planung-theme", b.dataset.theme); $('meta[name="color-scheme"]').content = b.dataset.theme; systemleiste(); zeigen(); }));
   $("#verbinden", el).onclick = async () => {
     if (vonGithub) serverSetzen($("#adresse", el).value);
     await verbinden(); lampe();
@@ -380,6 +380,12 @@ function hoeheAnpassen() {
 }
 hoeheAnpassen();
 addEventListener("resize", hoeheAnpassen);
+// Android: Die Systemleiste oben bekommt die Hintergrundfarbe der App, auch nach dem Wechsel zwischen Hell und Dunkel.
+function systemleiste() {
+  if (document.documentElement.dataset.os === "android") $('meta[name="theme-color"]').content = getComputedStyle(document.body).backgroundColor;
+}
+systemleiste();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", systemleiste);
 // Sichtbarer Bereich (ohne Tastatur) als CSS-Variablen: Der Chat sitzt darin fest, das Eingabefeld direkt über der Tastatur.
 function sichtbarerBereich() {
   const vv = window.visualViewport;

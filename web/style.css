@@ -288,3 +288,51 @@ a.pill { color: inherit; text-decoration: none; }
 .zusatz .notizknopf { padding: 0 12px; }
 .antwortblase .quelle { font-size: 12px; opacity: .85; }
 .badge.rot { background: color-mix(in srgb, var(--err) 22%, transparent); color: color-mix(in srgb, var(--err) 80%, var(--txt)); }
+
+/* Android: Optik wie Googles eigene Apps. Abläufe bleiben gleich, nur die Optik ändert sich. */
+.tabs .tl { display: none; }
+:root[data-os="android"] {
+  --r-lg: 16px; --r-sm: 12px;
+  --bg: light-dark(#f4f5f8, #111214);
+  --panel: light-dark(#f7f8fb, #1d1e21);
+  --karte: light-dark(#ffffff, #1f2023);
+  --navbg: light-dark(#eceef3, #1b1c1f);
+  --snack: light-dark(#313033, #e6e1e5);
+  --snacktxt: light-dark(#f4eff4, #313033);
+}
+[data-os="android"] body { background: var(--bg); font-family: Roboto, "Google Sans Text", system-ui, sans-serif; }
+[data-os="android"] main { padding-bottom: calc(env(safe-area-inset-bottom) + 180px); }
+[data-os="android"] h1 { font-size: 24px; font-weight: 500; letter-spacing: 0; }
+[data-os="android"] h2 { font-weight: 500; }
+[data-os="android"] :is(.karte, .gruppe, .kachel) { background: var(--karte); box-shadow: 0 1px 2px rgba(0,0,0,.14), 0 1px 3px 1px rgba(0,0,0,.07); }
+[data-os="android"] :is(.karte, .gruppe, .pill, .kachel, .segctl, .tabs, .fbbtn)::before { display: none; }
+[data-os="android"] .kachel { min-height: 120px; }
+[data-os="android"] .kachel .ikon { border-radius: 12px; }
+[data-os="android"] .kachel b { font-weight: 500; }
+[data-os="android"] .pill { border-radius: 20px; font-weight: 500; }
+[data-os="android"] .gross { height: 56px; border-radius: 16px; font-weight: 500; background: var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.22); }
+[data-os="android"] .gross.ok { background: var(--ok); }
+[data-os="android"] .blase.claude { background: var(--karte); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+/* Menüleiste unten über die ganze Breite, mit Beschriftung und Markierung hinter dem Symbol */
+[data-os="android"] .tabs { left: 0; right: 0; bottom: 0; transform: none; width: auto; border-radius: 0; padding: 12px 0 calc(env(safe-area-inset-bottom) + 14px);
+  background: var(--navbg); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+[data-os="android"] .tabs button { flex-direction: column; gap: 4px; height: auto; border-radius: 0; background: none; font-size: 12px; font-weight: 500; color: var(--mut); }
+[data-os="android"] .tabs button:active { transform: none; }
+[data-os="android"] .tabs .tl { display: block; }
+[data-os="android"] .tabs button:not(.plus) svg { box-sizing: content-box; width: 24px; height: 24px; padding: 4px 20px; border-radius: 16px; transition: background .2s; }
+[data-os="android"] .tabs button[aria-current="page"] { background: none; color: var(--txt); font-weight: 700; }
+[data-os="android"] .tabs button[aria-current="page"] svg { background: color-mix(in srgb, var(--accent) 26%, transparent); color: var(--accent); }
+/* Plus als runder Knopf unten rechts über der Leiste, Feedback klein darüber (wie bei Gmail) */
+[data-os="android"] .tabs .plus { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 96px); width: 56px; height: 56px; flex: none; }
+[data-os="android"] .tabs .plus span { width: 56px; height: 56px; border-radius: 16px; box-shadow: 0 3px 8px rgba(0,0,0,.3); }
+[data-os="android"] .fbbtn { right: 24px; bottom: calc(env(safe-area-inset-bottom) + 166px); width: 40px; height: 40px; border-radius: 12px;
+  background: var(--karte); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+[data-os="android"] .fbbtn svg { width: 22px; height: 22px; }
+[data-os="android"] .fbbtn.ungelesen::after { top: -3px; right: -3px; }
+
+/* Fenster von unten und Meldungen */
+[data-os="android"] .griff { width: 32px; height: 4px; margin-bottom: 16px; background: color-mix(in srgb, var(--txt) 35%, transparent); }
+[data-os="android"] .sheetkopf h2 { font-size: 20px; font-weight: 500; }
+[data-os="android"] .toast { top: auto; bottom: calc(env(safe-area-inset-bottom) + 96px); left: 16px; right: 88px; transform: none; max-width: none; border-radius: 8px;
+  background: var(--snack); color: var(--snacktxt); backdrop-filter: none; box-shadow: 0 3px 8px rgba(0,0,0,.3); }
