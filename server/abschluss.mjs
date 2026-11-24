@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fehler } from "./router.mjs";
 import { berichtPdf } from "./bericht.mjs";
-import { frageNach } from "./fragen.mjs";
+import { frageNach, richtungVon } from "./fragen.mjs";
 import { audioMime } from "./transkribieren.mjs";
 
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
@@ -25,7 +25,8 @@ export function dateiNamen(pl) {
   }
   return namen;
 }
-const alleDateien = (pl) => [...Object.values(pl.antworten || {}).flatMap((a) => a.dateien || []), ...(pl.verlauf || []).flatMap((n) => n.dateien || [])];
+const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).flatMap(([frageId, a]) => (a.dateien || []).map((d) => ({ ...d, richtung: richtungVon(frageId) }))),
+  ...(pl.verlauf || []).flatMap((n) => n.dateien || [])];
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
@@ -61,20 +62,25 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const ablage = typeof ablageQuelle === "function" ? ablageQuelle() : ablageQuelle;
     let pl = planungen.laden(id);
     if (!pl.ergebnis) throw fehler(409, "Erst zusammenfassen");
-    // Ein Kunde kann mehrere Projekte haben (PV, WP, Klima); jedes bekommt alles. Im Testmodus landen alle in UNB-1149, dort nur einmal.
-    const ziele = [];
+    // Ein Kunde kann mehrere Projekte haben (PV, WP, Klima). Im Testmodus landen alle in UNB-1149, dort nur einmal.
+    const ziele = [], richtungenIn = new Map();
     for (const p of pl.projekte?.length ? pl.projekte : [{ id: pl.projektId }]) {
       const z = schreiber.zielProjekt(p.id);
       if (!ziele.some((x) => x.id === z.id)) ziele.push({ ...z, nummer: p.nummer || "" });
+      richtungenIn.set(z.id, [...(richtungenIn.get(z.id) || []), ...(p.richtungen || [])]);
     }
     const ziel = ziele[0];
+    // Jedes Projekt bekommt nur die Fotos seiner Richtung, damit in HERO nichts doppelt liegt (Dominik, 24.11.).
+    // Protokoll in alle; Allgemeines und Richtungen ohne eigenes Projekt ins erste.
+    const abgedeckt = new Set([...richtungenIn.values()].flat());
+    const gehoertZu = (a, z) => a.protokoll || (abgedeckt.has(a.richtung) ? richtungenIn.get(z.id).includes(a.richtung) : z === ziel);
     const namen = dateiNamen(pl);
     const alle = alleDateien(pl);
     const datum = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" });
     const aufgenommen = `Aufgenommen von ${nameVon(pl.person)} am ${new Date(pl.erstellt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" })}`;
 
     // Was hochgeladen werden muss: alle Fotos, Videos, Sprachnotizen und PDFs, zuletzt das Protokoll (es braucht deren Links).
-    const auftraege = alle.map((d) => ({ schluessel: d.id, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
+    const auftraege = alle.map((d) => ({ schluessel: d.id, richtung: d.richtung, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
     const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
     auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
 
@@ -98,7 +104,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       }
     }
 
-    // Fotos und PDFs zusätzlich direkt in jedes HERO-Projekt (Videos und Sprachnotizen bleiben auf Drive, ihre Links stehen im Protokoll).
+    // Fotos und PDFs zusätzlich direkt in die HERO-Projekte (Videos und Sprachnotizen bleiben auf Drive, ihre Links stehen im Protokoll).
     // Nacheinander, weil HERO nach 30 s abbricht und Lastspitzen meiden will. Stand je Projekt in gesendet.inHero, ältere Planungen kannten nur ein Projekt.
     const fuerHero = dateien.inHero ? auftraege.filter((a) => a.mime === MIME.bild || a.mime === MIME.pdf) : [];
     pl.gesendet.inHero ||= pl.gesendet.hero ? { [ziel.id]: pl.gesendet.hero } : {};
@@ -107,7 +113,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const istInHero = (z, a) => pl.gesendet.inHero[z.id]?.[a.schluessel];
     hero: for (const z of ziele) {
       for (const a of fuerHero) {
-        if (istInHero(z, a)) continue;
+        if (!gehoertZu(a, z) || istInHero(z, a)) continue;
         if (a.protokoll && ablage && !pl.gesendet.dateien.protokoll) break; // Protokoll erst, wenn es alle Drive-Links enthält
         try {
           if (a.protokoll && !fs.existsSync(a.pfad)) await protokollSchreiben();
@@ -126,7 +132,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
     // Je Projekt ein kurzer Logbuch-Eintrag, sobald alles abgelegt und dort in HERO ist (ohne Ablage nur HERO).
     for (const z of ziele) {
-      if (pl.gesendet.logbuchIn.includes(z.id) || !(fertig || !ablage) || !fuerHero.every((a) => istInHero(z, a))) continue;
+      if (pl.gesendet.logbuchIn.includes(z.id) || !(fertig || !ablage) || !fuerHero.every((a) => !gehoertZu(a, z) || istInHero(z, a))) continue;
       await dateien.logbuchEintrag(z.id, logbuchText(aufgenommen));
       pl.gesendet.logbuchIn.push(z.id);
       planungen.speichern(pl);

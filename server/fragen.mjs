@@ -193,6 +193,8 @@ const F = [
 export const KATALOG = F.map(([bereich, id, frage, art, extra = {}]) => ({ bereich, id, frage, art, ...(NUR[bereich] && { nur: NUR[bereich] }), ...extra }));
 const NACH_ID = Object.fromEntries(KATALOG.map((f) => [f.id, f]));
 export const frageNach = (id) => NACH_ID[id];
+// Zu welcher Richtung (PV, Wärmepumpe, Klimaanlage) eine Frage gehört; null für Allgemeines (Objekt, Abschluss).
+export const richtungVon = (id) => (NACH_ID[id]?.nur ? TYPEN[NACH_ID[id].nur] : null);
 
 // Welche Fragen gelten bei diesen Antworten? Ohne Typ nur die Startfrage.
 export function sichtbar(antworten = {}) {

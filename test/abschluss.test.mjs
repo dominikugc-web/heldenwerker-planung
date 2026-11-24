@@ -237,7 +237,7 @@ test("HERO ohne Drive: Protokoll wird trotzdem erzeugt und hochgeladen", async (
   assert.equal(log.logbuch.length, 1);
 });
 
-test("Mehrere Projekte: jedes bekommt Fotos, Protokoll und Logbuch, im Testmodus nur einmal UNB-1149", async () => {
+test("Mehrere Projekte: jedes bekommt Protokoll und Logbuch, Fotos nach Richtung, im Testmodus nur einmal UNB-1149", async () => {
   const { p, planungen, log } = await aufbau({ fotos: 1 });
   const pl = planungen.laden(p.id);
   pl.projekte = [{ id: 11541539, nummer: "PV-1", richtungen: ["PV"] }, { id: 777, nummer: "WÄP-2", richtungen: ["Wärmepumpe"] }];
@@ -247,12 +247,12 @@ test("Mehrere Projekte: jedes bekommt Fotos, Protokoll und Logbuch, im Testmodus
   const frei = { zielProjekt: (id) => ({ id: Number(id), umgeleitet: false }) };
   const a = erstelleAbschluss({ planungen, schreiber: frei, dateien, ablage: null });
   const r = await a.abschliessen(p.id);
-  assert.deepEqual(inHero, [[11541539, "Zählerschran"], [11541539, "Besichtigung"], [777, "Zählerschran"], [777, "Besichtigung"]]);
+  assert.deepEqual(inHero, [[11541539, "Zählerschran"], [11541539, "Besichtigung"], [777, "Besichtigung"]], "PV-Foto nur ins PV-Projekt, Protokoll in beide");
   assert.deepEqual(log.logbuch.map((x) => x.id), [11541539, 777]);
   assert.deepEqual(r.ziele, [{ id: 11541539, umgeleitet: false, nummer: "PV-1" }, { id: 777, umgeleitet: false, nummer: "WÄP-2" }]);
   assert.equal(planungen.laden(p.id).status, "gesendet");
   await a.abschliessen(p.id);
-  assert.equal(inHero.length, 4, "nichts doppelt");
+  assert.equal(inHero.length, 3, "nichts doppelt");
   assert.equal(log.logbuch.length, 2);
 
   // Testmodus: beide Projekte werden auf UNB-1149 umgeleitet, dort landet alles nur einmal.
@@ -299,4 +299,26 @@ test("Neustart mitten im Senden: der Server setzt abgebrochene Sendungen selbst 
     assert.equal(st2.status, "fehler", "ohne Zusammenfassung bleibt es beim Hinweis");
     assert.equal((await (await fetch(s.url + "/api/planungen/" + alt.id)).json()).senden.status, "fehler", "ältere Sendungen nicht von selbst");
   } finally { await s.stop(); }
+});
+
+test("Mehrere Projekte: Fotos nur ins Projekt ihrer Richtung, Protokoll und Logbuch in alle, Allgemeines ins erste", async () => {
+  const { p, planungen, log } = await aufbau({ fotos: 1 }); // bild0001 hängt an foto_zaehlerschrank (AC = PV)
+  const pl = planungen.laden(p.id);
+  const dir = path.dirname(planungen.dateiPfad(p.id, "x"));
+  for (const id of ["wpbild01", "klimabi1", "allgem01"]) fs.writeFileSync(path.join(dir, id), "JPEG");
+  pl.antworten.ausseneinheit = { wert: "", dateien: [{ id: "wpbild01", name: "a.jpg", art: "bild" }] };
+  pl.antworten.foto_aussengeraet_standort = { wert: "", dateien: [{ id: "klimabi1", name: "k.jpg", art: "bild" }] };
+  pl.antworten.hinweis_monteure = { wert: "x", dateien: [{ id: "allgem01", name: "h.jpg", art: "bild" }] };
+  pl.antworten.typ = { wert: "PV, Wärmepumpe, Klimaanlage" };
+  pl.projekte = [{ id: 1, nummer: "PV-1", richtungen: ["PV"] }, { id: 2, nummer: "WP-2", richtungen: ["Wärmepumpe"] }, { id: 3, nummer: "KLA-3", richtungen: ["Klimaanlage"] }];
+  planungen.speichern(pl);
+  const inHero = [];
+  const dateien = { logbuchEintrag: async (id, t) => log.logbuch.push({ id, t }), inHero: async (id, pfad, name) => { inHero.push([id, name.split(" ")[0]]); return 1; } };
+  await erstelleAbschluss({ planungen, schreiber: { zielProjekt: (id) => ({ id, umgeleitet: false }) }, dateien, ablage: null }).abschliessen(p.id);
+  const fuer = (id) => inHero.filter((x) => x[0] === id).map((x) => x[1]);
+  assert.deepEqual(fuer(1), ["Zählerschrank", "Noch", "Besichtigungsprotokoll"]);
+  assert.deepEqual(fuer(2), ["Außeneinheit", "Besichtigungsprotokoll"]);
+  assert.deepEqual(fuer(3), ["Außengerät", "Besichtigungsprotokoll"]);
+  assert.deepEqual(log.logbuch.map((x) => x.id), [1, 2, 3]);
+  assert.equal(planungen.laden(p.id).status, "gesendet");
 });
