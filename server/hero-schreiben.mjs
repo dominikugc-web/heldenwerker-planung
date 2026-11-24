@@ -25,7 +25,8 @@ export function erstelleSchreiber({ hero, datenDir, echt = false }) {
     },
     async projektAnlegen({ vorname = "", nachname = "", firma = "", strasse = "", plz = "", ort = "", telefon = "", email = "", titel = "" }) {
       if (!(nachname.trim() || firma.trim()) || !titel.trim()) throw fehler(400, "Name oder Firma und ein Titel fehlen");
-      const test = (s) => (s.trim() ? "TEST " + s.trim() : "");
+      // Im Testmodus „TEST“ davor, damit man die Proben in HERO erkennt; im Echtbetrieb echte Namen.
+      const test = (s) => (s.trim() ? (echt ? "" : "TEST ") + s.trim() : "");
       const c = {
         first_name: vorname.trim(), last_name: test(nachname), company_name: nachname.trim() ? firma.trim() : test(firma),
         phone_mobile: telefon.trim(), email: email.trim(), address: { street: strasse.trim(), zipcode: plz.trim(), city: ort.trim() },

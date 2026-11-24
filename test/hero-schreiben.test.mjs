@@ -90,3 +90,15 @@ test("Server: Echtbetrieb nur, wenn eingeschaltet; /api/gesund meldet es", async
     try { assert.equal((await (await fetch(s.url + "/api/gesund")).json()).echt, echt); } finally { await s.stop(); }
   }
 });
+
+test("projektAnlegen im Echtbetrieb: Namen und Titel ohne TEST, Firma bleibt Firma", async () => {
+  const h = heroAttrappe({ create_contact: { create_contact: { id: 55, address_id: 66 } }, create_project_match: { create_project_match: { id: 78, project_nr: "UNB-2001" } } });
+  const s = erstelleSchreiber({ hero: h, datenDir: tempDir(), echt: true });
+  await s.projektAnlegen({ vorname: "Jörg", nachname: " Meier ", firma: "Meier GmbH", titel: "PV Dach" });
+  assert.equal(h.aufrufe[0].v.c.last_name, "Meier");
+  assert.equal(h.aufrufe[0].v.c.company_name, "Meier GmbH");
+  assert.equal(h.aufrufe[1].v.p.project_title, "PV Dach");
+  const nurFirma = heroAttrappe({ create_contact: { create_contact: { id: 1, address_id: 2 } }, create_project_match: { create_project_match: { id: 3, project_nr: "X" } } });
+  await erstelleSchreiber({ hero: nurFirma, datenDir: tempDir(), echt: true }).projektAnlegen({ firma: "Bäckerei Roth", titel: "Klima" });
+  assert.equal(nurFirma.aufrufe[0].v.c.company_name, "Bäckerei Roth");
+});

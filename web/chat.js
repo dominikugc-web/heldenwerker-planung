@@ -22,7 +22,7 @@ export function plusSheet() {
 function neuesProjektSheet() {
   const feld = (name, label, attr = "") => `<label class="feld"><span>${label}</span><input name="${name}" ${attr}></label>`;
   const d = sheet(`<form><div class="sheetkopf"><button type="button" class="pill" data-zu>Abbrechen</button><h2>Neues Projekt</h2><span></span></div>
-    <div class="banner">Wird in HERO mit „TEST“ vor dem Namen angelegt.</div>
+    ${zustand.gesund?.echt ? "" : `<div class="banner">Wird in HERO mit „TEST“ vor dem Namen angelegt.</div>`}
     <div class="gruppe">${feld("vorname", "Vorname", 'autocomplete="off"')}${feld("nachname", "Nachname", 'autocomplete="off"')}${feld("firma", "Firma (optional)", 'autocomplete="off"')}</div>
     <div class="gruppe">${feld("strasse", "Straße und Nr.", 'autocomplete="off"')}<div class="zwei" style="margin:0">${feld("plz", "PLZ", 'inputmode="numeric" autocomplete="off"')}${feld("ort", "Ort", 'autocomplete="off"')}</div>${feld("telefon", "Telefon", 'type="tel" autocomplete="off"')}${feld("email", "E-Mail", 'type="email" autocomplete="off"')}</div>
     <div class="gruppe">${feld("titel", "Worum geht es?", 'placeholder="z. B. PV 9,9 kWp mit Speicher" required')}</div>
