@@ -179,18 +179,20 @@ export async function chatAnsicht(el, id) {
   const beiTastatur = () => (verlauf.isConnected ? anheften() : vv.removeEventListener("resize", beiTastatur));
   vv?.addEventListener("resize", beiTastatur); // nach sichtbarerBereich() in app.js, die Höhe ist dann schon gesetzt
 
-  // Ausgang: zeigen, was noch hochgeladen wird; Stand vom Server übernehmen, sobald für diese Planung alles oben ist.
+  // Ausgang: Hochladen läuft still im Hintergrund (der grüne Balken reicht). Ein Hinweis kommt nur, wenn es hängt,
+  // weil kein Netz da ist; er verschwindet, sobald wieder etwas durchgeht. Stand vom Server übernehmen, sobald alles oben ist.
+  let wartet = false;
   const syncZeigen = (offen) => {
     const s = $("#sync", el);
-    s.hidden = !offen;
-    s.textContent = zustand.offline ? `☁ Offline gespeichert · ${offen} warten auf Netz` : `☁ Lädt hoch … ${offen} offen`;
+    s.hidden = !offen || !wartet;
+    s.textContent = `☁ Kein Empfang · ${offen} ${offen === 1 ? "Eintrag wartet" : "Einträge warten"}, bis wieder Netz da ist`;
   };
   const beiAusgang = ({ detail: d }) => {
     if (!el.isConnected || !$("#verlauf", el)) return removeEventListener("ausgang", beiAusgang);
+    if (d.wartet) wartet = true; else if ("planungId" in d) wartet = false; // planungId = es ging gerade etwas durch
     syncZeigen(d.offen);
     if (d.abgelehnt) toast("Nicht gespeichert: " + d.abgelehnt, "fehler");
     if (d.planungId === planung.id && d.antworten) { planung.antworten = d.antworten; merken("/api/planungen/" + planung.id, planung); zeichne(true); }
-    if (d.offen === 0 && d.planungId === planung.id) toast("Alles hochgeladen", "ok");
   };
   addEventListener("ausgang", beiAusgang);
   anzahl().then((n) => { syncZeigen(n); if (n) abarbeiten(); }).catch(() => {});
@@ -296,7 +298,8 @@ export async function chatAnsicht(el, id) {
   }
 
   // Antwort sofort auf dem Gerät eintragen und in den Ausgang legen; hochgeladen wird, sobald Netz da ist.
-  async function speichern(f, body, meta = {}) {
+  // nurAnzeigen: nur auf dem Gerät eintragen, in den Ausgang legt es der Aufrufer selbst (Fotos, siehe unten).
+  async function speichern(f, body, meta = {}, { nurAnzeigen = false } = {}) {
     if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
     if (f.art === "zahl" && body.wert && !istZahl(body.wert)) return toast("Bitte eine Zahl eintragen", "fehler");
     // Tastatur offen: Fokus solange auf ein verstecktes Feld parken, das beim Neuzeichnen bleibt, dann ans nächste Feld geben.
@@ -310,14 +313,19 @@ export async function chatAnsicht(el, id) {
     bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
     zeichne();
     if (tastatur) { const neu = $("input#wert, textarea#wert", steuerung); neu ? neu.focus({ preventScroll: true }) : halter.blur(); }
+    if (nurAnzeigen) return;
     try {
-      await einreihen({ planungId: planung.id, art: "antwort", pfad: `/api/planungen/${planung.id}/antworten/${f.id}`, body, frage: f.id, meta });
-      merken("/api/planungen/" + planung.id, planung);
-      abarbeiten();
+      await antwortEinreihen(f, body, meta);
     } catch (e) {
       planung.antworten = vorher.antworten; bearbeite = vorher.bearbeite; zeichne();
       bericht("antwort", e); toast("Konnte auf dem Gerät nicht speichern: " + (e.message || e), "fehler");
     }
+  }
+
+  async function antwortEinreihen(f, body, meta) {
+    await einreihen({ planungId: planung.id, art: "antwort", pfad: `/api/planungen/${planung.id}/antworten/${f.id}`, body, frage: f.id, meta });
+    merken("/api/planungen/" + planung.id, planung);
+    abarbeiten();
   }
 
   // ---------- Dateien an der aktuellen Frage ----------
@@ -332,18 +340,41 @@ export async function chatAnsicht(el, id) {
       lokaleUrl.set(dateiId, URL.createObjectURL(blob));
     }
   }
-  async function hochladenUndAnhaengen(f, files) {
-    const neu = [], meta = {};
+  // Fotos sofort anzeigen (Original als Vorschau), damit es gleich weitergeht. Verkleinern und in den Ausgang legen
+  // läuft dahinter, eins nach dem anderen (hinten), damit die Dateien vor der Antwort ankommen, die sie nennt.
+  let hinten = Promise.resolve();
+  function hochladenUndAnhaengen(f, files) {
+    if (zustand.demo) return toast("Demo, nicht verbunden. Hier wird nichts gespeichert.", "fehler");
+    const neu = [], meta = {}, auftraege = [];
     for (const file of files) {
       const art = file.type.startsWith("audio/") ? "audio" : artVon(file);
       if (!art) { toast(`${file.name}: nur Fotos, Videos, PDFs`, "fehler"); continue; }
-      const idNeu = neueId(), name = art === "bild" ? (file.name || "Foto").replace(/\.\w+$/, "") + ".jpg" : file.name, v = Date.now();
-      if (art === "bild") { const { gross, klein } = await bildVorbereiten(file); await dateiEinreihen(idNeu, name, art, gross, false, v); await dateiEinreihen(idNeu, name, art, klein, true, v); }
-      else await dateiEinreihen(idNeu, name, art, file, false, v);
-      meta[idNeu] = { id: idNeu, name, art, groesse: file.size, v };
-      neu.push({ id: idNeu });
+      const id = neueId(), name = art === "bild" ? (file.name || "Foto").replace(/\.\w+$/, "") + ".jpg" : file.name, v = Date.now();
+      if (art === "bild") lokaleUrl.set(id, URL.createObjectURL(file));
+      meta[id] = { id, name, art, groesse: file.size, v };
+      neu.push({ id });
+      auftraege.push({ id, name, art, file, v });
     }
-    if (neu.length) { await speichern(f, { dateien: [...dateienVon(f), ...neu] }, meta); toast(neu.length === 1 ? "Gespeichert" : `${neu.length} Dateien gespeichert`, "ok"); }
+    if (!neu.length) return;
+    const body = { dateien: [...dateienVon(f), ...neu] };
+    speichern(f, body, meta, { nurAnzeigen: true });
+    hinten = hinten.then(async () => {
+      try {
+        for (const a of auftraege) {
+          if (a.art === "bild") { const { gross, klein } = await bildVorbereiten(a.file); await dateiEinreihen(a.id, a.name, a.art, gross, false, a.v); await dateiEinreihen(a.id, a.name, a.art, klein, true, a.v); }
+          else await dateiEinreihen(a.id, a.name, a.art, a.file, false, a.v);
+        }
+        await antwortEinreihen(f, body, meta);
+      } catch (e) {
+        // Nicht auf dem Gerät gelandet: aus der Anzeige nehmen, sonst glaubt man, die Fotos wären gespeichert.
+        bericht("hochladen", e);
+        const weg = new Set(neu.map((d) => d.id));
+        planung.antworten = antwortAnwenden(antworten(), f, { dateien: dateienVon(f).filter((d) => !weg.has(d.id)) }, {});
+        if (el.isConnected) zeichne();
+        toast("Foto konnte nicht gespeichert werden, bitte nochmal: " + (e.message || e), "fehler");
+      }
+    });
+    return hinten;
   }
   for (const eingang of ["#kamera", "#galerie"]) $(eingang, el).addEventListener("change", async (e) => {
     const f = aktuelleFrage(), files = [...e.target.files];
@@ -354,6 +385,7 @@ export async function chatAnsicht(el, id) {
 
   async function malen(f, dateiId) {
     try {
+      await hinten; // ein gerade erst aufgenommenes Foto muss erst verkleinert auf dem Gerät liegen
       const d = (antworten()[f.id]?.dateien || []).find((x) => x.id === dateiId);
       // Immer die aktuelle, schon bemalte Fassung: erst die noch nicht hochgeladene, dann vom Server, ohne Netz die kleine vom Gerät.
       let blob = await dateiBlob(dateiId);
@@ -368,7 +400,6 @@ export async function chatAnsicht(el, id) {
       await dateiEinreihen(dateiId, name, "bild", neu, false, v);
       await dateiEinreihen(dateiId, name, "bild", await verkleinern(neu, 1600, 0.8), true, v);
       await speichern(f, { dateien: dateienVon(f) }, { [dateiId]: { v, groesse: neu.size } });
-      toast("Zeichnung gespeichert", "ok");
     } catch (e) { bericht("malen", e); fehlerMelden(e); }
   }
 
@@ -427,7 +458,8 @@ export async function chatAnsicht(el, id) {
   async function zusammenfassen(e) {
     const knopf = e.currentTarget; knopf.disabled = true; knopf.textContent = "Lädt noch hoch …";
     try {
-      // Erst muss alles auf dem Server sein, sonst fehlen Claude Antworten und Fotos.
+      // Erst muss alles auf dem Server sein, sonst fehlen Claude Antworten und Fotos (auch die, die gerade noch verkleinert werden).
+      await hinten;
       const offen = await abarbeiten();
       if (offen) { toast(`Noch ${offen} Einträge nicht hochgeladen. Zusammenfassen geht, sobald wieder Netz da ist.`, "fehler"); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Zusammenfassen und prüfen"; return; }
       knopf.textContent = "Claude schreibt den Monteur-Text …"; await api(`/api/planungen/${planung.id}/zusammenfassen`, { methode: "POST", body: {} }); gehe("pruefung/" + planung.id); }

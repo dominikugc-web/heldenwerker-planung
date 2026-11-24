@@ -42,7 +42,7 @@ export function abarbeiten() {
         } catch (e) {
           // Kein Netz, Server aus oder überlastet: später nochmal. Echte Ablehnung (4xx): verwerfen und melden, sonst hängt alles.
           const spaeter = e instanceof VerbindungsFehler || !e.status || e.status >= 500 || [401, 408, 429].includes(e.status);
-          if (spaeter) return anzahl();
+          if (spaeter) { const offen = await anzahl(); melden({ offen, wartet: true }); return offen; }
           await loeschen(op.nr);
           bericht("ausgang", e);
           melden({ offen: await anzahl(), abgelehnt: e.message, frage: op.frage });
