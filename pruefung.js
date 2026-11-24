@@ -1,6 +1,6 @@
 // Prüfansicht nach dem Zusammenfassen: Monteur-Text bearbeiten, Antworten kontrollieren, Protokoll ansehen, dann nach HERO.
 import { api, dateiUrl, serverUrl, zustand } from "./api.js";
-import { $, $$, esc, toast, fehlerMelden, IKON } from "./ui.js";
+import { $, $$, esc, toast, fehlerMelden, zurueck, IKON } from "./ui.js";
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
   ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
@@ -14,7 +14,7 @@ export async function pruefAnsicht(el, id, signal) {
     a.dateien?.length ? `${a.dateien.length} Datei${a.dateien.length > 1 ? "en" : ""}` : "", a.notiz ? "✎ Notiz" : ""].filter(Boolean).join(" · ");
   const bild = (f) => (antworten[f.id].dateien || []).filter((d) => d.art === "bild").slice(0, 3).map((d) => `<img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt="" loading="lazy">`).join("");
 
-  el.innerHTML = `<div class="kopf"><button class="pill rund" data-chat aria-label="Zurück zum Ablauf">${IKON.zurueck}</button><h1>Prüfen</h1><span class="muted small" id="gespeichert"></span></div>
+  el.innerHTML = `<div class="kopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button><h1>Prüfen</h1><span class="muted small" id="gespeichert"></span></div>
     <p class="unter">${esc(antworten.kunde?.wert || planung.projektTitel)}<br>Aufgenommen von ${esc(planung.personName || planung.person)}</p>
     <div id="ergebnis"></div>
     ${e.fehlt.length ? `<div class="karte fehlt"><b>Es fehlen noch Fotos</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p></div>` : ""}
@@ -28,6 +28,7 @@ export async function pruefAnsicht(el, id, signal) {
     <button class="gross ok" data-senden>${IKON.wolke}${planung.status === "gesendet" ? "Erneut senden" : "In HERO speichern"}</button>`;
 
   $$("[data-chat]", el).forEach((b) => (b.onclick = () => (location.hash = "chat/" + id)));
+  $("[data-zurueck]", el).onclick = () => zurueck("home");
 
   // Änderungen am Monteur-Text automatisch speichern (kurz verzögert).
   let timer, speichern = Promise.resolve();

@@ -5,6 +5,12 @@ export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
+// Zurück führt dorthin, wo man in der App zuletzt war (Dominik, 24.11.). Eigener Verlauf der Seiten in dieser Sitzung:
+// geht der Browser einen Schritt zurück, fällt der letzte Eintrag weg. Ohne Vorgänger (frisch geöffnet) gilt ersatz.
+const seiten = [location.hash];
+addEventListener("hashchange", () => { if (seiten.at(-2) === location.hash) seiten.pop(); else seiten.push(location.hash); });
+export const zurueck = (ersatz) => (seiten.length > 1 ? history.back() : (location.hash = ersatz));
+
 export function toast(text, art = "") {
   $(".toast")?.remove();
   const t = Object.assign(document.createElement("div"), { className: "toast " + art, textContent: text });
