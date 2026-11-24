@@ -79,6 +79,12 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     },
     ablage: () => ladeDrive(homeDir),
   });
+  // Wurde der Server mitten im Senden beendet (Neustart, PC aus), geht es hier weiter. Schon Gesendetes wird übersprungen.
+  for (const pl of planungen.liste()) {
+    if (pl.senden?.status !== "laeuft" || !pl.ergebnis) continue;
+    console.log("Setze Senden fort:", pl.id);
+    abschluss.starten(pl.id);
+  }
   const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren, echt };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;

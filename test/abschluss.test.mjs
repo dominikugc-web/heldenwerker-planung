@@ -265,3 +265,33 @@ test("Mehrere Projekte: jedes bekommt Fotos, Protokoll und Logbuch, im Testmodus
   assert.equal(log2.logbuch.length, 1);
   assert.equal(r2.ziele.length, 1);
 });
+
+test("Neustart mitten im Senden: der Server setzt abgebrochene Sendungen selbst fort", async () => {
+  const { testServer, tempDir } = await import("./hilfe.mjs");
+  const { erstellePlanungen } = await import("../server/planungen.mjs");
+  const datenDir = tempDir();
+  const planungen = erstellePlanungen({ datenDir });
+  const p = planungen.neu({ projektId: 11541539, projektTitel: "UNB-1149 X", person: "x" });
+  p.ergebnis = { monteure: MONTEURE, fehlt: [] };
+  p.senden = { status: "laeuft", start: "2026-11-24T07:33:12Z" };
+  planungen.speichern(p);
+  const ohne = planungen.neu({ projektId: 11541539, projektTitel: "ohne Zusammenfassung", person: "x" });
+  ohne.senden = { status: "laeuft", start: "2026-11-24T07:00:00Z" };
+  planungen.speichern(ohne);
+  const logbuch = [];
+  const heroFetch = async (url, init) => {
+    if (url.endsWith("/FileUploads/upload")) return Response.json({ status: "success", data: { uuid: "u1" } });
+    const b = JSON.parse(init.body);
+    if (b.query.includes("add_logbook_entry")) logbuch.push(b.variables.e.target_id);
+    return Response.json({ data: { add_logbook_entry: { id: 5 }, upload_document: { id: 6 } } });
+  };
+  const s = await testServer({ heroKey: "k", heroFetch, datenDir });
+  try {
+    let st;
+    for (let i = 0; i < 50 && (st = (await (await fetch(s.url + "/api/planungen/" + p.id)).json()).senden).status === "laeuft"; i++) await new Promise((x) => setTimeout(x, 20));
+    assert.equal(st.status, "fertig");
+    assert.deepEqual(logbuch, [11541539]);
+    const st2 = (await (await fetch(s.url + "/api/planungen/" + ohne.id)).json()).senden;
+    assert.equal(st2.status, "fehler", "ohne Zusammenfassung bleibt es beim Hinweis");
+  } finally { await s.stop(); }
+});
