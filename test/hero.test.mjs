@@ -123,3 +123,12 @@ test("Gewerk aus HERO gibt die Richtungen PV, Wärmepumpe, Klimaanlage", async (
   assert.equal(liste[0].gewerk, "Wärmepumpe und Photovoltaik");
   assert.match(f.aufrufe[0].body.query, /measure { name }/);
 });
+
+test("hochladen: ein Aussetzer bei HERO wird einmal wiederholt", async () => {
+  let n = 0;
+  const f = async () => (++n === 1 ? Promise.reject(new Error("socket hang up")) : Response.json({ status: "success", data: { uuid: "zwei" } }));
+  const pfad = (await import("node:path")).join((await import("./hilfe.mjs")).tempDir(), "a.jpg");
+  (await import("node:fs")).writeFileSync(pfad, "JPEG");
+  assert.equal(await erstelleHero({ key: "k", fetch: f }).hochladen(pfad, "a.jpg", "image/jpeg"), "zwei");
+  assert.equal(n, 2);
+});

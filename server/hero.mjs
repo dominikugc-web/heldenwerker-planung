@@ -88,12 +88,21 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
     // Lädt eine Datei als temporären Upload hoch und gibt die file_upload_uuid zurück; zugeordnet wird per GraphQL.
     async hochladen(pfad, name, mime) {
       if (!key) throw fehler(503, "HERO-Schlüssel fehlt");
-      const form = new FormData();
-      form.append("file", new Blob([fs.readFileSync(pfad)], { type: mime }), name);
-      let j;
-      try { j = await (await fetch(HERO_UPLOAD_URL, { method: "POST", headers: { "x-auth-token": key }, body: form, signal: AbortSignal.timeout(60_000) })).json(); } catch { j = null; }
-      if (j?.status !== "success" || !j.data?.uuid) throw new HeroFehler("HERO nimmt die Datei nicht an");
-      return j.data.uuid;
+      const daten = fs.readFileSync(pfad);
+      // Zweiter Versuch, weil HERO einzelne Uploads gelegentlich abbricht (24.11.: dieselbe Datei ging gleich danach durch).
+      let grund = "";
+      for (let versuch = 1; versuch <= 2; versuch++) {
+        const form = new FormData();
+        form.append("file", new Blob([daten], { type: mime }), name);
+        try {
+          const r = await fetch(HERO_UPLOAD_URL, { method: "POST", headers: { "x-auth-token": key }, body: form, signal: AbortSignal.timeout(60_000) });
+          const j = await r.json().catch(() => null);
+          if (j?.status === "success" && j.data?.uuid) return j.data.uuid;
+          grund = "HTTP " + r.status;
+        } catch (e) { grund = String(e?.message || e); }
+      }
+      console.error("HERO-Upload abgelehnt:", name, grund.replaceAll(key, "***").slice(0, 200));
+      throw new HeroFehler("HERO nimmt die Datei nicht an");
     },
     async laden(url) {
       const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
