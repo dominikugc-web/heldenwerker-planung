@@ -98,12 +98,14 @@ test("Foto Erdung sitzt direkt beim Potentialausgleich", () => {
   assert.ok(frageNach("foto_erdung").pflicht);
 });
 
-test("Gerüst: Höhe und freie Fläche werden per Foto erfasst", () => {
+test("Gerüst: Höhe und freie Fläche zusammen auf einem Pflichtfoto", () => {
   const geruest = KATALOG.filter((f) => f.bereich === "geruest");
-  assert.deepEqual(geruest.map((f) => f.id), ["foto_geruesthoehe", "regenrinne", "foto_geruestflaeche", "wandmontage"]);
-  assert.equal(frageNach("foto_geruesthoehe").art, "foto");
-  assert.ok(!frageNach("foto_geruesthoehe").pflicht);
-  assert.ok(frageNach("foto_geruestflaeche").pflicht);
+  assert.deepEqual(geruest.map((f) => f.id), ["foto_geruestflaeche", "regenrinne", "wandmontage"]);
+  const f = frageNach("foto_geruestflaeche");
+  assert.equal(f.frage, "Foto: Gerüsthöhe und Gerüstfläche");
+  assert.equal(f.titel, "Gerüsthöhe und Gerüstfläche");
+  assert.ok(f.art === "foto" && f.pflicht);
+  assert.equal(frageNach("foto_geruesthoehe"), undefined);
 });
 
 test("SAT-Frage heißt einbauen/versetzen, WR- und Speicher-Standort nur noch als Foto", () => {

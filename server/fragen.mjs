@@ -110,9 +110,9 @@ const F = [
   ["dc", "freileitung", "Freileitung?", "janein"],
   ["dc", "freileitung_isoliert", "Freileitung isoliert?", "janein", { wenn: { frage: "freileitung", ist: "ja" } }],
 
-  ["geruest", "foto_geruesthoehe", "Foto: Gerüsthöhe", "foto", { titel: "Gerüsthöhe" }],
+  // Höhe und freie Fläche auf einem Foto (Dominik, 24.11.); ID bleibt foto_geruestflaeche, damit alte Antworten passen.
+  ["geruest", "foto_geruestflaeche", "Foto: Gerüsthöhe und Gerüstfläche", "foto", { pflicht: true, titel: "Gerüsthöhe und Gerüstfläche" }],
   ["geruest", "regenrinne", "Regenrinne", "text"],
-  pflichtfoto("geruest", "Gerüstfläche"),
   ["geruest", "wandmontage", "Wandmontage?", "janein"],
 
   ...PFLICHTFOTOS.filter((name) => !IM_ABLAUF.includes(name)).map((name) => pflichtfoto("fotos", name)),
