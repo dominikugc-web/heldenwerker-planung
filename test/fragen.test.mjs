@@ -173,3 +173,11 @@ test("Inneneinheit WP: Bosch-Inneneinheiten statt Außengeräte", () => {
   assert.deepEqual(f.optionen, ["E · wandhängend, Speicher extern", "M · bodenstehend mit Warmwasserspeicher", "MB · Puffertower", "Sonstige (Notiz)"]);
   assert.ok(!f.optionen.some((o) => /Compress|Supraeco|Climate/.test(o)));
 });
+
+test("WP-Außeneinheit wird direkt per Foto erfasst", () => {
+  const f = frageNach("ausseneinheit");
+  assert.equal(f.art, "foto");
+  assert.equal(f.frage, "Foto: Außeneinheit Standort");
+  assert.equal(f.titel, "Außeneinheit Standort");
+  assert.equal(f.bereich, "wp_standort");
+});

@@ -139,7 +139,8 @@ const F = [
 
   // Bauform der Inneneinheit zur CS6800i/CS8800i AW (Bosch-Kürzel E, M, MB). Das WP-Modell selbst steht in bosch_modell (Dominik, 24.11.).
   ["wp_standort", "inneneinheit", "Inneneinheit (Bosch)", "auswahl", { optionen: ["E · wandhängend, Speicher extern", "M · bodenstehend mit Warmwasserspeicher", "MB · Puffertower", "Sonstige (Notiz)"] }],
-  ["wp_standort", "ausseneinheit", "Außeneinheit (Standort)", "text"],
+  // Standort der Außeneinheit direkt als Foto (Dominik, 24.11.); ID bleibt, alte Text-Antworten bleiben sichtbar.
+  ["wp_standort", "ausseneinheit", "Foto: Außeneinheit Standort", "foto", { titel: "Außeneinheit Standort" }],
   ["wp_standort", "abstand_innen_aussen", "Abstand innen zu außen", "zahl", { einheit: "m" }],
   ["wp_standort", "leitungsweg_wp", "Leitungsweg WP", "zahl", { einheit: "m" }],
   ["wp_standort", "kernbohrungen", "Kernbohrungen", "zahl", { einheit: "Stück" }],
