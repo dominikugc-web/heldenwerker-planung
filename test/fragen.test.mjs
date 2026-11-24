@@ -15,7 +15,7 @@ test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedanke
     if (f.wenn) assert.ok(frageNach(f.wenn.frage), "Bedingung zeigt ins Leere: " + f.id);
   }
   assert.equal(KATALOG[0].id, "typ");
-  assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht).length, 11);
+  assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht).length, 12);
 });
 
 test("Typ PV blendet Wärmepumpe aus und umgekehrt", () => {
@@ -51,8 +51,8 @@ test("pruefeAntwort: Ja/Nein, Auswahl, Zahl mit Komma, Text gekürzt", () => {
   assert.throws(() => pruefeAntwort(f("dachbelag"), "Stroh"), (e) => e.status === 400);
   assert.equal(pruefeAntwort(f("dachneigung"), "35,5"), "35,5");
   assert.throws(() => pruefeAntwort(f("dachneigung"), "steil"), (e) => e.status === 400);
-  assert.equal(pruefeAntwort(f("regenrinne"), "  ok  "), "ok");
-  assert.equal(pruefeAntwort(f("regenrinne"), "x".repeat(5000)).length, 2000);
+  assert.equal(pruefeAntwort(f("mehrkosten"), "  ok  "), "ok");
+  assert.equal(pruefeAntwort(f("mehrkosten"), "x".repeat(5000)).length, 2000);
 });
 
 test("Kabelweg DC: mehrere Punkte wählbar, in Katalog-Reihenfolge, Unbekanntes abgelehnt", () => {
@@ -84,7 +84,7 @@ test("AC-Fragen kommen vor den DC-Fragen, im Ablauf und in der Bereichsliste", (
 test("AC beginnt mit den Zählern, dann Foto WR/SP-Standort, WLAN/LAN und Kabelweg AC", () => {
   const i = (id) => KATALOG.findIndex((f) => f.id === id);
   const ac = KATALOG.filter((f) => f.bereich === "ac").map((f) => f.id);
-  assert.equal(ac[0], "anz_zaehler");
+  assert.deepEqual(ac.slice(0, 2), ["foto_zaehlerschrank", "anz_zaehler"]);
   assert.equal(i("foto_wr_sp_standort"), i("zaehler4_280") + 1);
   assert.equal(i("wlan_lan"), i("foto_wr_sp_standort") + 1);
   assert.equal(i("kabelweg"), i("wlan_lan") + 1);
@@ -180,4 +180,46 @@ test("WP-Außeneinheit wird direkt per Foto erfasst", () => {
   assert.equal(f.frage, "Foto: Außeneinheit Standort");
   assert.equal(f.titel, "Außeneinheit Standort");
   assert.equal(f.bereich, "wp_standort");
+});
+
+test("Reihenfolge 24.11.: Zählerschrank zuerst, HAK nach Erdspieß, Wallbox-Kabelweg am Ende von AC", () => {
+  const ac = KATALOG.filter((f) => f.bereich === "ac").map((f) => f.id);
+  assert.equal(ac[0], "foto_zaehlerschrank");
+  assert.deepEqual(ac.slice(-3), ["erdspiess", "foto_hak", "foto_kabelweg_wallbox"]);
+  const wb = frageNach("foto_kabelweg_wallbox");
+  assert.equal(wb.art, "foto");
+  assert.deepEqual(wb.wenn, { frage: "wallbox_wunsch", ist: "ja" });
+  assert.equal(frageNach("foto_hak").bereich, "ac");
+});
+
+test("Nur Wärmepumpe: Zählerschrank-Foto ganz am Anfang der Wärmepumpe, mit PV nur einmal bei AC", () => {
+  const ids = (typ) => sichtbar({ typ: { wert: typ } }).map((f) => f.id);
+  const wp = ids("Wärmepumpe");
+  assert.equal(wp[wp.indexOf("adresse") + 1], "foto_zaehlerschrank_wp");
+  assert.ok(ids("Wärmepumpe, Klimaanlage").includes("foto_zaehlerschrank_wp"));
+  const beides = ids("PV, Wärmepumpe");
+  assert.ok(beides.includes("foto_zaehlerschrank") && !beides.includes("foto_zaehlerschrank_wp"));
+  assert.ok(!ids("Klimaanlage").some((id) => id.startsWith("foto_zaehlerschrank")));
+  assert.equal(frageNach("foto_zaehlerschrank_wp").titel, "Zählerschrank");
+  assert.ok(frageNach("foto_zaehlerschrank_wp").pflicht);
+});
+
+test("DC: Kabelweg-Foto zuerst, Sparren/Lattung-Foto statt Sparrenabstand und Lattung, Schraubenlänge, Dach gesamt am Ende", () => {
+  const dc = KATALOG.filter((f) => f.bereich === "dc").map((f) => f.id);
+  assert.deepEqual(dc.slice(0, 2), ["foto_kabelweg", "dachbelag"]);
+  assert.equal(frageNach("foto_kabelweg").titel, "Kabelweg DC");
+  assert.ok(!dc.includes("sparrenabstand") && !dc.includes("lattung"));
+  assert.equal(dc[dc.indexOf("foto_sparren_lattung") + 1], "schraubenlaenge");
+  assert.equal(dc.at(-1), "foto_dach_gesamt");
+  const s = frageNach("schraubenlaenge");
+  assert.equal(s.art, "auswahl");
+  assert.equal(s.einheit, "mm");
+  assert.deepEqual(s.optionen, Array.from({ length: 16 }, (_, i) => String(100 + 20 * i)));
+  assert.deepEqual(KATALOG.filter((f) => f.bereich === "fotos").map((f) => f.id), ["foto_stoerer"]);
+});
+
+test("Regenrinne: Auswahl PVC, Kupfer, Aluminium", () => {
+  const f = frageNach("regenrinne");
+  assert.equal(f.art, "auswahl");
+  assert.deepEqual(f.optionen, ["PVC", "Kupfer", "Aluminium"]);
 });

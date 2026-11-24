@@ -2,7 +2,7 @@
 import { api, dateiUrl, zustand, bericht, merken } from "./api.js";
 import { ablage, antwortAnwenden, istZahl } from "./lokal.js";
 import { einreihen, abarbeiten, offeneAntworten, dateiBlob, anzahl } from "./ausgang.js";
-import { $, $$, esc, toast, fehlerMelden, sheet, IKON } from "./ui.js";
+import { $, $$, esc, toast, fehlerMelden, sheet, zurueck, IKON } from "./ui.js";
 import { zeichnen } from "./zeichnen.js";
 
 const gehe = (ziel) => (location.hash = ziel);
@@ -169,7 +169,7 @@ export async function chatAnsicht(el, id) {
     <input id="halter" class="halter" aria-hidden="true" tabindex="-1" autocomplete="off">
   </div>`;
   const verlauf = $("#verlauf", el), steuerung = $("#steuerung", el);
-  $("[data-zurueck]", el).onclick = () => gehe("home");
+  $("[data-zurueck]", el).onclick = () => zurueck("home");
   $("[data-uebersicht]", el).onclick = uebersicht;
   // Tastatur geht auf (oder die Eingabe wächst): Verlauf wird kleiner, also um genau so viel mit nach oben schieben.
   let verlaufH = 0;

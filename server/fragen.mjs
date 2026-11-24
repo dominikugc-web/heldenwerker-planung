@@ -41,8 +41,8 @@ const WECHSELRICHTER = [...kw("Sungrow", [3, 3.6, 4, 5, 6, 8, 10, 12, 15, 20, 25
 
 const KABELWEGE = ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60", "Sonstige (Notiz)"]; // gilt für DC und AC
 const PFLICHTFOTOS = ["Dach gesamt", "Pfannentyp", "Sparren/Lattung", "Erdung", "Störer", "Gerüstfläche", "Kabelweg", "WR/SP Standort", "Zählerschrank", "HAK"];
-// Diese Pflichtfotos stehen direkt bei ihrer Frage statt im Fotoblock (Dominik, 23.11.). IDs bleiben, damit alte Fotos erhalten bleiben.
-const IM_ABLAUF = ["Erdung", "Gerüstfläche", "WR/SP Standort", "Pfannentyp"];
+// Diese Pflichtfotos stehen direkt bei ihrer Frage statt im Fotoblock (Dominik, 23. und 24.11.). IDs bleiben, damit alte Fotos erhalten bleiben.
+const IM_ABLAUF = ["Erdung", "Gerüstfläche", "WR/SP Standort", "Pfannentyp", "Zählerschrank", "HAK", "Kabelweg", "Sparren/Lattung", "Dach gesamt"];
 const pflichtfoto = (bereich, name, extra = {}) => [bereich, "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name, ...extra }];
 
 // [bereich, id, frage, art, extra]
@@ -63,6 +63,7 @@ const F = [
   ["pv", "neuer_zs", "Neuer Zählerschrank?", "janein"],
   ["pv", "wallbox_wunsch", "Wallbox-Wunsch?", "janein"],
 
+  pflichtfoto("ac", "Zählerschrank"),
   ["ac", "anz_zaehler", "Wie viele Zähler sind vorhanden?", "auswahl", { optionen: ["1", "2", "3", "4"] }],
   // Zähler 1 behält die alten IDs, damit frühere Besichtigungen ihre Werte behalten; Zähler 2 bis 4 nur bei passender Anzahl.
   ...[1, 2, 3, 4].flatMap((n) => {
@@ -92,7 +93,10 @@ const F = [
   ["ac", "potentialausgleich", "Potentialausgleich?", "janein"],
   pflichtfoto("ac", "Erdung"),
   ["ac", "erdspiess", "Erdspieß nötig?", "janein"],
+  pflichtfoto("ac", "HAK"),
+  ["ac", "foto_kabelweg_wallbox", "Foto: Kabelweg Wallbox", "foto", { titel: "Kabelweg Wallbox", wenn: { frage: "wallbox_wunsch", ist: "ja" } }],
 
+  pflichtfoto("dc", "Kabelweg", { titel: "Kabelweg DC" }),
   ["dc", "dachbelag", "Dachbelag", "auswahl", { optionen: ["Pfanne", "Bitum", "Trapezblech", "Flachdach", "Sonstige (Notiz)"] }],
   ["dc", "pfannentyp", "Pfannentyp", "liste", { optionen: ["Frankfurter Pfanne", "Doppel-S / Reformpfanne", "Biberschwanz", "Hohlpfanne / Mönch-Nonne", "Falzziegel / Flachdachziegel", "Tegalit / Glattziegel", "Krempziegel", "Strangfalzziegel", "Tonpfanne (sonstige)", "Betondachstein", "Sonstige (Notiz)"], wenn: { frage: "dachbelag", ist: "Pfanne" } }],
   // Foto gleich zur Pfanne statt später bei den Pflichtfotos (Dominik, 24.11.); ohne Pfanne entfällt es.
@@ -100,10 +104,10 @@ const F = [
   ["dc", "k2_haken", "K2-Haken", "liste", { optionen: ["SingleHook 1.1", "SingleHook 3S", "SingleHook 3S Long", "SingleHook 4S", "SingleHook Vario", "SingleHook Alpin", "SingleHook FT", "SingleHook 2", "SolidHook 3S+", "CrossHook 3S", "TiltUp Hook", "SingleRail SpliceFoot", "SingleRail Stockschrauben", "Falzklemme", "MiniRail", "D-Dome", "S-Dome", "Sonstige (Notiz)"] }],
   ["dc", "dachneigung", "Dachneigung", "zahl", { einheit: "°" }],
   ["dc", "anz_dachflaechen", "Anzahl Dachflächen", "zahl"],
-  ["dc", "sparrenabstand", "Sparrenabstand", "zahl", { einheit: "cm" }],
+  pflichtfoto("dc", "Sparren/Lattung"),
+  ["dc", "schraubenlaenge", "Schraubenlänge", "auswahl", { einheit: "mm", optionen: Array.from({ length: 16 }, (_, i) => String(100 + 20 * i)) }],
   ["dc", "sparrenbreite", "Sparrenbreite", "zahl", { einheit: "cm" }],
   ["dc", "sparrentiefe", "Sparrentiefe", "zahl", { einheit: "cm" }],
-  ["dc", "lattung", "Lattung", "text"],
   ["dc", "ersatzpfannen", "Ersatzpfannen", "zahl", { einheit: "Stück" }],
   ["dc", "leistungsoptimierer", "Leistungsoptimierer", "zahl", { einheit: "Stück" }],
   ["dc", "aufdachdaemmung", "Aufdachdämmung", "zahl", { einheit: "cm" }],
@@ -111,14 +115,17 @@ const F = [
   ["dc", "kabelweg_dc", "Kabelweg DC", "mehrfach", { optionen: KABELWEGE }],
   ["dc", "freileitung", "Freileitung?", "janein"],
   ["dc", "freileitung_isoliert", "Freileitung isoliert?", "janein", { wenn: { frage: "freileitung", ist: "ja" } }],
+  pflichtfoto("dc", "Dach gesamt"),
 
   // Höhe und freie Fläche auf einem Foto (Dominik, 24.11.); ID bleibt foto_geruestflaeche, damit alte Antworten passen.
   ["geruest", "foto_geruestflaeche", "Foto: Gerüsthöhe und Gerüstfläche", "foto", { pflicht: true, titel: "Gerüsthöhe und Gerüstfläche" }],
-  ["geruest", "regenrinne", "Regenrinne", "text"],
+  ["geruest", "regenrinne", "Regenrinne", "auswahl", { optionen: ["PVC", "Kupfer", "Aluminium"] }],
   ["geruest", "wandmontage", "Wandmontage?", "janein"],
 
   ...PFLICHTFOTOS.filter((name) => !IM_ABLAUF.includes(name)).map((name) => pflichtfoto("fotos", name)),
 
+  // Ohne PV gibt es keinen AC-Teil; dann kommt das Zählerschrank-Foto zu Beginn der Wärmepumpe (Dominik, 24.11.).
+  ["wp_bestand", "foto_zaehlerschrank_wp", "Foto: Zählerschrank", "foto", { pflicht: true, titel: "Zählerschrank", wenn: { frage: "typ", ist: ["Wärmepumpe", "Wärmepumpe, Klimaanlage"] } }],
   ["wp_bestand", "bosch_modell", "Bosch-Modell", "text"],
   ["wp_bestand", "wp_leistung", "WP-Leistung", "zahl", { einheit: "kW" }],
   ["wp_bestand", "bestandsheizung", "Bestandsheizung", "auswahl", { optionen: ["Ölheizung", "Gasheizung", "Pelletheizung", "Fernwärme", "Sonstige (Notiz)"] }],

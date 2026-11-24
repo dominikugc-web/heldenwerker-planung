@@ -21,7 +21,7 @@ test("Abschnitte: nur sichtbare, beantwortete Fragen, Notizen und Sprachtexte da
   const dc = ab.find((x) => x.titel === "DC / Dachmontage").eintraege;
   assert.deepEqual(dc.map((e) => e.frage), ["Dachbelag"], "übersprungene Frage fehlt");
   assert.equal(dc[0].notiz, "Ziegel brüchig");
-  const foto = ab.find((x) => x.titel === "Pflichtfotos DC / AC").eintraege[0];
+  const foto = ab.find((x) => x.titel === "AC / Elektro PV").eintraege[0];
   assert.deepEqual(foto.bilder.map((b) => b.id), ["b1"]);
   assert.deepEqual(foto.medien.map((m) => [m.name, m.text]), [["Notiz.m4a", "ZS im Keller"]]);
 });
@@ -32,7 +32,7 @@ test("Text für Claude und Logbuch: Bereich, Frage, Antwort, Notiz", () => {
 });
 
 test("fehlende Pflichtfotos: nur sichtbare und ohne Bild", () => {
-  assert.deepEqual(fehltPflichtfotos(planung({ typ: a("Wärmepumpe") })), []);
+  assert.deepEqual(fehltPflichtfotos(planung({ typ: a("Wärmepumpe") })), ["Zählerschrank"], "nur WP: Zählerschrank-Foto bei der Wärmepumpe");
   const f = fehltPflichtfotos(planung({ typ: a("PV"), dachbelag: a("Pfanne"), foto_dach_gesamt: a("", { dateien: [{ id: "b1", art: "bild" }] }) }));
   assert.equal(f.length, 9);
   assert.ok(!f.includes("Dach gesamt") && f.includes("HAK") && f.includes("Pfannentyp"));
