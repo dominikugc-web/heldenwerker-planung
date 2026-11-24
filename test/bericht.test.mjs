@@ -33,9 +33,10 @@ test("Text für Claude und Logbuch: Bereich, Frage, Antwort, Notiz", () => {
 
 test("fehlende Pflichtfotos: nur sichtbare und ohne Bild", () => {
   assert.deepEqual(fehltPflichtfotos(planung({ typ: a("Wärmepumpe") })), []);
-  const f = fehltPflichtfotos(planung({ typ: a("PV"), foto_dach_gesamt: a("", { dateien: [{ id: "b1", art: "bild" }] }) }));
+  const f = fehltPflichtfotos(planung({ typ: a("PV"), dachbelag: a("Pfanne"), foto_dach_gesamt: a("", { dateien: [{ id: "b1", art: "bild" }] }) }));
   assert.equal(f.length, 9);
-  assert.ok(!f.includes("Dach gesamt") && f.includes("HAK"));
+  assert.ok(!f.includes("Dach gesamt") && f.includes("HAK") && f.includes("Pfannentyp"));
+  assert.ok(!fehltPflichtfotos(planung({ typ: a("PV"), dachbelag: a("Flachdach") })).includes("Pfannentyp"), "ohne Pfanne kein Pfannenfoto");
 });
 
 test("PDF: lädt, hat Fotos, anklickbare Links, Seitenumbruch bei vielen Fotos, Umlaute ok", async () => {

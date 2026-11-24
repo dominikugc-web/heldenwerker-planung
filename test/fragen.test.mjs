@@ -155,3 +155,14 @@ test("Klima: Räume je nach Anzahl, App nur beim Basispaket, Höhe nur bei Hausw
   assert.ok(!ids({ klima_aussen_ort: { wert: "Auf dem Boden" } }).includes("klima_aussen_hoehe"));
   assert.ok(frageNach("foto_aussengeraet_standort").pflicht && frageNach("foto_aussengeraet_standort").bereich === "klima");
 });
+
+test("Foto Pfannentyp kommt direkt nach der Frage nach dem Pfannentyp, nur bei Pfanne", () => {
+  const i = (id) => KATALOG.findIndex((f) => f.id === id);
+  assert.equal(i("foto_pfannentyp"), i("pfannentyp") + 1);
+  assert.equal(frageNach("foto_pfannentyp").bereich, "dc");
+  assert.ok(frageNach("foto_pfannentyp").pflicht);
+  const ids = (dach) => sichtbar({ typ: { wert: "PV" }, dachbelag: { wert: dach } }).map((f) => f.id);
+  assert.ok(ids("Pfanne").includes("foto_pfannentyp"));
+  assert.ok(!ids("Flachdach").includes("foto_pfannentyp"));
+  assert.equal(KATALOG.filter((f) => f.id === "foto_pfannentyp").length, 1);
+});

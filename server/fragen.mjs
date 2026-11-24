@@ -42,8 +42,8 @@ const WECHSELRICHTER = [...kw("Sungrow", [3, 3.6, 4, 5, 6, 8, 10, 12, 15, 20, 25
 const KABELWEGE = ["Schacht", "Kamin", "Alu", "Kupfer", "PVC", "PVC 100", "PVC 60", "Sonstige (Notiz)"]; // gilt für DC und AC
 const PFLICHTFOTOS = ["Dach gesamt", "Pfannentyp", "Sparren/Lattung", "Erdung", "Störer", "Gerüstfläche", "Kabelweg", "WR/SP Standort", "Zählerschrank", "HAK"];
 // Diese Pflichtfotos stehen direkt bei ihrer Frage statt im Fotoblock (Dominik, 23.11.). IDs bleiben, damit alte Fotos erhalten bleiben.
-const IM_ABLAUF = ["Erdung", "Gerüstfläche", "WR/SP Standort"];
-const pflichtfoto = (bereich, name) => [bereich, "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name }];
+const IM_ABLAUF = ["Erdung", "Gerüstfläche", "WR/SP Standort", "Pfannentyp"];
+const pflichtfoto = (bereich, name, extra = {}) => [bereich, "foto_" + name.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z]+/g, "_"), `Foto: ${name}`, "foto", { pflicht: true, titel: name, ...extra }];
 
 // [bereich, id, frage, art, extra]
 const F = [
@@ -95,6 +95,8 @@ const F = [
 
   ["dc", "dachbelag", "Dachbelag", "auswahl", { optionen: ["Pfanne", "Bitum", "Trapezblech", "Flachdach", "Sonstige (Notiz)"] }],
   ["dc", "pfannentyp", "Pfannentyp", "liste", { optionen: ["Frankfurter Pfanne", "Doppel-S / Reformpfanne", "Biberschwanz", "Hohlpfanne / Mönch-Nonne", "Falzziegel / Flachdachziegel", "Tegalit / Glattziegel", "Krempziegel", "Strangfalzziegel", "Tonpfanne (sonstige)", "Betondachstein", "Sonstige (Notiz)"], wenn: { frage: "dachbelag", ist: "Pfanne" } }],
+  // Foto gleich zur Pfanne statt später bei den Pflichtfotos (Dominik, 24.11.); ohne Pfanne entfällt es.
+  pflichtfoto("dc", "Pfannentyp", { wenn: { frage: "dachbelag", ist: "Pfanne" } }),
   ["dc", "k2_haken", "K2-Haken", "liste", { optionen: ["SingleHook 1.1", "SingleHook 3S", "SingleHook 3S Long", "SingleHook 4S", "SingleHook Vario", "SingleHook Alpin", "SingleHook FT", "SingleHook 2", "SolidHook 3S+", "CrossHook 3S", "TiltUp Hook", "SingleRail SpliceFoot", "SingleRail Stockschrauben", "Falzklemme", "MiniRail", "D-Dome", "S-Dome", "Sonstige (Notiz)"] }],
   ["dc", "dachneigung", "Dachneigung", "zahl", { einheit: "°" }],
   ["dc", "anz_dachflaechen", "Anzahl Dachflächen", "zahl"],
