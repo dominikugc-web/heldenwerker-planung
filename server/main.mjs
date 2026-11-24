@@ -66,13 +66,16 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
   };
   const planungen = erstellePlanungen({ datenDir });
   // Einmal pro Server, damit der Schutz gegen doppeltes Absenden greift; HERO wird je Aufruf frisch gebaut.
-  // Ablage = Drive, sobald ~/.google/planung-drive.env existiert; sonst gehen nur Logbuch-Einträge raus.
+  // Ablage = Drive, sobald ~/.google/planung-drive.env existiert. Fotos und PDFs gehen zusätzlich direkt ins HERO-Projekt.
   const profile = erstelleProfile({ datenDir, inhaber });
   const abschluss = erstelleAbschluss({
     nameVon: (login) => profile.nameVon(login),
     planungen,
     schreiber: { zielProjekt: (id) => schreiber().zielProjekt(id) },
-    dateien: { logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text) },
+    dateien: {
+      logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text),
+      inHero: (id, pfad, name, mime) => erstelleDateien({ schreiber: schreiber(), hero: hero() }).inHero(id, pfad, name, mime),
+    },
     ablage: () => ladeDrive(homeDir),
   });
   const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren };

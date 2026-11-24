@@ -97,3 +97,20 @@ test("Heizlastbericht: neueste PDF mit Heizlast im Namen, gelöschte und andere 
   const leer = await erstelleHero({ key: "k", fetch: attrappe({ data: { project_match: { file_uploads: [] } } }) }).heizlastBericht(1);
   assert.equal(leer, null);
 });
+
+test("hochladen: Datei als multipart an den REST-Endpunkt mit x-auth-token, Antwort ist die UUID", async () => {
+  const aufrufe = [];
+  const f = async (url, init) => { aufrufe.push({ url, init }); return new Response(JSON.stringify({ status: "success", data: { uuid: "abc123", id: 9 } })); };
+  const pfad = (await import("node:path")).join((await import("./hilfe.mjs")).tempDir(), "Zählerschrank 1.jpg");
+  (await import("node:fs")).writeFileSync(pfad, "JPEG");
+  const uuid = await erstelleHero({ key: "k", fetch: f }).hochladen(pfad, "Zählerschrank 1.jpg", "image/jpeg");
+  assert.equal(uuid, "abc123");
+  assert.equal(aufrufe[0].url, "https://login.hero-software.de/app/v8/FileUploads/upload");
+  assert.equal(aufrufe[0].init.headers["x-auth-token"], "k");
+  const datei = aufrufe[0].init.body.get("file");
+  assert.equal(datei.name, "Zählerschrank 1.jpg");
+  assert.equal(await datei.text(), "JPEG");
+
+  const kaputt = async () => new Response(JSON.stringify({ status: "error" }), { status: 400 });
+  await assert.rejects(erstelleHero({ key: "k", fetch: kaputt }).hochladen(pfad, "x.jpg", "image/jpeg"), (e) => e instanceof HeroFehler);
+});

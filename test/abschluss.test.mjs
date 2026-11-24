@@ -129,7 +129,12 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach sofort 202 und Senden
   const { testServer } = await import("./hilfe.mjs");
   const hero = [];
   let freigabe; const warten = new Promise((r) => (freigabe = r));
-  const heroFetch = async (url, init) => { const b = JSON.parse(init.body); hero.push(b); if (b.query.includes("add_logbook_entry")) await warten; return new Response(JSON.stringify({ data: { add_logbook_entry: { id: 5 } } })); };
+  const uploads = [];
+  const heroFetch = async (url, init) => {
+    if (url.endsWith("/FileUploads/upload")) { uploads.push({ name: init.body.get("file").name, token: init.headers["x-auth-token"] }); return new Response(JSON.stringify({ status: "success", data: { uuid: "u" + uploads.length } })); }
+    const b = JSON.parse(init.body); hero.push(b); if (b.query.includes("add_logbook_entry")) await warten;
+    return new Response(JSON.stringify({ data: { add_logbook_entry: { id: 5 }, upload_document: { id: 6 } } }));
+  };
   const s = await testServer({ heroKey: "k", heroFetch });
   const J = { "Content-Type": "application/json" };
   try {
@@ -150,6 +155,10 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach sofort 202 und Senden
     for (let i = 0; i < 50 && (st = (await (await fetch(s.url + "/api/planungen/" + p.id)).json()).senden).status === "laeuft"; i++) await new Promise((x) => setTimeout(x, 20));
     assert.equal(st.status, "fertig");
     assert.deepEqual(st.ergebnis.ziel, { id: 11541539, umgeleitet: true });
+    assert.deepEqual(uploads.map((u) => [u.name.startsWith("Besichtigungsprotokoll"), u.token]), [[true, "k"]], "Protokoll geht ins HERO-Projekt");
+    const dok = hero.find((b) => b.query.includes("upload_document"));
+    assert.deepEqual([dok.variables.u, dok.variables.id], ["u1", 11541539]);
+    assert.equal(st.ergebnis.inHero, 1);
     const logbuch = hero.filter((b) => b.query.includes("add_logbook_entry"));
     assert.equal(logbuch.length, 1);
     assert.equal(logbuch[0].variables.e.target_id, 11541539);
@@ -181,4 +190,49 @@ test("Ablage darf eine Funktion sein (Drive-Zugang wird ohne Neustart erkannt), 
   da = true;
   assert.equal((await a.abschliessen(p.id)).hochgeladen, 6);
   assert.equal(ordner[0], "UNB-1149 Müller");
+});
+
+test("HERO: Fotos und Protokoll gehen zusätzlich ins Projekt, nur einmal, Logbuch erst danach", async () => {
+  const { p, planungen, log } = await aufbau({ fotos: 2 });
+  const pl = planungen.laden(p.id);
+  pl.antworten.dachbelag.dateien = [{ id: "vid1", name: "Rundgang.mp4", art: "video" }];
+  planungen.speichern(pl);
+  fs.writeFileSync(planungen.dateiPfad(p.id, "vid1"), "MP4");
+  const inHero = [];
+  let fehlerBei = 2;
+  const dateien = {
+    logbuchEintrag: async (id, t) => log.logbuch.push({ id, t }),
+    async inHero(id, pfad, name, mime) { if (inHero.length + 1 === fehlerBei) { fehlerBei = 0; throw new Error("HERO weg"); } inHero.push({ id, name, mime, da: fs.existsSync(pfad) }); return 100 + inHero.length; },
+  };
+  const schreiber = { zielProjekt: () => ({ id: 11541539, umgeleitet: false }) };
+  const ablage = { hochladen: async (pfad, name) => "https://link/" + encodeURIComponent(name) };
+  const a = erstelleAbschluss({ planungen, schreiber, dateien, ablage });
+
+  const r1 = await a.abschliessen(p.id);
+  assert.equal(r1.inHero, 1);
+  assert.match(r1.fehler[0], /HERO weg/);
+  assert.equal(log.logbuch.length, 0, "Logbuch wartet, bis alles in HERO ist");
+
+  const r2 = await a.abschliessen(p.id);
+  assert.equal(r2.inHero, 2);
+  assert.deepEqual(r2.fehler, []);
+  assert.deepEqual(inHero.map((x) => x.name), ["Zählerschrank 1.jpg", "Dach gesamt 1.jpg", `Besichtigungsprotokoll ${new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" })}.pdf`]);
+  assert.ok(inHero.every((x) => x.id === 11541539 && x.da));
+  assert.ok(!inHero.some((x) => /mp4/.test(x.name)), "Videos bleiben auf Drive");
+  assert.equal(log.logbuch.length, 1);
+
+  assert.equal((await a.abschliessen(p.id)).inHero, 0, "nichts doppelt");
+  assert.equal(inHero.length, 3);
+});
+
+test("HERO ohne Drive: Protokoll wird trotzdem erzeugt und hochgeladen", async () => {
+  const { p, planungen, log } = await aufbau({ fotos: 1 });
+  const inHero = [];
+  const dateien = { logbuchEintrag: async (id, t) => log.logbuch.push({ id, t }), inHero: async (id, pfad, name) => { inHero.push({ name, da: fs.existsSync(pfad) }); return 1; } };
+  const a = erstelleAbschluss({ planungen, schreiber: { zielProjekt: () => ({ id: 11541539, umgeleitet: false }) }, dateien, ablage: null });
+  const r = await a.abschliessen(p.id);
+  assert.equal(r.inHero, 2);
+  assert.ok(inHero.every((x) => x.da));
+  assert.match(inHero[1].name, /^Besichtigungsprotokoll/);
+  assert.equal(log.logbuch.length, 1);
 });

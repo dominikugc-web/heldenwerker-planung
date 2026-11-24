@@ -72,12 +72,13 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
     auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
 
-    const r = { ziel, hochgeladen: 0, uebersprungen: 0, offen: 0, fehler: [] };
+    const protokollSchreiben = async () => fs.writeFileSync(protokollPfad, await berichtPdf(pl, { links: Object.fromEntries(Object.entries(pl.gesendet.dateien).map(([k, v]) => [k, v.link])), bild: (d) => planungen.bildFuerPdf(id, d) }));
+    const r = { ziel, hochgeladen: 0, uebersprungen: 0, offen: 0, inHero: 0, fehler: [] };
     for (const a of auftraege) {
       if (pl.gesendet.dateien[a.schluessel]) { r.uebersprungen++; continue; }
       if (!ablage) { r.offen++; continue; }
       try {
-        if (a.protokoll) fs.writeFileSync(a.pfad, await berichtPdf(pl, { links: Object.fromEntries(Object.entries(pl.gesendet.dateien).map(([k, v]) => [k, v.link])), bild: (d) => planungen.bildFuerPdf(id, d) }));
+        if (a.protokoll) await protokollSchreiben();
         const link = await ablage.hochladen(a.pfad, a.name, a.mime, pl.projektTitel.split(", ").slice(0, 2).join(" "));
         pl = planungen.laden(id);
         pl.gesendet.dateien[a.schluessel] = { name: a.name, link };
@@ -89,9 +90,30 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       }
     }
 
+    // Fotos und PDFs zusätzlich direkt ins HERO-Projekt (Videos und Sprachnotizen bleiben auf Drive, ihre Links stehen im Protokoll).
+    // Nacheinander, weil HERO nach 30 s abbricht und Lastspitzen meiden will.
+    const fuerHero = dateien.inHero ? auftraege.filter((a) => a.mime === MIME.bild || a.mime === MIME.pdf) : [];
+    pl.gesendet.hero ||= {};
+    for (const a of fuerHero) {
+      if (pl.gesendet.hero[a.schluessel]) continue;
+      if (a.protokoll && ablage && !pl.gesendet.dateien.protokoll) break; // Protokoll erst, wenn es alle Drive-Links enthält
+      try {
+        if (a.protokoll && !fs.existsSync(a.pfad)) await protokollSchreiben();
+        const heroId = await dateien.inHero(ziel.id, a.pfad, a.name, a.mime);
+        pl = planungen.laden(id);
+        (pl.gesendet.hero ||= {})[a.schluessel] = heroId;
+        planungen.speichern(pl);
+        r.inHero++;
+      } catch (e) {
+        r.fehler.push(`HERO ${a.name}: ${e.message}`);
+        break;
+      }
+    }
+    const inHeroFertig = fuerHero.every((a) => pl.gesendet.hero?.[a.schluessel]);
+
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
-    // Ein kurzer Logbuch-Eintrag, sobald alles abgelegt ist (ohne Ablage sofort); ein alter "vorlaeufig"-Stand gilt als erledigt.
-    if (!pl.gesendet.logbuch && (fertig || !ablage)) {
+    // Ein kurzer Logbuch-Eintrag, sobald alles abgelegt und in HERO ist (ohne Ablage nur HERO); ein alter "vorlaeufig"-Stand gilt als erledigt.
+    if (!pl.gesendet.logbuch && (fertig || !ablage) && inHeroFertig) {
       await dateien.logbuchEintrag(ziel.id, logbuchText(aufgenommen));
       pl.gesendet.logbuch = true;
     }

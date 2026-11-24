@@ -1,11 +1,14 @@
-// HERO GraphQL v7, nur lesen. Feldnamen per Introspektion geprüft am 17.11.2026:
+// HERO GraphQL v7, nur lesen (Schreiben läuft über hero-schreiben.mjs). Dazu der REST-Upload für Dateien. Feldnamen per Introspektion geprüft am 17.11.2026:
 // ProjectMatch: id project_nr project_title name customer address current_project_match_status file_uploads histories contact
 // Customer: full_name company_name first_name last_name phone_mobile phone_home email
 // Address: street zipcode city · CalendarEvent: id title start end project_match_id category{name}
 // FileUpload: id filename url · History: created custom_title custom_text
 // Sortierung: orderBy kennt nur aufsteigend; last:N + offset liefert das Neueste zuerst (geprüft 17.11.).
+import fs from "node:fs";
 import { fehler } from "./router.mjs";
 export const HERO_URL = "https://login.hero-software.de/api/external/v7/graphql";
+// Laut HERO-Support (24.11.2026): eine Datei pro Anfrage im Feld "file", Header x-auth-token, Antwort data.uuid.
+export const HERO_UPLOAD_URL = "https://login.hero-software.de/app/v8/FileUploads/upload";
 
 export class HeroFehler extends Error {
   constructor(meldung) { super(meldung); this.status = 502; this.eigen = true; }
@@ -61,6 +64,16 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
         .map((x) => ({ nr: x.nr, datum: x.date, produkte: produkte(x.published_customer_document_draft?.data?.items) }));
     },
     // Datei von einem HERO-Link laden (z. B. temporary_url einer Projektdatei).
+    // Lädt eine Datei als temporären Upload hoch und gibt die file_upload_uuid zurück; zugeordnet wird per GraphQL.
+    async hochladen(pfad, name, mime) {
+      if (!key) throw fehler(503, "HERO-Schlüssel fehlt");
+      const form = new FormData();
+      form.append("file", new Blob([fs.readFileSync(pfad)], { type: mime }), name);
+      let j;
+      try { j = await (await fetch(HERO_UPLOAD_URL, { method: "POST", headers: { "x-auth-token": key }, body: form, signal: AbortSignal.timeout(60_000) })).json(); } catch { j = null; }
+      if (j?.status !== "success" || !j.data?.uuid) throw new HeroFehler("HERO nimmt die Datei nicht an");
+      return j.data.uuid;
+    },
     async laden(url) {
       const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
       if (!r.ok) throw new HeroFehler("Datei aus HERO nicht ladbar");
