@@ -82,8 +82,10 @@ function planungZeile(p) {
   const person = (p.personName || p.person || "").split(/[\s@]/)[0];
   return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc(person)}</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
 }
+// Gebündelter Termin (ein Kunde, mehrere Projekte): die anderen Projekte gehen mit auf die Projektseite.
+const terminZiel = (t) => (t.projektId ? `href="#projekt/${t.projektId}${t.projektIds?.length > 1 ? "?mit=" + t.projektIds.join(",") : ""}"` : "");
 function terminZeile(t, mitPersonen = false) {
-  const ziel = t.projektId ? `href="#projekt/${t.projektId}"` : "";
+  const ziel = terminZiel(t);
   return `<a class="zeile" ${ziel}><span class="zeit">${t.ganztags ? "Ganz-<br>tags" : esc(uhrzeit(t.start))}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(tagSchluessel(t.start) === tagSchluessel(Date.now()) ? "Heute" : "Morgen")} · ${esc(t.kategorie)}${mitPersonen ? esc(personenText(t)) : ""}</div></div>${t.projektId ? `<span class="pfeil">${IKON.pfeil}</span>` : ""}</a>`;
 }
 
@@ -118,7 +120,7 @@ async function kalender(el, _, signal) {
   for (const b of $$("[data-tag]", el)) $(".punkt", b).hidden = !termine.some((t) => anTag(t, b.dataset.tag));
   const amTag = termine.filter((t) => anTag(t, kalenderTag));
   $("#liste", el).innerHTML = amTag.length ? amTag.map((t) => {
-    const ziel = t.projektId ? `href="#projekt/${t.projektId}"` : "";
+    const ziel = terminZiel(t);
     const mehrtaegig = ersterTag(t) !== letzterTag(t);
     const zeit = t.ganztags ? "Ganz-<br>tags" : ersterTag(t) < kalenderTag ? "läuft" : esc(uhrzeit(t.start));
     const neben = t.ganztags ? "" : mehrtaegig ? ` · ${esc(datumKurz(t.start))} bis ${esc(datumKurz(t.ende))}` : " · bis " + esc(uhrzeit(t.ende));
@@ -154,10 +156,13 @@ async function projekte(el, _, signal) {
 const projektZeile = (p) => `<a class="zeile" href="#projekt/${p.id}"><div class="haupt"><div class="titel">${esc(p.kunde || p.titel)}</div><div class="neben">${esc(p.adresse || "ohne Adresse")}</div><div class="neben">${esc(p.nummer)}${p.status ? " · " + esc(p.status) : ""}</div></div><span class="pfeil">${IKON.pfeil}</span></a>`;
 
 // ---------- Projektseite ----------
-async function projekt(el, id, signal) {
+async function projekt(el, roh, signal) {
+  // #projekt/7?mit=7,9: aus einem gebündelten Termin, die anderen Projekte desselben Besuchs sind vorausgewählt.
+  const [id, q = ""] = String(roh).split("?");
+  const mit = (new URLSearchParams(q).get("mit") || "").split(",").map(Number).filter(Boolean);
   el.innerHTML = `<h1>Projekt</h1><div class="leer">Lädt …</div>`;
   const [p, planungen] = await Promise.all([api("/api/projekte/" + id, { signal }), api("/api/planungen", { signal }).catch(() => [])]);
-  const eigene = planungen.filter((x) => x.projektId === p.id);
+  const eigene = planungen.filter((x) => x.projektId === p.id || x.projekte?.some((y) => y.id === p.id));
   const karte = p.adresse ? `https://maps.google.com/?q=${encodeURIComponent(p.adresse)}` : "";
   el.innerHTML = `<div class="kopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button><h1>${esc(p.kunde || p.titel)}</h1></div>
     <p class="unter">${esc(p.nummer)}${p.status ? " · " + esc(p.status) : ""}</p>
@@ -172,7 +177,7 @@ async function projekt(el, id, signal) {
     <div class="label">Logbuch in HERO</div><div class="gruppe">${p.logbuch.length ? p.logbuch.slice(0, 8).map((e) => `<div class="zeile"><div class="haupt"><div class="neben">${esc(datumKurz(e.datum))}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(e.text.length > 400 ? e.text.slice(0, 400) + " …" : e.text)}</div></div></div>`).join("") : `<div class="leer">Keine Einträge.</div>`}</div>
     <div class="label">Dateien in HERO</div><div class="gruppe">${p.dateien.length ? p.dateien.map((d) => `<a class="zeile" href="${esc(d.url)}" target="_blank" rel="noopener"><div class="haupt"><div class="titel">${esc(d.name)}</div></div><span class="pfeil">${IKON.pfeil}</span></a>`).join("") : `<div class="leer">Keine Dateien.</div>`}</div>`;
   $("[data-zurueck]", el).onclick = () => (history.length > 1 ? history.back() : gehe("projekte"));
-  $("[data-start]", el).onclick = () => planungStarten(p);
+  $("[data-start]", el).onclick = () => planungStarten(p, { mit });
   // Alle Projekte desselben Kunden aus HERO; das offene Projekt ist markiert.
   if (p.kundeId) api(`/api/kunden/${p.kundeId}/projekte`, { signal }).then((liste) => {
     const box = $("#kundenprojekte", el);

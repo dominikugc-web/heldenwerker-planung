@@ -58,12 +58,48 @@ function projektWaehlenSheet() {
   setTimeout(() => eingabe.focus(), 250);
 }
 
-export async function planungStarten(p) {
-  try {
-    const titel = [p.nummer, p.kunde, p.adresse].filter(Boolean).join(", ");
-    const pl = await api("/api/planungen", { methode: "POST", body: { projektId: p.id, projektTitel: titel, kunde: p.kunde, adresse: p.adresse, nummer: p.nummer } });
-    gehe("chat/" + pl.id);
-  } catch (e) { fehlerMelden(e); }
+// Ein Kunde ist ein Besuch: zuerst wählen, was besichtigt wird, und zu welchem seiner HERO-Projekte das jeweils gehört.
+// Vorausgewählt ist, was das geöffnete Projekt (und die Projekte aus demselben Termin, mit) laut Gewerk abdeckt.
+const RICHTUNGEN = ["PV", "Wärmepumpe", "Klimaanlage"];
+export async function planungStarten(p, { mit = [] } = {}) {
+  const projekte = p.kundeId ? await api(`/api/kunden/${p.kundeId}/projekte`).catch(() => []) : [];
+  if (!projekte.some((x) => x.id === p.id)) projekte.unshift(p);
+  const dabei = (x) => x.id === p.id || mit.includes(x.id);
+  const an = new Set(projekte.filter(dabei).flatMap((x) => x.richtungen || []));
+  const passend = (r) => projekte.filter((x) => (x.richtungen || []).includes(r));
+  const zu = Object.fromEntries(RICHTUNGEN.map((r) => [r, (passend(r).find(dabei) || passend(r)[0] || p).id]));
+  const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Was wird besichtigt?</h2><span></span></div>
+    <p class="unter">${esc(p.kunde || p.titel || "")}</p>
+    <div class="knoepfe">${RICHTUNGEN.map((r) => `<button class="wahl" data-r="${r}">${r}</button>`).join("")}</div>
+    <div class="gruppe" id="zuordnung" hidden></div>
+    <button class="gross" data-los>Besichtigung starten</button>`);
+  const zeichne = () => {
+    for (const b of $$("[data-r]", d)) { b.classList.toggle("gewaehlt", an.has(b.dataset.r)); b.setAttribute("aria-pressed", an.has(b.dataset.r)); }
+    const box = $("#zuordnung", d), welche = RICHTUNGEN.filter((r) => an.has(r));
+    box.hidden = projekte.length < 2 || !welche.length;
+    box.innerHTML = welche.map((r) => `<label class="feld"><span>${r} gehört zu Projekt</span><select data-fuer="${r}">${projekte.map((x) =>
+      `<option value="${x.id}" ${zu[r] === x.id ? "selected" : ""}>${esc(x.nummer || String(x.id))}${x.gewerk ? " · " + esc(x.gewerk) : ""}${x.status ? " · " + esc(x.status) : ""}</option>`).join("")}</select></label>`).join("");
+    $("[data-los]", d).disabled = !welche.length;
+  };
+  $("[data-zu]", d).onclick = () => d.close();
+  for (const b of $$("[data-r]", d)) b.onclick = () => { if (an.has(b.dataset.r)) an.delete(b.dataset.r); else an.add(b.dataset.r); zeichne(); };
+  $("#zuordnung", d).addEventListener("change", (e) => { if (e.target.dataset.fuer) zu[e.target.dataset.fuer] = Number(e.target.value); });
+  $("[data-los]", d).onclick = async (e) => {
+    const knopf = e.currentTarget, typen = RICHTUNGEN.filter((r) => an.has(r)), liste = [];
+    for (const r of typen) {
+      const x = projekte.find((y) => y.id === zu[r]) || p;
+      const eintrag = liste.find((y) => y.id === x.id);
+      if (eintrag) eintrag.richtungen.push(r); else liste.push({ id: x.id, nummer: x.nummer || "", richtungen: [r] });
+    }
+    knopf.disabled = true;
+    try {
+      const titel = [liste.map((x) => x.nummer).filter(Boolean).join(", "), p.kunde, p.adresse].filter(Boolean).join(", ");
+      const pl = await api("/api/planungen", { methode: "POST", body: { projektId: liste[0].id, projektTitel: titel, kunde: p.kunde, adresse: p.adresse, nummer: p.nummer, typen, projekte: liste } });
+      d.close();
+      gehe("chat/" + pl.id);
+    } catch (err) { fehlerMelden(err); knopf.disabled = false; }
+  };
+  zeichne();
 }
 
 // ---------- Bilder vorbereiten ----------
