@@ -137,7 +137,8 @@ const F = [
   ["wp_bestand", "hk_tausch", "Heizkörper-Tausch nötig?", "janein"],
   ["wp_bestand", "warmwasser_wp", "Warmwasser über WP?", "janein"],
 
-  ["wp_standort", "inneneinheit", "Inneneinheit (Bosch)", "liste", { optionen: ["Compress 3400i AWS", "Compress 3800i AW", "Compress 5000 AW", "Compress 5000 DW", "Compress 5800i AW", "Compress 6800i AW", "Compress 7000i AW", "Compress 7001i AW", "Compress 7400i AW", "Compress 7800i LW", "Compress 8800i AW", "Supraeco STE-1", "Supraeco STM-1", "Supraeco T-2", "Sonstige (Notiz)"] }],
+  // Bauform der Inneneinheit zur CS6800i/CS8800i AW (Bosch-Kürzel E, M, MB). Das WP-Modell selbst steht in bosch_modell (Dominik, 24.11.).
+  ["wp_standort", "inneneinheit", "Inneneinheit (Bosch)", "auswahl", { optionen: ["E · wandhängend, Speicher extern", "M · bodenstehend mit Warmwasserspeicher", "MB · Puffertower", "Sonstige (Notiz)"] }],
   ["wp_standort", "ausseneinheit", "Außeneinheit (Standort)", "text"],
   ["wp_standort", "abstand_innen_aussen", "Abstand innen zu außen", "zahl", { einheit: "m" }],
   ["wp_standort", "leitungsweg_wp", "Leitungsweg WP", "zahl", { einheit: "m" }],

@@ -166,3 +166,10 @@ test("Foto Pfannentyp kommt direkt nach der Frage nach dem Pfannentyp, nur bei P
   assert.ok(!ids("Flachdach").includes("foto_pfannentyp"));
   assert.equal(KATALOG.filter((f) => f.id === "foto_pfannentyp").length, 1);
 });
+
+test("Inneneinheit WP: Bosch-Inneneinheiten statt Außengeräte", () => {
+  const f = frageNach("inneneinheit");
+  assert.equal(f.frage, "Inneneinheit (Bosch)");
+  assert.deepEqual(f.optionen, ["E · wandhängend, Speicher extern", "M · bodenstehend mit Warmwasserspeicher", "MB · Puffertower", "Sonstige (Notiz)"]);
+  assert.ok(!f.optionen.some((o) => /Compress|Supraeco|Climate/.test(o)));
+});
