@@ -132,3 +132,24 @@ test("hochladen: ein Aussetzer bei HERO wird einmal wiederholt", async () => {
   assert.equal(await erstelleHero({ key: "k", fetch: f }).hochladen(pfad, "a.jpg", "image/jpeg"), "zwei");
   assert.equal(n, 2);
 });
+
+test("hochladen: bei 429 (zu viele Anfragen) wartet der Server und versucht es nochmal, Retry-After zählt", async () => {
+  const gewartet = [];
+  let n = 0;
+  const f = async () => (++n <= 2 ? new Response("{}", { status: 429, headers: n === 1 ? { "Retry-After": "7" } : {} }) : Response.json({ status: "success", data: { uuid: "drei" } }));
+  const pfad = (await import("node:path")).join((await import("./hilfe.mjs")).tempDir(), "b.jpg");
+  (await import("node:fs")).writeFileSync(pfad, "JPEG");
+  const uuid = await erstelleHero({ key: "k", fetch: f, warten: async (ms) => gewartet.push(ms) }).hochladen(pfad, "b.jpg", "image/jpeg");
+  assert.equal(uuid, "drei");
+  assert.equal(gewartet[0], 7000);
+  assert.ok(gewartet[1] >= 20000, "ohne Retry-After mindestens 20 s");
+});
+
+test("abfrage: bei 429 wartet der Server und fragt nochmal", async () => {
+  const gewartet = [];
+  let n = 0;
+  const f = async () => (++n === 1 ? new Response("{}", { status: 429 }) : Response.json({ data: { add_logbook_entry: { id: 1 } } }));
+  const d = await erstelleHero({ key: "k", fetch: f, warten: async (ms) => gewartet.push(ms) }).abfrage("mutation { x }");
+  assert.deepEqual(d, { add_logbook_entry: { id: 1 } });
+  assert.deepEqual(gewartet, [20000]);
+});

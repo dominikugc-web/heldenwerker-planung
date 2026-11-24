@@ -52,13 +52,20 @@ export function termineBuendeln(termine) {
 }
 
 // key und fetch werden übergeben, damit Tests ohne echten HERO-Aufruf laufen.
-export function erstelleHero({ key, fetch = globalThis.fetch }) {
+// HERO drosselt mit 429 (24.11.2026 beim Senden in drei Projekte): Retry-After abwarten, sonst 20 s je Versuch.
+const wartezeit = (r, versuch) => (Number(r.headers.get("retry-after")) || 20 * versuch) * 1000;
+
+export function erstelleHero({ key, fetch = globalThis.fetch, warten = (ms) => new Promise((ok) => setTimeout(ok, ms)) }) {
   async function abfrage(query, variables = {}) {
     if (!key) throw fehler(503, "HERO-Schlüssel fehlt");
     let r;
-    try {
-      r = await fetch(HERO_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ query, variables }) });
-    } catch { throw new HeroFehler("HERO antwortet nicht wie erwartet"); }
+    for (let versuch = 1; ; versuch++) {
+      try {
+        r = await fetch(HERO_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ query, variables }) });
+      } catch { throw new HeroFehler("HERO antwortet nicht wie erwartet"); }
+      if (r.status !== 429 || versuch >= 4) break;
+      await warten(wartezeit(r, versuch));
+    }
     let j;
     try { j = await r.json(); } catch { j = null; }
     if (!r.ok || !j || j.errors || !j.data) {
@@ -89,9 +96,10 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
     async hochladen(pfad, name, mime) {
       if (!key) throw fehler(503, "HERO-Schlüssel fehlt");
       const daten = fs.readFileSync(pfad);
-      // Zweiter Versuch, weil HERO einzelne Uploads gelegentlich abbricht (24.11.: dieselbe Datei ging gleich danach durch).
-      let grund = "";
-      for (let versuch = 1; versuch <= 2; versuch++) {
+      // Bei 429 (gedrosselt) bis zu 4 Versuche mit Pause; andere Aussetzer einmal wiederholen
+      // (24.11.: dieselbe Datei ging gleich danach durch).
+      let grund = "", aussetzer = 0;
+      for (let versuch = 1; versuch <= 5; versuch++) {
         const form = new FormData();
         form.append("file", new Blob([daten], { type: mime }), name);
         try {
@@ -99,7 +107,10 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
           const j = await r.json().catch(() => null);
           if (j?.status === "success" && j.data?.uuid) return j.data.uuid;
           grund = "HTTP " + r.status;
+          if (r.status === 429) { await warten(wartezeit(r, versuch)); continue; }
         } catch (e) { grund = String(e?.message || e); }
+        if (++aussetzer >= 2) break;
+        await warten(2000);
       }
       console.error("HERO-Upload abgelehnt:", name, grund.replaceAll(key, "***").slice(0, 200));
       throw new HeroFehler("HERO nimmt die Datei nicht an");
