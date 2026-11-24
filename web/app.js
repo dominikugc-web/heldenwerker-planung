@@ -32,11 +32,11 @@ $$(".tabs button").forEach((b) => b.addEventListener("click", () => (b.dataset.t
 $("#fbbtn").addEventListener("click", feedbackSheet);
 addEventListener("hashchange", zeigen);
 
-// Hinweise oben: Demo, Erlaubnis für das lokale Netz, Testmodus.
+// Hinweise oben: Offline, Demo, Testmodus (nur wenn der Server nicht im Echtbetrieb läuft).
 function banner() {
   if (zustand.offline) return `<div class="banner" role="status">Offline. Begonnene Besichtigungen laufen weiter, alles wird hochgeladen, sobald wieder Netz da ist.<button data-verbinden>Erneut verbinden</button></div>`;
   if (zustand.demo) return `<div class="banner blau" role="status">Demo, nicht verbunden. ${zustand.server ? "Server nicht erreichbar." : "Server-Adresse fehlt."}<button data-verbinden>${zustand.server ? "Erneut verbinden" : "Einrichten"}</button></div>`;
-  return `<div class="banner" role="status">Testmodus: Speichern geht nach UNB-1149 oder in TEST-Projekte.</div>`;
+  return zustand.gesund?.echt ? "" : `<div class="banner" role="status">Testmodus: Speichern geht nach UNB-1149 oder in TEST-Projekte.</div>`;
 }
 document.addEventListener("click", async (e) => {
   if (!e.target.closest("[data-verbinden]")) return;

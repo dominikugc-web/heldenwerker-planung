@@ -71,3 +71,22 @@ test("POST /api/projekte ohne Pflichtangaben antwortet 400 ohne HERO-Aufruf", as
     assert.equal(aufrufe, 0);
   } finally { await s.stop(); }
 });
+
+test("Echtbetrieb: schreibt in jedes Projekt, send_mail und delete bleiben gesperrt", async () => {
+  const h = heroAttrappe();
+  const s = erstelleSchreiber({ hero: h, datenDir: tempDir(), echt: true });
+  assert.deepEqual(s.zielProjekt(999), { id: 999, umgeleitet: false });
+  await s.heroSchreiben("mutation { add_logbook_entry(x:1) { id } }", {}, 999);
+  assert.equal(h.aufrufe.length, 1);
+  await assert.rejects(s.heroSchreiben("mutation { send_mail(x:1) { id } }", {}, 999));
+  await assert.rejects(s.heroSchreiben("mutation { delete_document(document_id:1) }", {}, 999));
+  assert.equal(h.aufrufe.length, 1);
+});
+
+test("Server: Echtbetrieb nur, wenn eingeschaltet; /api/gesund meldet es", async () => {
+  const { testServer } = await import("./hilfe.mjs");
+  for (const echt of [false, true]) {
+    const s = await testServer({ echt });
+    try { assert.equal((await (await fetch(s.url + "/api/gesund")).json()).echt, echt); } finally { await s.stop(); }
+  }
+});

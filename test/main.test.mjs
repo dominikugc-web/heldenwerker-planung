@@ -15,7 +15,7 @@ test("gesund meldet nur, ob Schlüssel da sind, nie den Wert", async () => {
     const r = await fetch(s.url + "/api/gesund");
     const text = await r.text();
     assert.equal(r.status, 200);
-    assert.deepEqual(JSON.parse(text), { ok: true, hero: true, claude: false });
+    assert.deepEqual(JSON.parse(text), { ok: true, hero: true, claude: false, echt: false });
     assert.ok(!text.includes("geheim123"));
   } finally { await s.stop(); }
 });

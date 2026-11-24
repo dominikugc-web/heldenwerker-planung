@@ -27,4 +27,4 @@ Legt `web/` auf den Branch `gh-pages`. Live unter https://dominikugc-web.github.
 ## Hinweise
 
 - Chrome am PC fragt beim ersten Verbinden von der GitHub-Seite nach „Lokales Netzwerk“. Erlauben. Safari am iPhone fragt nicht.
-- Testmodus: Der Server schreibt nur in UNB-1149 und in Projekte, die die App mit „TEST“ angelegt hat.
+- Echtbetrieb seit 24.11.2026: Der Server schreibt Fotos, Protokoll und Logbuch direkt in die gewählten Kundenprojekte. send_mail und Löschen bleiben gesperrt. Mit `PLANUNG_TESTMODUS=1` (so läuft die Vorschau mit daten-test) geht alles nur nach UNB-1149 und in Projekte, die die App mit „TEST“ angelegt hat. Neue Projekte aus der App bekommen weiter „TEST“ vor den Namen.

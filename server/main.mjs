@@ -53,12 +53,13 @@ route("GET", "/api/gesund", (req, res, p, k) => json(res, 200, {
   ok: true,
   hero: !!heroSchluessel(k.homeDir),
   claude: !!ladeSchluessel(...SCHLUESSEL.claude, k.homeDir),
+  echt: k.echt,
 }));
 
-export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient, inhaber = null, transkribieren = erstelleTranskription() }) {
+export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir, homeDir = os.homedir(), lokal = false, heroFetch, heroKey, claudeClient, inhaber = null, transkribieren = erstelleTranskription(), echt = false }) {
   // Schlüssel bei jedem Aufruf frisch lesen: Dominik kann ihn nachtragen, ohne neu zu starten.
   const hero = () => erstelleHero({ key: heroKey ?? heroSchluessel(homeDir), fetch: heroFetch });
-  const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir });
+  const schreiber = () => erstelleSchreiber({ hero: hero(), datenDir, echt });
   const claude = () => {
     const key = !claudeClient && ladeSchluessel(...SCHLUESSEL.claude, homeDir);
     if (!claudeClient && !key) return null;
@@ -78,7 +79,7 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     },
     ablage: () => ladeDrive(homeDir),
   });
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren };
+  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren, echt };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
@@ -108,6 +109,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     webDir: path.join(wurzel, "web"),
     datenDir: process.env.PLANUNG_DATEN || path.join(wurzel, "daten"),
     lokal: process.env.PLANUNG_LOKAL === "1",
+    // Echtbetrieb ist Standard; PLANUNG_TESTMODUS=1 (z. B. Vorschau mit daten-test) schreibt nur ins Testprojekt.
+    echt: process.env.PLANUNG_TESTMODUS !== "1",
     inhaber: process.env.PLANUNG_INHABER || ladeSchluessel(".hero/planung.env", "PLANUNG_INHABER") || (process.env.PLANUNG_LOKAL === "1" ? "Lokal" : null),
   });
   console.log("Planung läuft auf http://127.0.0.1:" + s.address().port);

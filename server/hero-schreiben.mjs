@@ -7,11 +7,12 @@ export const TESTPROJEKT_ID = 11541539; // UNB-1149
 const MEASURE_ID = 6985, TYPE_ID = 67921;
 const VERBOTEN = /send_mail|delete/i;
 
-// Schreibschutz für HERO: Schreiben nur ins Testprojekt und in selbst angelegte Projekte.
-export function erstelleSchreiber({ hero, datenDir }) {
+// Schreibschutz für HERO. Testmodus: nur ins Testprojekt und in selbst angelegte Projekte.
+// Echtbetrieb (seit 24.11.2026, Dominiks Freigabe): in jedes Projekt. send_mail und delete bleiben immer gesperrt.
+export function erstelleSchreiber({ hero, datenDir, echt = false }) {
   const angelegtDatei = path.join(datenDir, "angelegt.json");
   const angelegt = () => ladeJson(angelegtDatei, []);
-  const erlaubt = (id) => Number(id) === TESTPROJEKT_ID || angelegt().includes(Number(id));
+  const erlaubt = (id) => (echt && Number(id) > 0) || Number(id) === TESTPROJEKT_ID || angelegt().includes(Number(id));
 
   return {
     zielProjekt(gewuenscht) {
