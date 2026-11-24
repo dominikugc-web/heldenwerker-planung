@@ -6,6 +6,7 @@
 // Sortierung: orderBy kennt nur aufsteigend; last:N + offset liefert das Neueste zuerst (geprüft 17.11.).
 import fs from "node:fs";
 import { fehler } from "./router.mjs";
+import { richtungenAusGewerk } from "./fragen.mjs";
 export const HERO_URL = "https://login.hero-software.de/api/external/v7/graphql";
 // Laut HERO-Support (24.11.2026): eine Datei pro Anfrage im Feld "file", Header x-auth-token, Antwort data.uuid.
 export const HERO_UPLOAD_URL = "https://login.hero-software.de/app/v8/FileUploads/upload";
@@ -14,7 +15,7 @@ export class HeroFehler extends Error {
   constructor(meldung) { super(meldung); this.status = 502; this.eigen = true; }
 }
 
-const PROJEKT_FELDER = "id project_nr project_title name customer { id full_name company_name } address { street zipcode city } current_project_match_status { name }";
+const PROJEKT_FELDER = "id project_nr project_title name customer { id full_name company_name } address { street zipcode city } current_project_match_status { name } measure { name }";
 
 const trim = (s) => (s || "").trim();
 // HERO speichert Logbuch-Text als HTML (Zeilenumbruch = <br />).
@@ -27,7 +28,27 @@ export function alsProjekt(p) {
     id: p.id, nummer: p.project_nr, titel: trim(p.project_title) || trim(p.name), kunde: name(p.customer), kundeId: p.customer?.id ?? null,
     adresse: [a.street, [a.zipcode, a.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),
     status: p.current_project_match_status?.name || "",
+    gewerk: trim(p.measure?.name), richtungen: richtungenAusGewerk(p.measure?.name),
   };
+}
+
+// Ein Kunde mit mehreren Projekten (PV, WP, Klima) hat oft je Projekt einen Termin, besichtigt wird aber in einem Besuch.
+// Termine desselben Kunden, derselben Kategorie am selben Tag werden daher einer (projektIds nennt alle Projekte).
+const tagIn = (iso) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+export function termineBuendeln(termine) {
+  const gruppen = new Map();
+  for (const t of termine) {
+    const k = t.kundeId ? [tagIn(t.start), t.kundeId, t.kategorie].join("|") : "t" + t.id;
+    const g = gruppen.get(k);
+    if (!g) { gruppen.set(k, { ...t, projektIds: t.projektId ? [t.projektId] : [] }); continue; }
+    g.titel = g.kunde || g.titel;
+    if (t.start < g.start) g.start = t.start;
+    if (t.ende > g.ende) g.ende = t.ende;
+    if (t.projektId && !g.projektIds.includes(t.projektId)) g.projektIds.push(t.projektId);
+    g.meins = g.meins || t.meins;
+    g.personen = [...new Set([...(g.personen || []), ...(t.personen || [])])];
+  }
+  return [...gruppen.values()];
 }
 
 // key und fetch werden übergeben, damit Tests ohne echten HERO-Aufruf laufen.
@@ -113,8 +134,8 @@ export function erstelleHero({ key, fetch = globalThis.fetch }) {
     },
     // personen = wer eingeteilt ist (Mitarbeiter oder Team). E-Mail nur für die Zuordnung auf dem Server, nicht für die Oberfläche.
     async termineLaden(von, bis) {
-      const d = await abfrage(`query($von:DateTime,$bis:DateTime){ calendar_events(start:$von, end:$bis, first:500){ id title start end all_day project_match_id category { name } partners { id full_name email } } }`, { von, bis });
-      return d.calendar_events.map((t) => ({ id: t.id, titel: t.title, start: t.start, ende: t.end, projektId: t.project_match_id || null, kategorie: t.category?.name || "", ganztags: !!t.all_day,
+      const d = await abfrage(`query($von:DateTime,$bis:DateTime){ calendar_events(start:$von, end:$bis, first:500){ id title start end all_day project_match_id project_match { customer { id full_name company_name } } category { name } partners { id full_name email } } }`, { von, bis });
+      return d.calendar_events.map((t) => ({ id: t.id, titel: t.title, start: t.start, ende: t.end, projektId: t.project_match_id || null, kundeId: t.project_match?.customer?.id ?? null, kunde: name(t.project_match?.customer), kategorie: t.category?.name || "", ganztags: !!t.all_day,
         personen: (t.partners || []).map((p) => ({ id: p.id, name: trim(p.full_name), email: trim(p.email) })) }));
     },
     // HERO hat keine Mitarbeiterliste in der API; wer in Terminen eingeteilt ist (60 Tage zurück, 120 voraus), reicht für die Zuordnung.

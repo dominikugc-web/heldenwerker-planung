@@ -94,7 +94,7 @@ test("gleichzeitiger zweiter Aufruf bekommt 409", async () => {
 test("fremdes Projekt landet im Testprojekt und meldet das", async () => {
   const { p, log, abschluss } = await aufbau({ projektId: 999 });
   const r = await abschluss.abschliessen(p.id);
-  assert.deepEqual(r.ziel, { id: 11541539, umgeleitet: true });
+  assert.deepEqual(r.ziel, { id: 11541539, umgeleitet: true, nummer: "" });
   assert.equal(log.logbuch[0].id, 11541539);
 });
 
@@ -154,7 +154,7 @@ test("Route abschliessen: ohne Zusammenfassung 409, danach sofort 202 und Senden
     let st;
     for (let i = 0; i < 50 && (st = (await (await fetch(s.url + "/api/planungen/" + p.id)).json()).senden).status === "laeuft"; i++) await new Promise((x) => setTimeout(x, 20));
     assert.equal(st.status, "fertig");
-    assert.deepEqual(st.ergebnis.ziel, { id: 11541539, umgeleitet: true });
+    assert.deepEqual(st.ergebnis.ziel, { id: 11541539, umgeleitet: true, nummer: "" });
     assert.deepEqual(uploads.map((u) => [u.name.startsWith("Besichtigungsprotokoll"), u.token]), [[true, "k"]], "Protokoll geht ins HERO-Projekt");
     const dok = hero.find((b) => b.query.includes("upload_document"));
     assert.deepEqual([dok.variables.u, dok.variables.id], ["u1", 11541539]);
@@ -235,4 +235,33 @@ test("HERO ohne Drive: Protokoll wird trotzdem erzeugt und hochgeladen", async (
   assert.ok(inHero.every((x) => x.da));
   assert.match(inHero[1].name, /^Besichtigungsprotokoll/);
   assert.equal(log.logbuch.length, 1);
+});
+
+test("Mehrere Projekte: jedes bekommt Fotos, Protokoll und Logbuch, im Testmodus nur einmal UNB-1149", async () => {
+  const { p, planungen, log } = await aufbau({ fotos: 1 });
+  const pl = planungen.laden(p.id);
+  pl.projekte = [{ id: 11541539, nummer: "PV-1", richtungen: ["PV"] }, { id: 777, nummer: "WÄP-2", richtungen: ["Wärmepumpe"] }];
+  planungen.speichern(pl);
+  const inHero = [];
+  const dateien = { logbuchEintrag: async (id, t) => log.logbuch.push({ id, t }), inHero: async (id, pfad, name) => { inHero.push([id, name.slice(0, 12)]); return 1; } };
+  const frei = { zielProjekt: (id) => ({ id: Number(id), umgeleitet: false }) };
+  const a = erstelleAbschluss({ planungen, schreiber: frei, dateien, ablage: null });
+  const r = await a.abschliessen(p.id);
+  assert.deepEqual(inHero, [[11541539, "Zählerschran"], [11541539, "Besichtigung"], [777, "Zählerschran"], [777, "Besichtigung"]]);
+  assert.deepEqual(log.logbuch.map((x) => x.id), [11541539, 777]);
+  assert.deepEqual(r.ziele, [{ id: 11541539, umgeleitet: false, nummer: "PV-1" }, { id: 777, umgeleitet: false, nummer: "WÄP-2" }]);
+  assert.equal(planungen.laden(p.id).status, "gesendet");
+  await a.abschliessen(p.id);
+  assert.equal(inHero.length, 4, "nichts doppelt");
+  assert.equal(log.logbuch.length, 2);
+
+  // Testmodus: beide Projekte werden auf UNB-1149 umgeleitet, dort landet alles nur einmal.
+  const { p: p2, planungen: pl2, log: log2 } = await aufbau({ fotos: 1 });
+  const x = pl2.laden(p2.id); x.projekte = [{ id: 5, nummer: "PV-5" }, { id: 6, nummer: "KLA-6" }]; pl2.speichern(x);
+  const hero2 = [];
+  const test = { zielProjekt: () => ({ id: 11541539, umgeleitet: true }) };
+  const r2 = await erstelleAbschluss({ planungen: pl2, schreiber: test, dateien: { logbuchEintrag: async (id) => log2.logbuch.push(id), inHero: async (id) => hero2.push(id) }, ablage: null }).abschliessen(p2.id);
+  assert.deepEqual(hero2, [11541539, 11541539]);
+  assert.equal(log2.logbuch.length, 1);
+  assert.equal(r2.ziele.length, 1);
 });

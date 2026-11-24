@@ -114,7 +114,7 @@ export async function pruefAnsicht(el, id, signal) {
     if (!s) return;
     const r = s.ergebnis;
     const zeilen = s.status === "laeuft" ? [["Wird im Hintergrund gesendet …", "⏳"], ["Du kannst die App schließen, es läuft auf dem Server weiter.", ""]] : [
-      r && [r.ziel.umgeleitet ? "Gespeichert im Testprojekt UNB-1149 (Testmodus)" : "Gespeichert im Projekt", ""],
+      r && [r.ziel.umgeleitet ? "Gespeichert im Testprojekt UNB-1149 (Testmodus)" : r.ziele?.length > 1 ? "Gespeichert in " + r.ziele.length + " Projekten" : "Gespeichert im Projekt", r.ziel.umgeleitet ? "" : (r.ziele || []).map((z) => z.nummer).filter(Boolean).join(", ")],
       r && ["Logbuch-Eintrag „Besichtigung durchgeführt“", "✓"],
       r?.hochgeladen && ["Protokoll und Fotos auf Google Drive", r.hochgeladen],
       r?.inHero && ["Fotos und Protokoll im HERO-Projekt", r.inHero],

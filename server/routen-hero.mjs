@@ -1,5 +1,6 @@
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { istAdmin } from "./profile.mjs";
+import { termineBuendeln } from "./hero.mjs";
 
 route("GET", "/api/projekte", async (req, res, p, k) =>
   json(res, 200, await k.hero().projekteSuchen(k.query.get("suche") || "", { offset: Number(k.query.get("offset") || 0) })));
@@ -11,9 +12,9 @@ route("GET", "/api/termine", async (req, res, p, k) => {
   const von = k.query.get("von"), bis = k.query.get("bis");
   if (!von || !bis) return json(res, 400, { fehler: "von und bis fehlen" });
   const ich = k.profil?.heroPerson?.id, login = String(k.person || "").toLowerCase();
-  json(res, 200, (await k.hero().termineLaden(von, bis)).map(({ personen, ...t }) => ({
+  json(res, 200, termineBuendeln((await k.hero().termineLaden(von, bis)).map(({ personen, ...t }) => ({
     ...t, personen: personen.map((x) => x.name), meins: personen.some((x) => x.id === ich || (!!x.email && x.email.toLowerCase() === login)),
-  })));
+  }))));
 });
 route("GET", "/api/termin-kategorien", async (req, res, p, k) => json(res, 200, await k.hero().terminKategorien()));
 route("GET", "/api/hero-personen", async (req, res, p, k) => {

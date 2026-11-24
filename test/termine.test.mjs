@@ -57,3 +57,21 @@ test("Team: ungültige HERO-Person wird abgelehnt", async () => {
     assert.equal(r.status, 400);
   } finally { await s.stop(); }
 });
+
+test("Termine: mehrere Besichtigungen beim selben Kunden am selben Tag werden ein Termin", async () => {
+  const kunde = { customer: { id: 55, full_name: "Muster, Max", company_name: "" } };
+  const ev = (id, start, end, pm, wer = []) => ({ id, title: "Besichtigung " + id, start, end, all_day: false, project_match_id: pm, project_match: kunde, category: { name: "Vor-Ort-Termin" }, partners: wer });
+  const daniel = [{ id: 86860, full_name: "Daniel Fech", email: "fech@heldenwerker.de" }];
+  const daten = { data: { calendar_events: [
+    ev(1, "2026-11-18T08:00:00Z", "2026-11-18T09:00:00Z", 7),
+    ev(2, "2026-11-18T09:00:00Z", "2026-11-18T10:00:00Z", 9, daniel),
+    ev(3, "2026-11-19T08:00:00Z", "2026-11-19T09:00:00Z", 10),
+  ] } };
+  const s = await testServer({ heroKey: "k", heroFetch: async () => new Response(JSON.stringify(daten)), inhaber: "chef@x.de" });
+  try {
+    const t = await termine(s, "fech@heldenwerker.de");
+    assert.equal(t.length, 2, "anderer Tag bleibt eigener Termin");
+    assert.deepEqual([t[0].projektIds, t[0].start, t[0].ende, t[0].meins, t[0].titel], [[7, 9], "2026-11-18T08:00:00Z", "2026-11-18T10:00:00Z", true, "Muster, Max"]);
+    assert.deepEqual(t[1].projektIds, [10]);
+  } finally { await s.stop(); }
+});

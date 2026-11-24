@@ -61,7 +61,13 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const ablage = typeof ablageQuelle === "function" ? ablageQuelle() : ablageQuelle;
     let pl = planungen.laden(id);
     if (!pl.ergebnis) throw fehler(409, "Erst zusammenfassen");
-    const ziel = schreiber.zielProjekt(pl.projektId);
+    // Ein Kunde kann mehrere Projekte haben (PV, WP, Klima); jedes bekommt alles. Im Testmodus landen alle in UNB-1149, dort nur einmal.
+    const ziele = [];
+    for (const p of pl.projekte?.length ? pl.projekte : [{ id: pl.projektId }]) {
+      const z = schreiber.zielProjekt(p.id);
+      if (!ziele.some((x) => x.id === z.id)) ziele.push({ ...z, nummer: p.nummer || "" });
+    }
+    const ziel = ziele[0];
     const namen = dateiNamen(pl);
     const alle = alleDateien(pl);
     const datum = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" });
@@ -73,13 +79,15 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
 
     const protokollSchreiben = async () => fs.writeFileSync(protokollPfad, await berichtPdf(pl, { links: Object.fromEntries(Object.entries(pl.gesendet.dateien).map(([k, v]) => [k, v.link])), bild: (d) => planungen.bildFuerPdf(id, d) }));
-    const r = { ziel, hochgeladen: 0, uebersprungen: 0, offen: 0, inHero: 0, fehler: [] };
+    // Drive-Ordner: Projektnummer(n) und Kunde
+    const ordner = pl.projekte?.length > 1 ? [pl.projekte.map((x) => x.nummer).join(" "), pl.antworten?.kunde?.wert].filter(Boolean).join(" ") : pl.projektTitel.split(", ").slice(0, 2).join(" ");
+    const r = { ziel, ziele, hochgeladen: 0, uebersprungen: 0, offen: 0, inHero: 0, fehler: [] };
     for (const a of auftraege) {
       if (pl.gesendet.dateien[a.schluessel]) { r.uebersprungen++; continue; }
       if (!ablage) { r.offen++; continue; }
       try {
         if (a.protokoll) await protokollSchreiben();
-        const link = await ablage.hochladen(a.pfad, a.name, a.mime, pl.projektTitel.split(", ").slice(0, 2).join(" "));
+        const link = await ablage.hochladen(a.pfad, a.name, a.mime, ordner);
         pl = planungen.laden(id);
         pl.gesendet.dateien[a.schluessel] = { name: a.name, link };
         planungen.speichern(pl);
@@ -90,33 +98,40 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       }
     }
 
-    // Fotos und PDFs zusätzlich direkt ins HERO-Projekt (Videos und Sprachnotizen bleiben auf Drive, ihre Links stehen im Protokoll).
-    // Nacheinander, weil HERO nach 30 s abbricht und Lastspitzen meiden will.
+    // Fotos und PDFs zusätzlich direkt in jedes HERO-Projekt (Videos und Sprachnotizen bleiben auf Drive, ihre Links stehen im Protokoll).
+    // Nacheinander, weil HERO nach 30 s abbricht und Lastspitzen meiden will. Stand je Projekt in gesendet.inHero, ältere Planungen kannten nur ein Projekt.
     const fuerHero = dateien.inHero ? auftraege.filter((a) => a.mime === MIME.bild || a.mime === MIME.pdf) : [];
-    pl.gesendet.hero ||= {};
-    for (const a of fuerHero) {
-      if (pl.gesendet.hero[a.schluessel]) continue;
-      if (a.protokoll && ablage && !pl.gesendet.dateien.protokoll) break; // Protokoll erst, wenn es alle Drive-Links enthält
-      try {
-        if (a.protokoll && !fs.existsSync(a.pfad)) await protokollSchreiben();
-        const heroId = await dateien.inHero(ziel.id, a.pfad, a.name, a.mime);
-        pl = planungen.laden(id);
-        (pl.gesendet.hero ||= {})[a.schluessel] = heroId;
-        planungen.speichern(pl);
-        r.inHero++;
-      } catch (e) {
-        r.fehler.push(`HERO ${a.name}: ${e.message}`);
-        break;
+    pl.gesendet.inHero ||= pl.gesendet.hero ? { [ziel.id]: pl.gesendet.hero } : {};
+    pl.gesendet.logbuchIn ||= pl.gesendet.logbuch ? [ziel.id] : [];
+    planungen.speichern(pl);
+    const istInHero = (z, a) => pl.gesendet.inHero[z.id]?.[a.schluessel];
+    hero: for (const z of ziele) {
+      for (const a of fuerHero) {
+        if (istInHero(z, a)) continue;
+        if (a.protokoll && ablage && !pl.gesendet.dateien.protokoll) break; // Protokoll erst, wenn es alle Drive-Links enthält
+        try {
+          if (a.protokoll && !fs.existsSync(a.pfad)) await protokollSchreiben();
+          const heroId = await dateien.inHero(z.id, a.pfad, a.name, a.mime);
+          pl = planungen.laden(id);
+          (pl.gesendet.inHero[z.id] ||= {})[a.schluessel] = heroId;
+          planungen.speichern(pl);
+          r.inHero++;
+        } catch (e) {
+          r.fehler.push(`HERO ${z.nummer || z.id} ${a.name}: ${e.message}`);
+          break hero;
+        }
       }
     }
-    const inHeroFertig = fuerHero.every((a) => pl.gesendet.hero?.[a.schluessel]);
 
     const fertig = auftraege.every((a) => pl.gesendet.dateien[a.schluessel]);
-    // Ein kurzer Logbuch-Eintrag, sobald alles abgelegt und in HERO ist (ohne Ablage nur HERO); ein alter "vorlaeufig"-Stand gilt als erledigt.
-    if (!pl.gesendet.logbuch && (fertig || !ablage) && inHeroFertig) {
-      await dateien.logbuchEintrag(ziel.id, logbuchText(aufgenommen));
-      pl.gesendet.logbuch = true;
+    // Je Projekt ein kurzer Logbuch-Eintrag, sobald alles abgelegt und dort in HERO ist (ohne Ablage nur HERO).
+    for (const z of ziele) {
+      if (pl.gesendet.logbuchIn.includes(z.id) || !(fertig || !ablage) || !fuerHero.every((a) => istInHero(z, a))) continue;
+      await dateien.logbuchEintrag(z.id, logbuchText(aufgenommen));
+      pl.gesendet.logbuchIn.push(z.id);
+      planungen.speichern(pl);
     }
+    pl.gesendet.logbuch = ziele.every((z) => pl.gesendet.logbuchIn.includes(z.id));
     if (pl.gesendet.logbuch) pl.status = "gesendet";
     pl.gesendet.ziel = ziel;
     planungen.speichern(pl);

@@ -7,6 +7,15 @@ import { kostenSchaetzen } from "./claude.mjs";
 import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
 import { antwortenAusLieferscheinen } from "./lieferschein.mjs";
 import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
+import { TYPEN } from "./fragen.mjs";
+
+const RICHTUNGEN = Object.values(TYPEN);
+// Ein Kunde kann je Richtung ein eigenes HERO-Projekt haben; besichtigt wird alles in einem Besuch.
+function projekteAus(b) {
+  if (b.projekte === undefined) return [{ id: Number(b.projektId), nummer: String(b.nummer || ""), richtungen: [] }];
+  if (!Array.isArray(b.projekte) || !b.projekte.length || b.projekte.length > 5 || b.projekte.some((p) => !Number(p?.id))) throw fehler(400, "Projekte ungültig");
+  return b.projekte.map((p) => ({ id: Number(p.id), nummer: String(p.nummer || "").slice(0, 40), richtungen: RICHTUNGEN.filter((r) => [].concat(p.richtungen || []).includes(r)) }));
+}
 
 // Steht "laeuft" drin, aber hier läuft nichts (Server wurde neu gestartet): als unterbrochen melden, damit man neu senden kann.
 const sendenStand = (k, pl) => (pl.senden?.status === "laeuft" && !k.abschluss.laeuft(pl.id)
@@ -20,12 +29,19 @@ route("POST", "/api/planungen", async (req, res, p, k) => {
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
   // Was schon in Lieferscheinen und im Heizlastbericht steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
   // Lieferschein vor Heizlast: dort steht die echte Außeneinheit, die Heizlast ist nur der Richtwert.
+  const projekte = projekteAus(b);
   const hero = k.hero();
-  const heizlast = async () => { const d = await hero.heizlastBericht(b.projektId); return d ? antwortenAusHeizlast(await heizlastAusPdf(await hero.laden(d.url))) : {}; };
-  const [ls, hl] = await Promise.allSettled([hero.lieferscheine(b.projektId).then(antwortenAusLieferscheinen), heizlast()]);
-  for (const [name, x] of [["Lieferscheine", ls], ["Heizlast", hl]]) if (x.status === "rejected") console.error(name + ":", String(x.reason?.message).slice(0, 200));
-  const vorbefuellt = { ...(hl.value || {}), ...(ls.value || {}) };
-  json(res, 201, k.planungen.neu({ projektId: b.projektId, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer: b.nummer, vorbefuellt }));
+  const heizlast = async (id) => { const d = await hero.heizlastBericht(id); return d ? antwortenAusHeizlast(await heizlastAusPdf(await hero.laden(d.url))) : {}; };
+  const [ls, hl] = await Promise.all([
+    Promise.allSettled(projekte.map((p) => hero.lieferscheine(p.id).then(antwortenAusLieferscheinen))),
+    Promise.allSettled(projekte.map((p) => heizlast(p.id))),
+  ]);
+  for (const [name, liste] of [["Lieferscheine", ls], ["Heizlast", hl]]) for (const x of liste) if (x.status === "rejected") console.error(name + ":", String(x.reason?.message).slice(0, 200));
+  const vorbefuellt = Object.assign({}, ...hl.map((x) => x.value || {}), ...ls.map((x) => x.value || {}));
+  const typen = RICHTUNGEN.filter((r) => [].concat(b.typen || []).includes(r));
+  if (typen.length) vorbefuellt.typ = { wert: typen.join(", ") };
+  const nummer = projekte.map((p) => p.nummer).filter(Boolean).join(", ") || b.nummer;
+  json(res, 201, k.planungen.neu({ projektId: projekte[0].id, projekte, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer, vorbefuellt }));
 });
 
 route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {

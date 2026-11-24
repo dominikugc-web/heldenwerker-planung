@@ -25,7 +25,7 @@ test("Suche geht als Variable mit, nicht im Query-Text", async () => {
 test("HERO-Objekt wird auf Projekt abgebildet", async () => {
   const f = attrappe({ data: { project_matches: [PM] } });
   const [p] = await erstelleHero({ key: "k", fetch: f }).projekteSuchen("");
-  assert.deepEqual(p, { id: 7, nummer: "UNB-7", titel: "PV Dach", kunde: "Müller & Söhne", kundeId: null, adresse: "Hauptstraße 1, 56307 Dernbach", status: "Neu" });
+  assert.deepEqual(p, { id: 7, nummer: "UNB-7", titel: "PV Dach", kunde: "Müller & Söhne", kundeId: null, adresse: "Hauptstraße 1, 56307 Dernbach", status: "Neu", gewerk: "", richtungen: [] });
 });
 
 test("errors in der Antwort werden zu HeroFehler", async () => {
@@ -56,7 +56,7 @@ test("Termine bekommen Zeitraum als Variablen und werden abgebildet", async () =
   const f = attrappe({ data: { calendar_events: [{ id: 1, title: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", end: "2026-11-18T10:00:00+01:00", project_match_id: 7, all_day: false, category: { name: "Besichtigung" } }] } });
   const t = await erstelleHero({ key: "k", fetch: f }).termineLaden("2026-11-18T00:00:00Z", "2026-11-19T00:00:00Z");
   assert.equal(f.aufrufe[0].body.variables.von, "2026-11-18T00:00:00Z");
-  assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kategorie: "Besichtigung", ganztags: false, personen: [] });
+  assert.deepEqual(t[0], { id: 1, titel: "Besichtigung Müller", start: "2026-11-18T09:00:00+01:00", ende: "2026-11-18T10:00:00+01:00", projektId: 7, kundeId: null, kunde: "", kategorie: "Besichtigung", ganztags: false, personen: [] });
 });
 
 test("projektLaden nimmt das Logbuch aus histories, neueste zuerst, höchstens 30", async () => {
@@ -113,4 +113,13 @@ test("hochladen: Datei als multipart an den REST-Endpunkt mit x-auth-token, Antw
 
   const kaputt = async () => new Response(JSON.stringify({ status: "error" }), { status: 400 });
   await assert.rejects(erstelleHero({ key: "k", fetch: kaputt }).hochladen(pfad, "x.jpg", "image/jpeg"), (e) => e instanceof HeroFehler);
+});
+
+test("Gewerk aus HERO gibt die Richtungen PV, Wärmepumpe, Klimaanlage", async () => {
+  const mit = (name) => ({ ...PM, measure: { name } });
+  const f = attrappe({ data: { project_matches: ["Wärmepumpe und Photovoltaik", "Photovoltaik mit Speicher, Wallbox und Notstromsystem", "Klimaanlagen", "Klima- und Lüftungsanlagen", "Speichererweiterung", "Unbekannt"].map(mit) } });
+  const liste = await erstelleHero({ key: "k", fetch: f }).kundenProjekte(55);
+  assert.deepEqual(liste.map((p) => p.richtungen), [["PV", "Wärmepumpe"], ["PV"], ["Klimaanlage"], ["Klimaanlage"], ["PV"], []]);
+  assert.equal(liste[0].gewerk, "Wärmepumpe und Photovoltaik");
+  assert.match(f.aufrufe[0].body.query, /measure { name }/);
 });

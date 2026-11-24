@@ -21,6 +21,8 @@ export const BEREICHE = {
 };
 const NUR = { pv: "pv", dc: "pv", geruest: "pv", fotos: "pv", ac: "pv", wp_bestand: "wp", wp_standort: "wp", klima: "klima" };
 export const TYPEN = { pv: "PV", wp: "Wärmepumpe", klima: "Klimaanlage" };
+// Welche Richtungen ein HERO-Projekt abdeckt, steht im Gewerk (measure), z. B. „Wärmepumpe und Photovoltaik“.
+export const richtungenAusGewerk = (gewerk = "") => [/photovoltaik|pv|speicher|wallbox/i.test(gewerk) && TYPEN.pv, /wärmepumpe/i.test(gewerk) && TYPEN.wp, /klima/i.test(gewerk) && TYPEN.klima].filter(Boolean);
 // Gewählte Typen einer Besichtigung. Alte Antwort "Beides" (vor dem 23.11.) heißt PV und Wärmepumpe.
 export const typen = (antworten = {}) => { const w = antworten.typ?.wert || ""; return w === "Beides" ? ["PV", "Wärmepumpe"] : w.split(",").map((t) => t.trim()).filter(Boolean); };
 
