@@ -1,5 +1,8 @@
 // In Fotos zeichnen: Stift, Pfeil, Text (verschieben, Größe ändern), eigene Farben, Zoomen mit zwei Fingern,
 // Rückgängig. Ergebnis in voller Auflösung.
+// Stift: Finger kurz still halten macht das Stück seit dem letzten Haltepunkt zu einer geraden Linie mit Richtungspfeil;
+// weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
+const HALTEN_MS = 450, RUHE_PX = 8; // so lange und so ruhig muss der Finger bleiben
 const FARBEN = [["#e8667e", "Rot"], ["#f5d020", "Gelb"], ["#ffffff", "Weiß"]];
 const EIGENE = "planung-farben", MAX_EIGENE = 8; // eigene Farben bleiben auf dem Gerät; die älteste fällt raus
 const eigeneFarben = () => { try { return JSON.parse(localStorage.getItem(EIGENE)) || []; } catch { return []; } };
@@ -51,6 +54,16 @@ export function zeichnen(blob) {
     const textleiste = el.querySelector(".textleiste");
     const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = !s; };
 
+    // Pfeilspitze in der Mitte einer Geraden, zeigt in Zeichenrichtung; zu kurze Stücke bekommen keine.
+    function pfeilMitte(a, b) {
+      const l = breite * 3.5, d = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d < l * 2.5) return;
+      const w = Math.atan2(b.y - a.y, b.x - a.x), sx = (a.x + b.x) / 2 + Math.cos(w) * l / 2, sy = (a.y + b.y) / 2 + Math.sin(w) * l / 2;
+      ctx.beginPath(); ctx.moveTo(sx, sy);
+      ctx.lineTo(sx - l * Math.cos(w - 0.5), sy - l * Math.sin(w - 0.5));
+      ctx.lineTo(sx - l * Math.cos(w + 0.5), sy - l * Math.sin(w + 0.5)); ctx.closePath(); ctx.fill();
+    }
+
     function malen() {
       ctx.drawImage(img, 0, 0);
       for (const s of striche) {
@@ -75,8 +88,11 @@ export function zeichnen(blob) {
           ctx.lineTo(b.x - l * Math.cos(w - 0.45), b.y - l * Math.sin(w - 0.45));
           ctx.lineTo(b.x - l * Math.cos(w + 0.45), b.y - l * Math.sin(w + 0.45)); ctx.closePath(); ctx.fill();
         } else {
-          s.punkte.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+          // fest: gerade Strecken bis zum letzten Haltepunkt, punkte: freier Strich ab dort
+          const fest = s.fest || [];
+          [...fest, ...s.punkte].forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
           ctx.stroke();
+          for (let i = 1; i < fest.length; i++) pfeilMitte(fest[i - 1], fest[i]);
         }
       }
       ctx.shadowBlur = 0;
@@ -102,12 +118,28 @@ export function zeichnen(blob) {
     }
 
     const punkt = (e) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
+
+    // Halten beim Stift: Bleibt der Finger HALTEN_MS lang ruhig, wird das Stück seit dem letzten Haltepunkt gerade.
+    let ruhe = null, halteTimer = null;
+    const halteStopp = () => { clearTimeout(halteTimer); halteTimer = null; ruhe = null; };
+    function halteStart(e) {
+      clearTimeout(halteTimer);
+      ruhe = { x: e.clientX, y: e.clientY };
+      halteTimer = setTimeout(() => {
+        if (!aktiv || aktiv.art !== "stift") return;
+        const hier = aktiv.punkte.at(-1), fest = (aktiv.fest ||= [aktiv.punkte[0]]);
+        if (Math.hypot(hier.x - fest.at(-1).x, hier.y - fest.at(-1).y) < breite * 3) return; // noch kein Stück gezogen
+        fest.push(hier); aktiv.punkte = [hier];
+        navigator.vibrate?.(15);
+        malen();
+      }, HALTEN_MS);
+    }
     flaeche.addEventListener("pointerdown", (e) => {
       try { flaeche.setPointerCapture(e.pointerId); } catch { /* Zeiger schon weg */ }
       finger.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (finger.size === 2) { // zweiter Finger: zoomen statt zeichnen, angefangener Strich fällt weg
         if (aktiv) { striche.splice(striche.indexOf(aktiv), 1); aktiv = null; }
-        ziehen = null; kandidat = null; warten = true; gesteStarten(); malen(); return;
+        halteStopp(); ziehen = null; kandidat = null; warten = true; gesteStarten(); malen(); return;
       }
       if (finger.size > 2 || warten) return;
       const p = punkt(e);
@@ -118,6 +150,7 @@ export function zeichnen(blob) {
         malen(); return;
       }
       aktiv = { art: werkzeug, farbe, punkte: [p] }; striche.push(aktiv);
+      if (werkzeug === "stift") halteStart(e);
     });
     flaeche.addEventListener("pointermove", (e) => {
       if (!finger.has(e.pointerId)) return;
@@ -127,13 +160,16 @@ export function zeichnen(blob) {
       if (kandidat && Math.hypot(e.clientX - kandidat.x, e.clientY - kandidat.y) > 12) kandidat = null;
       if (!aktiv) return;
       if (aktiv.art === "pfeil") aktiv.punkte[1] = punkt(e); else aktiv.punkte.push(punkt(e));
+      // Zittern zählt nicht als Bewegung; erst wer weiterzieht, startet das Warten aufs Halten neu.
+      if (aktiv.art === "stift" && (!ruhe || Math.hypot(e.clientX - ruhe.x, e.clientY - ruhe.y) > RUHE_PX)) halteStart(e);
       malen();
     });
     const los = (e) => {
       finger.delete(e.pointerId);
       if (geste && finger.size < 2) geste = null;
       if (!finger.size) warten = false;
-      if (aktiv) { if (aktiv.punkte.length < 2) striche.splice(striche.indexOf(aktiv), 1); aktiv = null; malen(); }
+      halteStopp();
+      if (aktiv) { if (aktiv.punkte.length < 2 && !(aktiv.fest?.length > 1)) striche.splice(striche.indexOf(aktiv), 1); aktiv = null; malen(); }
       ziehen = null;
       if (kandidat && e.type === "pointerup") {
         const { p } = kandidat; kandidat = null;
