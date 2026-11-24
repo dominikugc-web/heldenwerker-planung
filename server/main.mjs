@@ -80,8 +80,9 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     ablage: () => ladeDrive(homeDir),
   });
   // Wurde der Server mitten im Senden beendet (Neustart, PC aus), geht es hier weiter. Schon Gesendetes wird übersprungen.
+  // shortcut: nur Sendungen der letzten 12 Stunden; ältere (z. B. noch aus dem Testmodus) bleiben „unterbrochen“ und brauchen „Erneut senden“.
   for (const pl of planungen.liste()) {
-    if (pl.senden?.status !== "laeuft" || !pl.ergebnis) continue;
+    if (pl.senden?.status !== "laeuft" || !pl.ergebnis || Date.now() - Date.parse(pl.senden.start) > 12 * 3600_000) continue;
     console.log("Setze Senden fort:", pl.id);
     abschluss.starten(pl.id);
   }

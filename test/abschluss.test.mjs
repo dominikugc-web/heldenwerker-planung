@@ -273,8 +273,12 @@ test("Neustart mitten im Senden: der Server setzt abgebrochene Sendungen selbst 
   const planungen = erstellePlanungen({ datenDir });
   const p = planungen.neu({ projektId: 11541539, projektTitel: "UNB-1149 X", person: "x" });
   p.ergebnis = { monteure: MONTEURE, fehlt: [] };
-  p.senden = { status: "laeuft", start: "2026-11-24T07:33:12Z" };
+  p.senden = { status: "laeuft", start: new Date(Date.now() - 3600_000).toISOString() };
   planungen.speichern(p);
+  const alt = planungen.neu({ projektId: 11541539, projektTitel: "alt", person: "x" });
+  alt.ergebnis = { monteure: MONTEURE, fehlt: [] };
+  alt.senden = { status: "laeuft", start: new Date(Date.now() - 48 * 3600_000).toISOString() };
+  planungen.speichern(alt);
   const ohne = planungen.neu({ projektId: 11541539, projektTitel: "ohne Zusammenfassung", person: "x" });
   ohne.senden = { status: "laeuft", start: "2026-11-24T07:00:00Z" };
   planungen.speichern(ohne);
@@ -293,5 +297,6 @@ test("Neustart mitten im Senden: der Server setzt abgebrochene Sendungen selbst 
     assert.deepEqual(logbuch, [11541539]);
     const st2 = (await (await fetch(s.url + "/api/planungen/" + ohne.id)).json()).senden;
     assert.equal(st2.status, "fehler", "ohne Zusammenfassung bleibt es beim Hinweis");
+    assert.equal((await (await fetch(s.url + "/api/planungen/" + alt.id)).json()).senden.status, "fehler", "ältere Sendungen nicht von selbst");
   } finally { await s.stop(); }
 });
