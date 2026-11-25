@@ -4,7 +4,9 @@
 // weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
 // Produkt: freigestelltes Gerät aus der Liste einsetzen, verschieben, am Griff unten rechts größer/kleiner ziehen (25.11.).
 import { api, serverUrl, zustand } from "./api.js";
-const HALTEN_MS = 450, RUHE_PX = 8; // so lange und so ruhig muss der Finger bleiben
+// Halten = die letzten HALTEN_MS lag der Finger innerhalb von RUHE_PX Bildschirmpunkten. Ein echter Finger zittert
+// und wandert dabei ein paar Punkte; 8 Punkte ab dem ersten Ruhepunkt waren am Handy zu streng (25.11.).
+const HALTEN_MS = 450, RUHE_PX = 16;
 const FARBEN = [["#e8667e", "Rot"], ["#f5d020", "Gelb"], ["#ffffff", "Weiß"]];
 const EIGENE = "planung-farben", MAX_EIGENE = 8; // eigene Farben bleiben auf dem Gerät; die älteste fällt raus
 const eigeneFarben = () => { try { return JSON.parse(localStorage.getItem(EIGENE)) || []; } catch { return []; } };
@@ -123,8 +125,9 @@ export function zeichnen(blob) {
           }
         } else if (s.art === "pfeil") {
           const [a, b] = [s.punkte[0], s.punkte.at(-1)];
-          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
           const w = Math.atan2(b.y - a.y, b.x - a.x), l = breite * 4.5;
+          // Linie endet im Pfeilkopf, sonst schaut ihr rundes Ende vorn über die Spitze hinaus
+          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x - Math.cos(w) * l * 0.7, b.y - Math.sin(w) * l * 0.7); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(b.x, b.y);
           ctx.lineTo(b.x - l * Math.cos(w - 0.45), b.y - l * Math.sin(w - 0.45));
           ctx.lineTo(b.x - l * Math.cos(w + 0.45), b.y - l * Math.sin(w + 0.45)); ctx.closePath(); ctx.fill();
@@ -160,20 +163,28 @@ export function zeichnen(blob) {
 
     const punkt = (e) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
 
-    // Halten beim Stift: Bleibt der Finger HALTEN_MS lang ruhig, wird das Stück seit dem letzten Haltepunkt gerade.
-    let ruhe = null, halteTimer = null;
-    const halteStopp = () => { clearTimeout(halteTimer); halteTimer = null; ruhe = null; };
+    // Halten beim Stift: Lag der Finger die letzten HALTEN_MS ruhig, wird das Stück seit dem letzten Haltepunkt gerade.
+    // Geprüft wird laufend über die zuletzt gemeldeten Fingerpositionen (Bildschirmpunkte mit Zeit).
+    let spur = [], halteTimer = null, haltepunkt = null;
+    const halteStopp = () => { clearInterval(halteTimer); halteTimer = null; spur = []; haltepunkt = null; };
     function halteStart(e) {
-      clearTimeout(halteTimer);
-      ruhe = { x: e.clientX, y: e.clientY };
-      halteTimer = setTimeout(() => {
-        if (!aktiv || aktiv.art !== "stift") return;
-        const hier = aktiv.punkte.at(-1), fest = (aktiv.fest ||= [aktiv.punkte[0]]);
-        if (Math.hypot(hier.x - fest.at(-1).x, hier.y - fest.at(-1).y) < breite * 3) return; // noch kein Stück gezogen
-        fest.push(hier); aktiv.punkte = [hier];
-        navigator.vibrate?.(15);
-        malen();
-      }, HALTEN_MS);
+      spur = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+      clearInterval(halteTimer);
+      halteTimer = setInterval(haltenPruefen, 60);
+    }
+    function haltenPruefen() {
+      if (!aktiv || aktiv.art !== "stift" || !spur.length) return;
+      const jetzt = performance.now(), letzte = spur.at(-1);
+      if (jetzt - spur[0].t < HALTEN_MS) return; // noch nicht lange genug gezeichnet
+      // alle Positionen seit HALTEN_MS (dazu die letzte davor, falls seitdem keine Bewegung gemeldet wurde)
+      const ab = spur.findLastIndex((s) => s.t <= jetzt - HALTEN_MS);
+      if (spur.slice(Math.max(0, ab)).some((s) => Math.hypot(s.x - letzte.x, s.y - letzte.y) > RUHE_PX)) return;
+      const hier = aktiv.punkte.at(-1), fest = (aktiv.fest ||= [aktiv.punkte[0]]);
+      if (Math.hypot(hier.x - fest.at(-1).x, hier.y - fest.at(-1).y) < breite * 3) return; // seit dem letzten Haltepunkt nichts gezogen
+      fest.push(hier); aktiv.punkte = [hier];
+      haltepunkt = { x: letzte.x, y: letzte.y }; // Zittern hier nicht mitzeichnen, erst echtes Weiterziehen
+      navigator.vibrate?.(15);
+      malen();
     }
     flaeche.addEventListener("pointerdown", (e) => {
       try { flaeche.setPointerCapture(e.pointerId); } catch { /* Zeiger schon weg */ }
@@ -206,9 +217,10 @@ export function zeichnen(blob) {
       if (ziehen) { const p = punkt(e); gewaehlt.x = p.x - ziehen.dx; gewaehlt.y = p.y - ziehen.dy; malen(); return; }
       if (kandidat && Math.hypot(e.clientX - kandidat.x, e.clientY - kandidat.y) > 12) kandidat = null;
       if (!aktiv) return;
+      if (aktiv.art === "stift") { const t = performance.now(); spur.push({ t, x: e.clientX, y: e.clientY }); spur = spur.filter((s) => s.t > t - 2000); }
+      if (haltepunkt && Math.hypot(e.clientX - haltepunkt.x, e.clientY - haltepunkt.y) <= RUHE_PX) return;
+      haltepunkt = null;
       if (aktiv.art === "pfeil") aktiv.punkte[1] = punkt(e); else aktiv.punkte.push(punkt(e));
-      // Zittern zählt nicht als Bewegung; erst wer weiterzieht, startet das Warten aufs Halten neu.
-      if (aktiv.art === "stift" && (!ruhe || Math.hypot(e.clientX - ruhe.x, e.clientY - ruhe.y) > RUHE_PX)) halteStart(e);
       malen();
     });
     const los = (e) => {
@@ -226,6 +238,7 @@ export function zeichnen(blob) {
       kandidat = null;
     };
     flaeche.addEventListener("pointerup", los); flaeche.addEventListener("pointercancel", los);
+    flaeche.addEventListener("contextmenu", (e) => e.preventDefault()); // Android: langes Halten öffnet sonst das Bildmenü
 
     el.addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
