@@ -1,0 +1,36 @@
+// Freigestellte Produktbilder zum Einsetzen beim Bemalen (Dominik, 25.11.2026).
+// Die Bilder liegen nur auf dem Server unter daten/produkte/<id>.png (Herstellerbilder, nicht ins öffentliche Repo);
+// Rohbilder und Freistell-Skript im Vault unter 07 Anhänge/Planungstool Produktbilder.
+import fs from "node:fs";
+import path from "node:path";
+import { route, json, fehler } from "./router.mjs";
+
+export const PRODUKTE = [
+  ["bosch-wp-aussen", "Bosch Außengerät", "Wärmepumpe"],
+  ["bosch-wp-innen-wand", "Bosch Inneneinheit wandhängend", "Wärmepumpe"],
+  ["bosch-warmwasserspeicher", "Bosch Warmwasserspeicher", "Wärmepumpe"],
+  ["bosch-pufferspeicher", "Bosch Pufferspeicher", "Wärmepumpe"],
+  ["bosch-klima-innen", "Bosch Innengerät", "Klimaanlage"],
+  ["bosch-klima-aussen", "Bosch Außengerät", "Klimaanlage"],
+  ["fronius-gen24", "Fronius GEN24", "Wechselrichter"],
+  ["goodwe-wechselrichter", "GoodWe", "Wechselrichter"],
+  ["ecoflow-wechselrichter", "EcoFlow PowerOcean", "Wechselrichter"],
+  ["fronius-reserva", "Fronius Reserva", "Speicher"],
+  ["goodwe-lynx-d", "GoodWe Lynx D", "Speicher"],
+  ["ecoflow-speicher", "EcoFlow PowerOcean Batterie", "Speicher"],
+  ["ecoflow-ocean-2", "EcoFlow OCEAN 2", "Speicher"],
+  ["ecoflow-powerocean", "EcoFlow PowerOcean komplett", "Speicher"],
+  ["fronius-wattpilot-flex", "Fronius Wattpilot Flex", "Wallbox"],
+  ["goodwe-hca-g2", "GoodWe HCA G2", "Wallbox"],
+  ["ecoflow-powerpulse-2", "EcoFlow PowerPulse 2", "Wallbox"],
+].map(([id, name, bereich]) => ({ id, name, bereich }));
+
+const datei = (k, id) => path.join(k.datenDir, "produkte", id + ".png");
+
+route("GET", "/api/produkte", (req, res, p, k) => json(res, 200, PRODUKTE.filter((x) => fs.existsSync(datei(k, x.id)))));
+route("GET", "/api/produkte/:id", (req, res, p, k) => {
+  // Nur bekannte IDs, damit niemand über den Pfad an andere Dateien kommt.
+  if (!PRODUKTE.some((x) => x.id === p.id) || !fs.existsSync(datei(k, p.id))) throw fehler(404, "Produkt nicht gefunden");
+  res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "private, max-age=86400" });
+  fs.createReadStream(datei(k, p.id)).pipe(res);
+});

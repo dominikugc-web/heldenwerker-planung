@@ -2,6 +2,8 @@
 // Rückgängig. Ergebnis in voller Auflösung.
 // Stift: Finger kurz still halten macht das Stück seit dem letzten Haltepunkt zu einer geraden Linie mit Richtungspfeil;
 // weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
+// Produkt: freigestelltes Gerät aus der Liste einsetzen, verschieben, am Griff unten rechts größer/kleiner ziehen (25.11.).
+import { api, serverUrl, zustand } from "./api.js";
 const HALTEN_MS = 450, RUHE_PX = 8; // so lange und so ruhig muss der Finger bleiben
 const FARBEN = [["#e8667e", "Rot"], ["#f5d020", "Gelb"], ["#ffffff", "Weiß"]];
 const EIGENE = "planung-farben", MAX_EIGENE = 8; // eigene Farben bleiben auf dem Gerät; die älteste fällt raus
@@ -22,7 +24,9 @@ export function zeichnen(blob) {
       <div class="werkzeuge">
         <div class="palette"></div>
         <div class="textleiste" hidden><button class="pill" data-kleiner aria-label="Text kleiner">A−</button><button class="pill" data-groesser aria-label="Text größer">A+</button><button class="pill" data-textweg>Text löschen</button></div>
+        <div class="produktleiste" hidden><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
         <div class="reihe"><button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
+        <select class="pill produktwahl" aria-label="Produkt einsetzen" disabled><option value="">Produkt …</option></select>
         <button class="pill" data-rueck>Rückgängig</button></div></div>`;
     document.body.append(el);
     const c = el.querySelector("canvas"), ctx = c.getContext("2d"), flaeche = el.querySelector(".flaeche");
@@ -43,7 +47,7 @@ export function zeichnen(blob) {
         farbeWaehlen(f);
       });
     }
-    function farbeWaehlen(f) { farbe = f; if (gewaehlt) gewaehlt.farbe = f; farbenZeichnen(); malen(); }
+    function farbeWaehlen(f) { farbe = f; if (gewaehlt?.art === "text") gewaehlt.farbe = f; farbenZeichnen(); malen(); }
     farbenZeichnen();
 
     // ---------- Text ----------
@@ -51,8 +55,37 @@ export function zeichnen(blob) {
     const schrift = (s) => `700 ${Math.round(textHoehe(s))}px system-ui, sans-serif`;
     const textBox = (s) => { ctx.font = schrift(s); return { x: s.x, y: s.y - textHoehe(s) / 2, w: ctx.measureText(s.text).width, h: textHoehe(s) }; };
     const trifft = (p) => striche.findLast((s) => { if (s.art !== "text") return false; const b = textBox(s), r = breite * 2; return p.x >= b.x - r && p.x <= b.x + b.w + r && p.y >= b.y - r && p.y <= b.y + b.h + r; });
-    const textleiste = el.querySelector(".textleiste");
-    const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = !s; };
+    const textleiste = el.querySelector(".textleiste"), produktleiste = el.querySelector(".produktleiste");
+    // Ausgewählt ist ein Text oder ein Produkt; die passende Leiste erscheint.
+    const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = s?.art !== "text"; produktleiste.hidden = s?.art !== "produkt"; };
+
+    // ---------- Produkte ----------
+    const griffR = () => 26 * (c.width / c.getBoundingClientRect().width); // Griff etwa 26 Bildschirmpunkte, egal wie groß das Foto ist
+    const trifftProdukt = (p) => striche.findLast((s) => s.art === "produkt" && p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h);
+    const amGriff = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - (s.y + s.h)) <= griffR();
+    const wahl = el.querySelector(".produktwahl"), bilder = new Map();
+    if (!zustand.demo) api("/api/produkte").then((liste) => {
+      if (!liste.length) return;
+      const gruppen = [...new Set(liste.map((x) => x.bereich))];
+      wahl.innerHTML = `<option value="">Produkt …</option>` + gruppen.map((g) => `<optgroup label="${g}">${liste.filter((x) => x.bereich === g).map((x) => `<option value="${x.id}">${x.name}</option>`).join("")}</optgroup>`).join("");
+      wahl.disabled = false;
+    }).catch(() => { /* ohne Netz keine Produkte, alles andere geht */ });
+    wahl.addEventListener("change", async () => {
+      const id = wahl.value; wahl.value = "";
+      if (!id) return;
+      try {
+        if (!bilder.has(id)) {
+          const r = await fetch(serverUrl("/api/produkte/" + encodeURIComponent(id)));
+          if (!r.ok) throw new Error("Produktbild nicht geladen");
+          bilder.set(id, await createImageBitmap(await r.blob()));
+        }
+        const bild = bilder.get(id), fr = flaeche.getBoundingClientRect();
+        const mitteBild = punkt({ clientX: fr.left + fr.width / 2, clientY: fr.top + fr.height / 2 });
+        const w = (c.width / zoom.s) * 0.3, h = w * bild.height / bild.width; // ein knappes Drittel der sichtbaren Breite
+        const neu = { art: "produkt", bild, x: mitteBild.x - w / 2, y: mitteBild.y - h / 2, w, h };
+        striche.push(neu); textAuswahl(neu); malen();
+      } catch (e) { alert(e.message || "Produkt konnte nicht geladen werden"); }
+    });
 
     // Pfeilspitze in der Mitte einer Geraden, zeigt in Zeichenrichtung; zu kurze Stücke bekommen keine.
     function pfeilMitte(a, b) {
@@ -70,7 +103,15 @@ export function zeichnen(blob) {
         ctx.strokeStyle = s.farbe; ctx.fillStyle = s.farbe; ctx.lineWidth = breite; ctx.lineCap = "round"; ctx.lineJoin = "round";
         ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = breite;
         ctx.beginPath();
-        if (s.art === "text") {
+        if (s.art === "produkt") {
+          ctx.shadowBlur = breite * 1.5; ctx.drawImage(s.bild, s.x, s.y, s.w, s.h); ctx.shadowBlur = 0;
+          if (s === gewaehlt) { // Rahmen und Griff nur zum Bearbeiten
+            ctx.setLineDash([breite * 2, breite * 1.5]); ctx.lineWidth = Math.max(2, breite / 2.5); ctx.strokeStyle = "#fff";
+            ctx.strokeRect(s.x, s.y, s.w, s.h); ctx.setLineDash([]);
+            ctx.beginPath(); ctx.arc(s.x + s.w, s.y + s.h, griffR() * 0.7, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+            ctx.lineWidth = Math.max(2, breite / 3); ctx.strokeStyle = "#000"; ctx.stroke();
+          }
+        } else if (s.art === "text") {
           // Beschriftung: Farbe mit dunklem Rand, damit sie auf hellem und dunklem Untergrund lesbar bleibt.
           ctx.shadowBlur = 0; ctx.font = schrift(s); ctx.textBaseline = "middle";
           ctx.lineWidth = breite * 1.4 * s.groesse; ctx.strokeStyle = "rgba(0,0,0,.8)";
@@ -143,6 +184,11 @@ export function zeichnen(blob) {
       }
       if (finger.size > 2 || warten) return;
       const p = punkt(e);
+      // Produkte lassen sich in jedem Werkzeug greifen: am Griff Größe ändern, sonst verschieben.
+      if (gewaehlt?.art === "produkt" && amGriff(gewaehlt, p)) { ziehen = { griff: true }; return; }
+      const pr = trifftProdukt(p);
+      if (pr) { textAuswahl(pr); ziehen = { dx: p.x - pr.x, dy: p.y - pr.y }; malen(); return; }
+      if (gewaehlt?.art === "produkt") { textAuswahl(null); malen(); }
       if (werkzeug === "text") {
         const t = trifft(p);
         textAuswahl(t || null);
@@ -156,6 +202,7 @@ export function zeichnen(blob) {
       if (!finger.has(e.pointerId)) return;
       finger.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (geste) { if (finger.size >= 2) gesteBewegen(); return; }
+      if (ziehen?.griff) { const p = punkt(e), w = Math.max(breite * 8, p.x - gewaehlt.x); gewaehlt.h *= w / gewaehlt.w; gewaehlt.w = w; malen(); return; }
       if (ziehen) { const p = punkt(e); gewaehlt.x = p.x - ziehen.dx; gewaehlt.y = p.y - ziehen.dy; malen(); return; }
       if (kandidat && Math.hypot(e.clientX - kandidat.x, e.clientY - kandidat.y) > 12) kandidat = null;
       if (!aktiv) return;
@@ -187,7 +234,14 @@ export function zeichnen(blob) {
         werkzeug = b.dataset.werkzeug; el.querySelectorAll("[data-werkzeug]").forEach((x) => x.setAttribute("aria-pressed", x === b));
         if (werkzeug !== "text") { textAuswahl(null); malen(); }
       }
-      if (gewaehlt && ("groesser" in b.dataset || "kleiner" in b.dataset)) { gewaehlt.groesse = Math.min(4, Math.max(0.4, gewaehlt.groesse * ("groesser" in b.dataset ? 1.25 : 0.8))); malen(); }
+      if (gewaehlt && ("groesser" in b.dataset || "kleiner" in b.dataset)) {
+        const f = "groesser" in b.dataset ? 1.25 : 0.8;
+        if (gewaehlt.art === "produkt") { // um die Mitte skalieren
+          const w = Math.max(breite * 8, gewaehlt.w * f), h = gewaehlt.h * w / gewaehlt.w;
+          gewaehlt.x += (gewaehlt.w - w) / 2; gewaehlt.y += (gewaehlt.h - h) / 2; gewaehlt.w = w; gewaehlt.h = h;
+        } else gewaehlt.groesse = Math.min(4, Math.max(0.4, gewaehlt.groesse * f));
+        malen();
+      }
       if (gewaehlt && "textweg" in b.dataset) { striche.splice(striche.indexOf(gewaehlt), 1); textAuswahl(null); malen(); }
       if ("rueck" in b.dataset) { striche.pop(); if (!striche.includes(gewaehlt)) textAuswahl(null); malen(); }
       if ("zoomweg" in b.dataset) zoomSetzen({ s: 1, x: 0, y: 0 });
