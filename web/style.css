@@ -216,7 +216,14 @@ body.tastatur .chatleiste { padding-bottom: 8px; }
 .zeichnen .pill[aria-pressed="true"] { background: #fff; color: #000; }
 
 /* Prüfansicht */
-.abschnitt textarea { min-height: 88px; }
+.abschnitt textarea { min-height: 44px; resize: none; overflow: hidden; }
+.abschnitt textarea[readonly] { cursor: default; }
+.abschnitt textarea:not([readonly]) { box-shadow: 0 0 0 2px var(--accent); }
+.abschnittkopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.abschnittkopf > span { font-size: 14px; color: var(--mut); }
+.stiftknopf { width: 36px; height: 36px; margin: -6px -6px -6px 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--mut); }
+.stiftknopf svg { width: 20px; height: 20px; }
+.stiftknopf[aria-pressed="true"] { color: var(--accent); }
 .fehlt { border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); }
 .fotoraster { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .fotoraster figure { margin: 0; display: grid; gap: 6px; }
