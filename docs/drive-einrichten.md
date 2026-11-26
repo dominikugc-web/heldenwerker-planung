@@ -11,4 +11,10 @@ Fotos, Videos und das Protokoll-PDF gehen auf Google Drive in den Ordner des Ser
        DRIVE_WEBAPP_URL=https://script.google.com/macros/s/…/exec
        DRIVE_TOKEN=…
 
-Der Server erkennt die Datei ohne Neustart. Ab dann landen beim „In HERO speichern“ alle Dateien in einem Unterordner je Projekt, und die Links stehen im HERO-Logbuch. Planungen, die schon gesendet wurden, holen die Dateien beim nächsten „Erneut senden“ nach.
+Der Server erkennt die Datei ohne Neustart. Ab dann landen beim „In HERO speichern“ alle Dateien geordnet nach Kunde / Projektnummer / Fotos, Videos, Sprachnachrichten, Dokumente (Protokoll direkt im Projektordner), und die Links stehen im HERO-Logbuch. Planungen, die schon gesendet wurden, holen die Dateien beim nächsten „Erneut senden“ nach.
+
+## Skript aktualisieren
+
+Neuen Inhalt einfügen und speichern, dann **Bereitstellen → Bereitstellungen verwalten → Stift → Version: Neue Version → Bereitstellen**. So bleibt die Web-App-URL gleich. Eine neue Bereitstellung würde eine neue URL erzeugen.
+
+Alte Ordner aus der Zeit vor dem 26.11. („PVSN-1303 Familie Diwiwi“) räumt die Aktion `einsortieren` in die neue Ordnung um. Sie läuft auch im Editor über die Funktion `einsortieren`. Dateien werden nur verschoben, alle Links bleiben gültig.
