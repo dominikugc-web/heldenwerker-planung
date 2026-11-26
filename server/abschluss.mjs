@@ -6,6 +6,8 @@ import { frageNach, richtungVon } from "./fragen.mjs";
 import { audioMime } from "./transkribieren.mjs";
 
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
+// Drive-Unterordner je Dateiart; das Protokoll liegt direkt im Projektordner (Dominik, 26.11.).
+const ART_ORDNER = { bild: "Fotos", video: "Videos", audio: "Sprachnachrichten", pdf: "Dokumente" };
 
 // Logbuch-Text für HERO: nur, dass besichtigt wurde und von wem (Dominik, 23.11.). Details stehen im Protokoll-PDF.
 export const logbuchText = (aufgenommen) => "Besichtigung durchgeführt\n" + aufgenommen;
@@ -80,20 +82,23 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     const aufgenommen = `Aufgenommen von ${nameVon(pl.person)} am ${new Date(pl.erstellt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" })}`;
 
     // Was hochgeladen werden muss: alle Fotos, Videos, Sprachnotizen und PDFs, zuletzt das Protokoll (es braucht deren Links).
-    const auftraege = alle.map((d) => ({ schluessel: d.id, richtung: d.richtung, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
+    const auftraege = alle.map((d) => ({ schluessel: d.id, richtung: d.richtung, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), art: ART_ORDNER[d.art], mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
     const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
     auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
 
     const protokollSchreiben = async () => fs.writeFileSync(protokollPfad, await berichtPdf(pl, { links: Object.fromEntries(Object.entries(pl.gesendet.dateien).map(([k, v]) => [k, v.link])), bild: (d) => planungen.bildFuerPdf(id, d) }));
-    // Drive-Ordner: Projektnummer(n) und Kunde
-    const ordner = pl.projekte?.length > 1 ? [pl.projekte.map((x) => x.nummer).join(" "), pl.antworten?.kunde?.wert].filter(Boolean).join(" ") : pl.projektTitel.split(", ").slice(0, 2).join(" ");
+    // Drive-Ordner: Kunde / Projektnummer(n) / Dateiart (Dominik, 26.11.). Titel ist „Nummer, Kunde, Adresse“.
+    const titel = pl.projektTitel.split(", ");
+    const kunde = pl.antworten?.kunde?.wert || titel[1] || "Ohne Kunde";
+    const nummern = (pl.projekte || []).map((x) => x.nummer).filter(Boolean).join(" ") || titel[0] || "Ohne Projekt";
+    const ordner = (a) => [kunde, nummern, a.art].filter(Boolean).map((t) => String(t).replace(/[/\\]/g, "-").trim());
     const r = { ziel, ziele, hochgeladen: 0, uebersprungen: 0, offen: 0, inHero: 0, fehler: [] };
     for (const a of auftraege) {
       if (pl.gesendet.dateien[a.schluessel]) { r.uebersprungen++; continue; }
       if (!ablage) { r.offen++; continue; }
       try {
         if (a.protokoll) await protokollSchreiben();
-        const link = await ablage.hochladen(a.pfad, a.name, a.mime, ordner);
+        const link = await ablage.hochladen(a.pfad, a.name, a.mime, ordner(a));
         pl = planungen.laden(id);
         pl.gesendet.dateien[a.schluessel] = { name: a.name, link };
         planungen.speichern(pl);

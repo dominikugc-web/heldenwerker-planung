@@ -31,10 +31,10 @@ test("hochladen: Upload-Adresse holen, Datei streamen, Freigabe setzen, Link zur
   const f = attrappe();
   const datei = path.join(tempDir(), "x.mp4");
   fs.writeFileSync(datei, Buffer.alloc(1234, 1));
-  const link = await erstelleDrive({ url: "https://script.example/exec", token: "geheim", fetch: f }).hochladen(datei, "Rundgang.mp4", "video/mp4", "PVSN-1303 Familie Diwiwi");
+  const link = await erstelleDrive({ url: "https://script.example/exec", token: "geheim", fetch: f }).hochladen(datei, "Rundgang.mp4", "video/mp4", ["Familie Diwiwi", "PVSN-1303", "Videos"]);
   assert.equal(link, "https://drive.google.com/file/d/datei123/view");
   assert.deepEqual(f.aufrufe.map((a) => a.art), ["start", "upload", "fertig"]);
-  assert.deepEqual(f.aufrufe[0].b, { token: "geheim", aktion: "start", name: "Rundgang.mp4", mime: "video/mp4", ordner: "PVSN-1303 Familie Diwiwi" });
+  assert.deepEqual(f.aufrufe[0].b, { token: "geheim", aktion: "start", name: "Rundgang.mp4", mime: "video/mp4", pfad: ["Familie Diwiwi", "PVSN-1303", "Videos"] });
   assert.equal(f.aufrufe[1].laenge, 1234);
   assert.equal(f.aufrufe[1].headers["Content-Length"], "1234");
 });

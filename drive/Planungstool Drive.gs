@@ -3,11 +3,14 @@
  *
  * Läuft als Web-App unter dem Konto service.heldenwerker@gmail.com, dem der Ordner
  * „Planungs App Glarie“ gehört. Der Planungstool-Server auf Dominiks PC ruft es auf:
- *   1. aktion "start":  legt bei Bedarf den Projekt-Unterordner an und öffnet einen
- *                       Upload bei Google. Antwort: { uploadUrl }.
+ *   1. aktion "start":  legt bei Bedarf die Ordner Kunde / Projektnummer / Dateiart an
+ *                       (z. B. Familie Diwiwi / PVSN-1303 / Fotos) und öffnet einen Upload
+ *                       bei Google. Antwort: { uploadUrl }.
  *      Der Server schickt die Datei danach direkt an diese Adresse (auch große Videos).
  *   2. aktion "fertig": setzt die Freigabe „Jeder mit dem Link: Betrachter“ und
  *                       liefert den Link. Antwort: { id, link }.
+ *   3. aktion "einsortieren": räumt alte Ordner „PVSN-1303 Familie Diwiwi“ in die neue
+ *                       Ordnung um. Antwort: { ordner, dateien }.
  *
  * Einrichtung: siehe docs/drive-einrichten.md im Repo.
  * Schutz: Jede Anfrage braucht das geheime Kennwort aus den Skript-Eigenschaften (TOKEN).
@@ -23,6 +26,7 @@ function doPost(e) {
     if (!token || b.token !== token) return antwort({ fehler: "Kein Zugriff" });
     if (b.aktion === "start") return antwort(start_(b));
     if (b.aktion === "fertig") return antwort(fertig_(b));
+    if (b.aktion === "einsortieren") return antwort(einsortieren());
     return antwort({ fehler: "Unbekannte Aktion" });
   } catch (err) {
     return antwort({ fehler: String(err && err.message || err) });
@@ -33,7 +37,9 @@ function doPost(e) {
 // Berechtigung, der Server braucht dafür kein Google-Konto.
 function start_(b) {
   if (!b.name || !b.mime) throw new Error("name und mime fehlen");
-  const ordner = unterordner_(String(b.ordner || "Ohne Projekt"));
+  // pfad: Ordnerstufen seit 26.11.; ordner: alter Server mit einem Ordner je Projekt
+  const stufen = Array.isArray(b.pfad) && b.pfad.length ? b.pfad : [String(b.ordner || "Ohne Projekt")];
+  const ordner = stufen.reduce(unterordner_, DriveApp.getFolderById(ORDNER_ID));
   const r = UrlFetchApp.fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true", {
     method: "post",
     contentType: "application/json; charset=UTF-8",
@@ -52,12 +58,45 @@ function fertig_(b) {
   return { id: datei.getId(), link: datei.getUrl() };
 }
 
-// Unterordner je Projekt, z. B. „PVSN-1303 Familie Diwiwi“; wird nur einmal angelegt.
-function unterordner_(name) {
+// Unterordner mit diesem Namen; wird nur einmal angelegt.
+function unterordner_(eltern, name) {
+  const sauber = String(name).replace(/[\/\\]/g, "-").trim().slice(0, 120) || "Ohne Namen";
+  const treffer = eltern.getFoldersByName(sauber);
+  return treffer.hasNext() ? treffer.next() : eltern.createFolder(sauber);
+}
+
+// Wie der Server die Dateiarten ablegt; das Protokoll bleibt direkt im Projektordner.
+function artOrdner_(projekt, datei) {
+  if (/^Besichtigungsprotokoll/.test(datei.getName())) return projekt;
+  const mime = datei.getMimeType();
+  const art = /^image\//.test(mime) ? "Fotos" : /^video\//.test(mime) ? "Videos" : /^audio\//.test(mime) ? "Sprachnachrichten" : mime === "application/pdf" ? "Dokumente" : "";
+  return art ? unterordner_(projekt, art) : projekt;
+}
+
+// Alte Ordner „PVSN-1303 Familie Diwiwi“ (auch mehrere Nummern vor dem Namen) direkt im Hauptordner
+// werden zu Familie Diwiwi / PVSN-1303 / Fotos usw. Dateien werden nur verschoben, alle Links bleiben gültig.
+// Kann gefahrlos mehrfach laufen; Ordner ohne Projektnummer vorne bleiben, wie sie sind.
+function einsortieren() {
   const haupt = DriveApp.getFolderById(ORDNER_ID);
-  const sauber = name.replace(/[\/\\]/g, "-").slice(0, 120);
-  const treffer = haupt.getFoldersByName(sauber);
-  return treffer.hasNext() ? treffer.next() : haupt.createFolder(sauber);
+  const alte = [];
+  for (const it = haupt.getFolders(); it.hasNext();) alte.push(it.next());
+  const ergebnis = { ordner: 0, dateien: 0 };
+  for (const alt of alte) {
+    const m = alt.getName().match(/^((?:[A-Za-z]+-\d+ )+)(.+)$/);
+    if (!m) continue;
+    const kunde = unterordner_(haupt, m[2]), nummern = m[1].trim();
+    const da = kunde.getFoldersByName(nummern);
+    // Gibt es den Projektordner beim Kunden schon, wandern die Dateien hinein, sonst zieht der Ordner selbst um.
+    const projekt = da.hasNext() ? da.next() : alt.moveTo(kunde).setName(nummern);
+    const dateien = [];
+    for (const it = alt.getFiles(); it.hasNext();) dateien.push(it.next());
+    for (const d of dateien) { d.moveTo(artOrdner_(projekt, d)); ergebnis.dateien++; }
+    // Nur der leere Rest nach dem Zusammenführen kommt in den Papierkorb.
+    if (projekt.getId() !== alt.getId() && !alt.getFiles().hasNext() && !alt.getFolders().hasNext()) alt.setTrashed(true);
+    ergebnis.ordner++;
+  }
+  Logger.log("Einsortiert: " + JSON.stringify(ergebnis));
+  return ergebnis;
 }
 
 function antwort(obj) {

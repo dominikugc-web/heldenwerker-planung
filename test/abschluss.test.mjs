@@ -11,7 +11,7 @@ const MONTEURE = { wasWirdGemacht: ["PV 9,9 kWp Süddach"], woKommtWasHin: ["WR 
 async function aufbau({ projektId = 11541539, fotos = 5, ablageFehlerBei = null } = {}) {
   const datenDir = tempDir();
   const planungen = erstellePlanungen({ datenDir });
-  const p = planungen.neu({ projektId, projektTitel: "UNB-1149 Müller", person: "x" });
+  const p = planungen.neu({ projektId, projektTitel: "UNB-1149, Müller", person: "x" });
   const dir = path.join(datenDir, "planungen", p.id, "dateien");
   fs.mkdirSync(dir, { recursive: true });
   const dateien = [];
@@ -179,8 +179,11 @@ test("Server neu gestartet, während gesendet wurde: Status zeigt unterbrochen s
   } finally { await s.stop(); }
 });
 
-test("Ablage darf eine Funktion sein (Drive-Zugang wird ohne Neustart erkannt), Ordner = Nummer und Kunde", async () => {
+test("Ablage darf eine Funktion sein (Drive-Zugang wird ohne Neustart erkannt), Ordner = Kunde / Nummer / Art", async () => {
   const { p, planungen, log } = await aufbau();
+  const pl = planungen.laden(p.id);
+  pl.antworten.kunde = { wert: "Jörg Müller", dateien: [] };
+  planungen.speichern(pl);
   const ordner = [];
   let da = false;
   const ablage = () => (da ? { hochladen: async (pfad, name, mime, o) => { ordner.push(o); return "https://l/" + name; } } : null);
@@ -189,7 +192,8 @@ test("Ablage darf eine Funktion sein (Drive-Zugang wird ohne Neustart erkannt), 
   assert.equal((await a.abschliessen(p.id)).offen, 6);
   da = true;
   assert.equal((await a.abschliessen(p.id)).hochgeladen, 6);
-  assert.equal(ordner[0], "UNB-1149 Müller");
+  assert.deepEqual(ordner[0], ["Jörg Müller", "UNB-1149", "Fotos"]);
+  assert.deepEqual(ordner.at(-1), ["Jörg Müller", "UNB-1149"]); // Protokoll liegt direkt im Projektordner
 });
 
 test("HERO: Fotos und Protokoll gehen zusätzlich ins Projekt, nur einmal, Logbuch erst danach", async () => {

@@ -15,8 +15,9 @@ export function erstelleDrive({ url, token, fetch = globalThis.fetch }) {
   }
   return {
     name: "Drive",
+    // ordner: Liste der Ordnerstufen unter dem Hauptordner, z. B. ["Familie Diwiwi", "PVSN-1303", "Fotos"].
     async hochladen(pfad, name, mime, ordner) {
-      const { uploadUrl } = await webApp({ aktion: "start", name, mime, ordner });
+      const { uploadUrl } = await webApp({ aktion: "start", name, mime, pfad: ordner });
       const groesse = fs.statSync(pfad).size;
       const r = await fetch(uploadUrl, {
         method: "PUT", duplex: "half", body: Readable.toWeb(fs.createReadStream(pfad)),
