@@ -15,6 +15,8 @@ Der Server erkennt die Datei ohne Neustart. Ab dann landen beim „In HERO speic
 
 ## Skript aktualisieren
 
-Neuen Inhalt einfügen und speichern, dann **Bereitstellen → Bereitstellungen verwalten → Stift → Version: Neue Version → Bereitstellen**. So bleibt die Web-App-URL gleich. Eine neue Bereitstellung würde eine neue URL erzeugen.
+Automatisch: `node drive/einspielen.mjs` holt den Online-Stand per clasp, sichert ihn, bricht ab, wenn dort von Hand geändert wurde, spielt `drive/Planungstool Drive.gs` ein und hängt eine neue Version an die bestehende Bereitstellung. Einmalig nötig: Apps Script API unter script.google.com/home/usersettings einschalten, clasp nach `~/.google/clasp` installieren, `clasp login --user service` mit dem Service-Konto, dazu `DRIVE_SKRIPT_ID` und `DRIVE_ORDNER_ID` in `~/.google/planung-drive.env`. `--probe` vergleicht nur.
+
+Von Hand: neuen Inhalt einfügen und speichern, dann **Bereitstellen → Bereitstellungen verwalten → Stift → Version: Neue Version → Bereitstellen**. So bleibt die Web-App-URL gleich. Eine neue Bereitstellung würde eine neue URL erzeugen.
 
 Alte Ordner aus der Zeit vor dem 26.11. („PVSN-1303 Familie Diwiwi“) räumt die Aktion `einsortieren` in die neue Ordnung um. Sie läuft auch im Editor über die Funktion `einsortieren`. Dateien werden nur verschoben, alle Links bleiben gültig.
