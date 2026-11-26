@@ -2,6 +2,7 @@
 // Rückgängig. Ergebnis in voller Auflösung.
 // Stift: Finger kurz still halten macht das Stück seit dem letzten Haltepunkt zu einer geraden Linie mit Richtungspfeil;
 // weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
+// Seit 26.11. ist der Stift immer gerade (das laufende Stück spannt vom letzten Haltepunkt zum Finger) und endet mit Pfeilspitze.
 // Produkt: freigestelltes Gerät aus der Liste einsetzen, verschieben, am Griff unten rechts größer/kleiner ziehen (25.11.).
 import { api, serverUrl, zustand } from "./api.js";
 // Halten = die letzten HALTEN_MS lag der Finger innerhalb von RUHE_PX Bildschirmpunkten. Ein echter Finger zittert
@@ -106,6 +107,15 @@ export function zeichnen(blob) {
       ctx.lineTo(sx - l * Math.cos(w + 0.5), sy - l * Math.sin(w + 0.5)); ctx.closePath(); ctx.fill();
     }
 
+    // Gerade von a nach b mit Pfeilspitze an b; die Linie endet im Pfeilkopf, sonst schaut ihr rundes Ende vorn heraus.
+    function linieMitPfeil(a, b) {
+      const w = Math.atan2(b.y - a.y, b.x - a.x), l = breite * 4.5;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x - Math.cos(w) * l * 0.7, b.y - Math.sin(w) * l * 0.7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - l * Math.cos(w - 0.45), b.y - l * Math.sin(w - 0.45));
+      ctx.lineTo(b.x - l * Math.cos(w + 0.45), b.y - l * Math.sin(w + 0.45)); ctx.closePath(); ctx.fill();
+    }
+
     function malen() {
       ctx.drawImage(img, 0, 0);
       for (const s of striche) {
@@ -131,19 +141,18 @@ export function zeichnen(blob) {
             ctx.strokeRect(b.x - r, b.y - r, b.w + 2 * r, b.h + 2 * r); ctx.setLineDash([]);
           }
         } else if (s.art === "pfeil") {
-          const [a, b] = [s.punkte[0], s.punkte.at(-1)];
-          const w = Math.atan2(b.y - a.y, b.x - a.x), l = breite * 4.5;
-          // Linie endet im Pfeilkopf, sonst schaut ihr rundes Ende vorn über die Spitze hinaus
-          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x - Math.cos(w) * l * 0.7, b.y - Math.sin(w) * l * 0.7); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(b.x, b.y);
-          ctx.lineTo(b.x - l * Math.cos(w - 0.45), b.y - l * Math.sin(w - 0.45));
-          ctx.lineTo(b.x - l * Math.cos(w + 0.45), b.y - l * Math.sin(w + 0.45)); ctx.closePath(); ctx.fill();
+          linieMitPfeil(s.punkte[0], s.punkte.at(-1));
         } else {
-          // fest: gerade Strecken bis zum letzten Haltepunkt, punkte: freier Strich ab dort
-          const fest = s.fest || [];
-          [...fest, ...s.punkte].forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+          // Stift: Geraden über die Haltepunkte (fest), das letzte Stück gerade bis zum Finger bzw. Endpunkt.
+          const fest = s.fest || [s.punkte[0]], ende = s.punkte.at(-1), zuletzt = fest.at(-1);
+          const pts = [...fest];
+          // Endet der Strich direkt am Haltepunkt (nur Zittern danach), zeigt die Spitze in Richtung des letzten Stücks.
+          if (fest.length < 2 || Math.hypot(ende.x - zuletzt.x, ende.y - zuletzt.y) >= breite * 3) pts.push(ende);
+          if (pts.length < 2) continue;
+          pts.slice(0, -1).forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
           ctx.stroke();
-          for (let i = 1; i < fest.length; i++) pfeilMitte(fest[i - 1], fest[i]);
+          for (let i = 1; i < pts.length - 1; i++) pfeilMitte(pts[i - 1], pts[i]);
+          linieMitPfeil(pts.at(-2), pts.at(-1));
         }
       }
       ctx.shadowBlur = 0;
