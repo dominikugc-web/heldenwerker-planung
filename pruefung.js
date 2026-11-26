@@ -19,7 +19,7 @@ export async function pruefAnsicht(el, id, signal) {
     <div id="ergebnis"></div>
     ${e.fehlt.length ? `<div class="karte fehlt"><b>Es fehlen noch Fotos</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p></div>` : ""}
     <div class="label">Für die Monteure</div>
-    <div class="gruppe">${ABSCHNITTE.map(([k, t]) => `<label class="feld abschnitt"><span>${t}</span><textarea data-abschnitt="${k}" rows="3" placeholder="Eine Zeile pro Punkt">${esc((e.monteure[k] || []).join("\n"))}</textarea></label>`).join("")}</div>
+    <div class="gruppe">${ABSCHNITTE.map(([k, t]) => `<div class="feld abschnitt"><div class="abschnittkopf"><span>${t}</span><button class="stiftknopf" data-bearbeiten="${k}" aria-label="${t} bearbeiten" aria-pressed="false">${IKON.stift}</button></div><textarea data-abschnitt="${k}" rows="1" readonly placeholder="Eine Zeile pro Punkt">${esc((e.monteure[k] || []).join("\n"))}</textarea></div>`).join("")}</div>
     ${[...new Set(beantwortet.map((f) => f.bereich))].map((b) => `<div class="label">${esc(bereiche[b])}</div><div class="gruppe">${beantwortet.filter((f) => f.bereich === b).map((f) =>
       `<a class="zeile" href="#chat/${esc(planung.id)}/${esc(f.id)}"><div class="haupt"><div class="titel">${esc(f.titel || f.frage)}</div><div class="neben">${esc(wert(f, antworten[f.id]))}</div></div><span class="daumen">${bild(f)}</span>${IKON.pfeil}</a>`).join("")}</div>`).join("")}
     <div class="zwei"><a class="pill" href="${esc(serverUrl(`/api/planungen/${planung.id}/protokoll.pdf`))}" target="_blank" rel="noopener" data-pdf>Protokoll ansehen</a><button class="pill" data-chat>Zum Ablauf</button></div>
@@ -29,6 +29,21 @@ export async function pruefAnsicht(el, id, signal) {
 
   $$("[data-chat]", el).forEach((b) => (b.onclick = () => (location.hash = "chat/" + id)));
   $("[data-zurueck]", el).onclick = () => zurueck("home");
+
+  // Monteur-Kacheln: Höhe folgt dem Text, damit nichts innen scrollt. Bearbeiten nur über den Stift.
+  const hoehe = (t) => { t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; };
+  const kacheln = $$("[data-abschnitt]", el);
+  kacheln.forEach(hoehe);
+  addEventListener("resize", () => kacheln.forEach(hoehe), { signal });
+  for (const t of kacheln) {
+    t.addEventListener("input", () => hoehe(t));
+    t.addEventListener("blur", () => { t.readOnly = true; $(`[data-bearbeiten="${t.dataset.abschnitt}"]`, el).setAttribute("aria-pressed", "false"); });
+  }
+  $$("[data-bearbeiten]", el).forEach((b) => (b.onclick = () => {
+    const t = $(`[data-abschnitt="${b.dataset.bearbeiten}"]`, el);
+    t.readOnly = false; b.setAttribute("aria-pressed", "true");
+    t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+  }));
 
   // Änderungen am Monteur-Text automatisch speichern (kurz verzögert).
   let timer, speichern = Promise.resolve();
