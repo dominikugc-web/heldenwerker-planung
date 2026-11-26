@@ -29,13 +29,20 @@ export function zeichnen(blob) {
         <div class="produktleiste" hidden><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
         <div class="reihe"><button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
         <select class="pill produktwahl" aria-label="Produkt einsetzen" disabled><option value="">Produkt …</option></select>
-        <button class="pill" data-rueck>Rückgängig</button></div></div>`;
+        <button class="pill" data-rueck aria-label="Rückgängig" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button><button class="pill" data-vor aria-label="Wiederholen" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button></div></div>`;
     document.body.append(el);
     const c = el.querySelector("canvas"), ctx = c.getContext("2d"), flaeche = el.querySelector(".flaeche");
     c.width = img.naturalWidth; c.height = img.naturalHeight;
     const breite = Math.max(5, c.width * 0.009); // Strich wirkt auf jedem Foto gleich dick
     let farbe = FARBEN[0][0], werkzeug = "stift", striche = [], aktiv = null;
     let gewaehlt = null, ziehen = null, kandidat = null; // Text: ausgewählt, wird verschoben, neuer Text beim Loslassen
+    // Rückgängig/Wiederholen (26.11.): vor jeder Änderung eine Kopie aller Striche merken. Fertige Striche ändern nur
+    // ihre obersten Felder (Lage, Größe, Farbe), darum reicht eine flache Kopie je Strich.
+    const zurueckListe = [], vorListe = [];
+    const kopie = (ohne) => striche.filter((s) => s !== ohne).map((s) => ({ ...s }));
+    const knoepfe = () => { el.querySelector("[data-rueck]").disabled = !zurueckListe.length; el.querySelector("[data-vor]").disabled = !vorListe.length; };
+    const merken = (ohne) => { zurueckListe.push(kopie(ohne)); vorListe.length = 0; knoepfe(); };
+    function springen(von, nach) { if (!von.length) return; nach.push(kopie()); striche = von.pop(); textAuswahl(null); knoepfe(); malen(); }
 
     // ---------- Farben: drei feste, dazu eigene über den Plus-Knopf ----------
     const palette = el.querySelector(".palette");
@@ -49,7 +56,7 @@ export function zeichnen(blob) {
         farbeWaehlen(f);
       });
     }
-    function farbeWaehlen(f) { farbe = f; if (gewaehlt?.art === "text") gewaehlt.farbe = f; farbenZeichnen(); malen(); }
+    function farbeWaehlen(f) { farbe = f; if (gewaehlt?.art === "text" && gewaehlt.farbe !== f) { merken(); gewaehlt.farbe = f; } farbenZeichnen(); malen(); }
     farbenZeichnen();
 
     // ---------- Text ----------
@@ -85,7 +92,7 @@ export function zeichnen(blob) {
         const mitteBild = punkt({ clientX: fr.left + fr.width / 2, clientY: fr.top + fr.height / 2 });
         const w = (c.width / zoom.s) * 0.3, h = w * bild.height / bild.width; // ein knappes Drittel der sichtbaren Breite
         const neu = { art: "produkt", bild, x: mitteBild.x - w / 2, y: mitteBild.y - h / 2, w, h };
-        striche.push(neu); textAuswahl(neu); malen();
+        merken(); striche.push(neu); textAuswahl(neu); malen();
       } catch (e) { alert(e.message || "Produkt konnte nicht geladen werden"); }
     });
 
@@ -213,6 +220,7 @@ export function zeichnen(blob) {
       if (!finger.has(e.pointerId)) return;
       finger.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (geste) { if (finger.size >= 2) gesteBewegen(); return; }
+      if (ziehen && !ziehen.gemerkt) { merken(); ziehen.gemerkt = true; }
       if (ziehen?.griff) { const p = punkt(e), w = Math.max(breite * 8, p.x - gewaehlt.x); gewaehlt.h *= w / gewaehlt.w; gewaehlt.w = w; malen(); return; }
       if (ziehen) { const p = punkt(e); gewaehlt.x = p.x - ziehen.dx; gewaehlt.y = p.y - ziehen.dy; malen(); return; }
       if (kandidat && Math.hypot(e.clientX - kandidat.x, e.clientY - kandidat.y) > 12) kandidat = null;
@@ -228,12 +236,12 @@ export function zeichnen(blob) {
       if (geste && finger.size < 2) geste = null;
       if (!finger.size) warten = false;
       halteStopp();
-      if (aktiv) { if (aktiv.punkte.length < 2 && !(aktiv.fest?.length > 1)) striche.splice(striche.indexOf(aktiv), 1); aktiv = null; malen(); }
+      if (aktiv) { if (aktiv.punkte.length < 2 && !(aktiv.fest?.length > 1)) striche.splice(striche.indexOf(aktiv), 1); else merken(aktiv); aktiv = null; malen(); }
       ziehen = null;
       if (kandidat && e.type === "pointerup") {
         const { p } = kandidat; kandidat = null;
         const text = prompt("Beschriftung")?.trim();
-        if (text) { const neu = { art: "text", farbe, text: text.slice(0, 80), x: p.x, y: p.y, groesse: 1 }; striche.push(neu); textAuswahl(neu); malen(); }
+        if (text) { const neu = { art: "text", farbe, text: text.slice(0, 80), x: p.x, y: p.y, groesse: 1 }; merken(); striche.push(neu); textAuswahl(neu); malen(); }
       }
       kandidat = null;
     };
@@ -249,14 +257,16 @@ export function zeichnen(blob) {
       }
       if (gewaehlt && ("groesser" in b.dataset || "kleiner" in b.dataset)) {
         const f = "groesser" in b.dataset ? 1.25 : 0.8;
+        merken();
         if (gewaehlt.art === "produkt") { // um die Mitte skalieren
           const w = Math.max(breite * 8, gewaehlt.w * f), h = gewaehlt.h * w / gewaehlt.w;
           gewaehlt.x += (gewaehlt.w - w) / 2; gewaehlt.y += (gewaehlt.h - h) / 2; gewaehlt.w = w; gewaehlt.h = h;
         } else gewaehlt.groesse = Math.min(4, Math.max(0.4, gewaehlt.groesse * f));
         malen();
       }
-      if (gewaehlt && "textweg" in b.dataset) { striche.splice(striche.indexOf(gewaehlt), 1); textAuswahl(null); malen(); }
-      if ("rueck" in b.dataset) { striche.pop(); if (!striche.includes(gewaehlt)) textAuswahl(null); malen(); }
+      if (gewaehlt && "textweg" in b.dataset) { merken(); striche.splice(striche.indexOf(gewaehlt), 1); textAuswahl(null); malen(); }
+      if ("rueck" in b.dataset) springen(zurueckListe, vorListe);
+      if ("vor" in b.dataset) springen(vorListe, zurueckListe);
       if ("zoomweg" in b.dataset) zoomSetzen({ s: 1, x: 0, y: 0 });
       if ("abbrechen" in b.dataset && verwerfen()) schliessen(null);
       if ("fertig" in b.dataset) { textAuswahl(null); malen(); striche.length ? c.toBlob((neu) => schliessen(neu), "image/jpeg", 0.88) : schliessen(null); }
