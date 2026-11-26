@@ -15,6 +15,7 @@ export const PRODUKTE = [
   ["fronius-gen24", "Fronius GEN24", "Wechselrichter"],
   ["goodwe-wechselrichter", "GoodWe", "Wechselrichter"],
   ["ecoflow-wechselrichter", "EcoFlow PowerOcean", "Wechselrichter"],
+  ["goodwe-esa", "GoodWe ESA", "Wechselrichter"],
   ["fronius-reserva", "Fronius Reserva", "Speicher"],
   ["goodwe-lynx-d", "GoodWe Lynx D", "Speicher"],
   ["ecoflow-speicher", "EcoFlow PowerOcean Batterie", "Speicher"],
