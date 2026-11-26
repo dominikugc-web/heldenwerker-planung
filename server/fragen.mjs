@@ -115,7 +115,8 @@ const F = [
   ["dc", "kabelweg_dc", "Kabelweg DC", "mehrfach", { optionen: KABELWEGE }],
   ["dc", "freileitung", "Freileitung?", "janein"],
   ["dc", "freileitung_isoliert", "Freileitung isoliert?", "janein", { wenn: { frage: "freileitung", ist: "ja" } }],
-  pflichtfoto("dc", "Dach gesamt"),
+  // Klarer benannt (Dominik, 26.11.); ID und Titel bleiben, damit Protokoll, Dateinamen und alte Antworten passen.
+  ["dc", "foto_dach_gesamt", "Fotos: Gesamtdachfläche (alle Dachflächen)", "foto", { pflicht: true, titel: "Dach gesamt" }],
 
   // Höhe und freie Fläche auf einem Foto (Dominik, 24.11.); ID bleibt foto_geruestflaeche, damit alte Antworten passen.
   ["geruest", "foto_geruestflaeche", "Foto: Gerüsthöhe und Gerüstfläche", "foto", { pflicht: true, titel: "Gerüsthöhe und Gerüstfläche" }],
