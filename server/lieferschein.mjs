@@ -89,16 +89,20 @@ export function abschlussAusLieferscheinen(liste = []) {
   setze("ab_ac_wr", klar(b.wechselrichter), b.wechselrichter?.quelle);
   setze("ab_ac_speicher", b.speicher?.wert, b.speicher?.quelle);
   if (b.wallbox?.wert) { setze("ab_ac_wallbox_da", "ja", b.wallbox.quelle); setze("ab_ac_wallbox", b.wallbox.wert, b.wallbox.quelle); }
-  setze("ab_wp_aussen", b.bosch_modell?.wert, b.bosch_modell?.quelle);
-  setze("ab_wp_innen", b.inneneinheit?.wert, b.inneneinheit?.quelle);
+  // Kaskade („2 x AW 11 KW … kaskadiert“): Anzahl der Außeneinheiten davor.
+  const kaskade = liste.flatMap((l) => l.produkte || []).map((x) => x.name.match(/(\d+)\s*x\s*AW\b/i)?.[1]).find(Boolean);
+  setze("ab_wp_aussen", b.bosch_modell?.wert && (kaskade ? `${kaskade} x ${b.bosch_modell.wert} (kaskadiert)` : b.bosch_modell.wert), b.bosch_modell?.quelle);
+  const modell = b.bosch_modell?.wert?.split(",")[0];
+  setze("ab_wp_innen", b.inneneinheit?.wert && (modell ? `${modell} Inneneinheit ${b.inneneinheit.wert}` : b.inneneinheit.wert), b.inneneinheit?.quelle);
   // Neuester Lieferschein gewinnt, wie oben.
   for (const ls of [...liste].sort((x, y) => String(y.datum || "").localeCompare(String(x.datum || "")))) {
     const p = ls.produkte || [];
     const innen = p.filter((x) => /klima/i.test(x.name) && /inneneinheit/i.test(x.name));
     const aussen = p.filter((x) => /klimagerät|split-klima/i.test(x.name) && !/inneneinheit|konsole/i.test(x.name));
     const optimierer = p.filter((x) => /tigo|optimierer/i.test(x.name));
-    if (p.some((x) => /warmwasserspeicher/i.test(x.name))) setze("ab_wp_ww_da", "ja", ls.nr);
-    if (p.some((x) => /pufferspeicher/i.test(x.name))) setze("ab_wp_puffer_da", "ja", ls.nr);
+    const ww = p.filter((x) => /warmwasserspeicher/i.test(x.name)), puffer = p.filter((x) => /pufferspeicher|puffertower/i.test(x.name));
+    if (ww.length) { setze("ab_wp_ww_da", "ja", ls.nr); setze("ab_wp_ww", ww.map(mitMenge).join(", "), ls.nr); }
+    if (puffer.length) { setze("ab_wp_puffer_da", "ja", ls.nr); setze("ab_wp_puffer", puffer.map(mitMenge).join(", "), ls.nr); }
     setze("ab_klima_aussen", aussen.map(mitMenge).join(", "), ls.nr);
     setze("ab_klima_innen", innen.map(mitMenge).join(", "), ls.nr);
     setze("ab_dach_optimierer", optimierer.map(mitMenge).join(", "), ls.nr);

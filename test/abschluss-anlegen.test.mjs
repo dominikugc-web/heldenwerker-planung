@@ -85,3 +85,30 @@ test("Wallbox nur abfragen, wenn sie im Lieferschein steht (ohne Lieferschein: f
   assert.ok(ids(keinLs).includes("ab_ac_wallbox_da"), "kein Lieferschein: lieber fragen");
   assert.ok(!ids(mit).includes("ab_ls_wallbox"), "Merker ist keine sichtbare Frage");
 });
+
+test("Wärmepumpe: Außeneinheit, Inneneinheit, Warmwasser- und Pufferspeicher aus dem Lieferschein", () => {
+  const a = abschlussAusLieferscheinen([{ nr: "LS-870", datum: "2026-11-20", produkte: [
+    { name: "Bosch Luft-Wasser-Wärmepumpe AW 10-12 KW", beschreibung: "Bosch CS6800i AW inkl. Inneneinheit - Umweltfreundliches Kältemittel R290", menge: 1 },
+    { name: "Bosch Pufferspeicher BH 200", beschreibung: "Bosch Pufferspeicher 200 Liter", menge: 1 },
+    { name: "Bosch Warmwasserspeicher WH 370", beschreibung: "Bosch Warmwasserspeicher 370 Liter", menge: 1 },
+  ] }]);
+  assert.equal(a.ab_wp_aussen.wert, "Bosch CS6800i AW, 10-12 kW");
+  assert.match(a.ab_wp_innen.wert, /^Bosch CS6800i AW Inneneinheit E/);
+  assert.equal(a.ab_wp_ww_da.wert, "ja");
+  assert.equal(a.ab_wp_ww.wert, "Bosch Warmwasserspeicher WH 370");
+  assert.equal(a.ab_wp_puffer_da.wert, "ja");
+  assert.equal(a.ab_wp_puffer.wert, "Bosch Pufferspeicher BH 200");
+  assert.equal(a.ab_wp_puffer.quelle, "LS-870");
+  const t = abschlussAusLieferscheinen([{ nr: "LS-733", datum: "2026-11-01", produkte: [
+    { name: "Bosch Luft-Wasser-Wärmepumpe AW 5 KW", beschreibung: "Bosch CS6800i AW inkl. Inneneinheit", menge: 1 },
+    { name: "Bosch Puffertower", beschreibung: "mit 70 Liter Pufferspeicher und integrierter Inneneinheit", menge: 1 },
+  ] }]);
+  assert.equal(t.ab_wp_puffer.wert, "Bosch Puffertower");
+  assert.match(t.ab_wp_innen.wert, /Inneneinheit MB/);
+});
+
+test("Wärmepumpe in Kaskade: Anzahl der Außeneinheiten steht davor", () => {
+  const a = abschlussAusLieferscheinen([{ nr: "LS-885", datum: "2026-11-20", produkte: [
+    { name: "22 KW Bosch Luft-Wasser-Wärmepumpe 2 x AW 11 KW schwarz kaskadiert", beschreibung: "Bosch CS8800i AW inkl. Inneneinheit", menge: 1 }] }]);
+  assert.equal(a.ab_wp_aussen.wert, "2 x Bosch CS8800i AW, 11 kW (kaskadiert)");
+});
