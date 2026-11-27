@@ -28,7 +28,7 @@ export async function pruefAnsicht(el, id, signal) {
       `<${gesperrt ? "div" : "a"} class="zeile" ${gesperrt ? "" : `href="#chat/${esc(planung.id)}/${esc(f.id)}"`}><div class="haupt"><div class="titel">${esc(f.titel || f.frage)}</div><div class="neben">${esc(wert(f, antworten[f.id]))}</div></div><span class="daumen">${bild(f)}</span>${gesperrt ? "" : IKON.pfeil}</${gesperrt ? "div" : "a"}>`).join("")}</div>`).join("")}
     <div class="zwei"><a class="pill" href="${esc(serverUrl(`/api/planungen/${planung.id}/protokoll.pdf`))}" target="_blank" rel="noopener" data-pdf>Protokoll ansehen</a>${gesperrt ? "" : `<button class="pill" data-chat>Zum Ablauf</button>`}</div>
     <button class="pill" data-pdfsichern style="width:100%;margin-bottom:var(--gap)">PDF in Dateien sichern</button>
-    ${abschluss ? `<button class="pill" data-neustart style="width:100%;margin-bottom:var(--gap);color:var(--err)">${gesperrt ? "Neuen Bericht anlegen" : "Bericht komplett neu starten"}</button>` : ""}
+    <button class="pill" data-neustart style="width:100%;margin-bottom:var(--gap);color:var(--err)">Neu starten</button>
     <button class="pill" data-fotossichern style="width:100%;margin-bottom:var(--gap)">Alle Fotos aufs Handy</button>
     <button class="gross ok" data-senden ${e.fehlt.length && abschluss ? "disabled" : ""}>${IKON.wolke}${planung.status === "gesendet" ? "Erneut senden" : "In HERO speichern"}</button>`;
 

@@ -143,19 +143,22 @@ export function abnahmeSheet() {
   });
 }
 
-// ---------- Abschlussbericht neu starten (Dominik, 27.11.) ----------
-// Offen: alle Antworten, Fotos und die Unterschrift weg, Kopf und Monteure bleiben. Schon gesendet: neuen Bericht für dasselbe Projekt.
+// ---------- Neu starten (Dominik, 27.11.), Abschlussbericht und Besichtigung ----------
+// Offen: alle Antworten, Fotos, Unterschrift und Zusammenfassung weg, Kundendaten, Typ/Bericht und Monteure bleiben.
+// Schon gesendet: neu anlegen für dieselben Projekte, das Gesendete bleibt unangetastet.
 export async function berichtNeuStarten(planung, fragen) {
-  const a = planung.antworten || {}, gesendet = planung.status === "gesendet" || !!planung.senden;
-  if (!confirm(gesendet ? "Dieser Bericht ist schon gesendet. Einen neuen Bericht für dasselbe Projekt anlegen?"
-    : "Alle Antworten, Fotos und die Unterschrift werden gelöscht. Bericht wirklich neu starten?")) return;
+  const a = planung.antworten || {}, gesendet = planung.status === "gesendet" || !!planung.senden, abschluss = !!berichtKey(fragen, a);
+  if (!confirm(gesendet ? `${abschluss ? "Dieser Bericht ist" : "Diese Besichtigung ist"} schon gesendet. Für dasselbe Projekt neu anlegen?`
+    : `Alle Antworten, Fotos${abschluss ? " und die Unterschrift" : " und die Zusammenfassung"} werden gelöscht. Wirklich neu starten?`)) return;
   try {
     await abarbeiten(); // nichts Altes aus dem Ausgang über den neuen Stand legen
-    const pl = gesendet
-      ? await api("/api/planungen", { methode: "POST", body: { bericht: berichtKey(fragen, a), projektId: planung.projektId, projektTitel: planung.projektTitel,
-          kunde: a.ab_kunde?.wert, adresse: a.ab_adresse?.wert, nummer: a.ab_projektnr?.wert, monteure: String(a.ab_monteure?.wert || "").split(",").map((s) => s.trim()).filter(Boolean) } })
-      : await api(`/api/planungen/${planung.id}/neustart`, { methode: "POST", body: {} });
-    toast(gesendet ? "Neuer Bericht angelegt" : "Bericht neu gestartet", "ok");
+    const liste = (w) => String(w || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const pl = !gesendet ? await api(`/api/planungen/${planung.id}/neustart`, { methode: "POST", body: {} })
+      : abschluss ? await api("/api/planungen", { methode: "POST", body: { bericht: berichtKey(fragen, a), projektId: planung.projektId, projektTitel: planung.projektTitel,
+          kunde: a.ab_kunde?.wert, adresse: a.ab_adresse?.wert, nummer: a.ab_projektnr?.wert, monteure: liste(a.ab_monteure?.wert) } })
+      : await api("/api/planungen", { methode: "POST", body: { projektId: planung.projektId, projekte: planung.projekte, typen: liste(a.typ?.wert), projektTitel: planung.projektTitel,
+          kunde: a.kunde?.wert, adresse: a.adresse?.wert, nummer: a.projektnr?.wert } });
+    toast(gesendet ? "Neu angelegt" : "Neu gestartet", "ok");
     if (location.hash === "#chat/" + pl.id) dispatchEvent(new HashChangeEvent("hashchange")); else gehe("chat/" + pl.id);
   } catch (e) { fehlerMelden(e); }
 }
@@ -319,7 +322,7 @@ export async function chatAnsicht(el, id) {
   el.innerHTML = `<div class="chatseite">
     <div class="chatkopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button>
       <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || antworten().ab_kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div><div class="sync" id="sync" role="status" hidden></div></div>
-      ${abschluss() ? `<button class="pill rund" data-neustartkopf aria-label="Bericht komplett neu starten" title="Bericht komplett neu starten"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>` : ""}
+      <button class="pill" data-neustartkopf>Neu starten</button>
       <button class="pill" data-uebersicht>Übersicht</button></div>
     <div class="fortschritt" aria-hidden="true"><span id="balken"></span></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
@@ -737,7 +740,7 @@ export async function chatAnsicht(el, id) {
         const kurz = a?.wert ? mitEinheit(f, a.wert) : a?.dateien?.length ? `${a.dateien.length} Datei(en)` : "";
         return `<button class="zeile" data-springe="${f.id}"><div class="haupt"><div class="titel">${esc(f.frage)}</div>${kurz ? `<div class="neben">${esc(kurz)}</div>` : ""}</div><span class="badge ${status[1]}">${status[0]}</span></button>`;
       }).join("")}</div>`).join("")}
-      ${abschluss() ? `<button class="pill" data-neustart style="width:100%;margin-top:var(--gap);color:var(--err)">Bericht komplett neu starten</button>` : ""}`);
+      <button class="pill" data-neustart style="width:100%;margin-top:var(--gap);color:var(--err)">Neu starten</button>`);
     $("[data-zu]", d).onclick = () => d.close();
     $("[data-neustart]", d)?.addEventListener("click", () => { d.close(); berichtNeuStarten(planung, fragen); });
     $$("[data-springe]", d).forEach((b) => (b.onclick = () => { bearbeite = b.dataset.springe; d.close(); zeichne(false, true); }));
