@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { PDFDocument, StandardFonts, rgb, PDFName, PDFString } from "pdf-lib";
 import { BEREICHE, KATALOG, sichtbar, typen, istAbschluss } from "./fragen.mjs";
+import { ABNAHME_TEXT } from "./abschluss-fragen.mjs";
 
 // Bericht der Besichtigung aus den Antworten des festen Ablaufs: als Abschnitte, als Text und als PDF
 // im Stil des „DC Abnahmeprotokolls“ (Logo, Titelband, Abschnittsbalken, Frage | Antwort, Fotos darunter).
@@ -15,12 +16,12 @@ export function berichtAbschnitte(pl) {
   const antworten = pl.antworten || {};
   const gruppen = new Map();
   for (const f of sichtbar(antworten)) {
-    if (f.id === "typ") continue;
+    if (["typ", "bericht", "ab_unterschrift"].includes(f.id)) continue; // Unterschrift hat im PDF einen eigenen Block
     const a = antworten[f.id];
     if (!a || (!a.wert && !a.notiz && !a.dateien?.length)) continue;
     const dateien = a.dateien || [];
     const eintrag = {
-      id: f.id, frage: f.titel || f.frage, antwort: einheit(f, a.wert || ""), notiz: a.notiz || "",
+      id: f.id, frage: f.titel || f.frage, antwort: f.abschluss && f.pflicht && a.uebersprungen && !dateien.length ? "Nicht möglich" : einheit(f, a.wert || ""), notiz: a.notiz || "",
       bilder: dateien.filter((d) => d.art === "bild"), medien: dateien.filter((d) => d.art !== "bild"),
     };
     if (!gruppen.has(f.bereich)) gruppen.set(f.bereich, { titel: BEREICHE[f.bereich], eintraege: [] });
@@ -56,14 +57,19 @@ const LOGO = new URL("../vorlagen/logo.png", import.meta.url);
 // Standardschrift kann nur WinAnsi; alles andere (Emojis, fremde Schriften) wird ersetzt statt abzustürzen.
 const winAnsi = (s) => String(s ?? "").normalize("NFC").replace(/[^\x20-\x7E\xA0-\xFF€‘’‚“”„•…\n]/gu, "?").replace(/\?+/g, (m) => (m.length > 1 ? "?" : m));
 
-export const berichtTitel = (antworten = {}) => `Technische Besichtigung ${typen(antworten).join(" + ") || "PV"}`;
+export const berichtTitel = (antworten = {}) => (istAbschluss(antworten) ? `Abnahmeprotokoll ${antworten.bericht.wert}`
+  : `Technische Besichtigung ${typen(antworten).join(" + ") || "PV"}`);
+// Dateiname des Protokolls in Drive und HERO; datum = Sendetag (TT.MM.JJJJ).
+export const pdfDateiname = (pl, datum) => (istAbschluss(pl.antworten)
+  ? `${berichtTitel(pl.antworten)} ${pl.antworten.ab_kunde?.wert || ""} ${datum}`.replace(/[/\\:?*"<>|]/g, "-").replace(/\s+/g, " ") + ".pdf"
+  : `Besichtigungsprotokoll ${datum}.pdf`);
 
 export async function berichtPdf(pl, { links = {}, bild }) {
   const doc = await PDFDocument.create();
   const normal = await doc.embedFont(StandardFonts.Helvetica), fett = await doc.embedFont(StandardFonts.HelveticaBold), kursiv = await doc.embedFont(StandardFonts.HelveticaOblique);
   const logo = await doc.embedPng(fs.readFileSync(LOGO));
   const antworten = pl.antworten || {};
-  const titel = berichtTitel(antworten);
+  const titel = berichtTitel(antworten), abschluss = istAbschluss(antworten);
   let seite, y;
 
   const neueSeite = () => {
@@ -157,7 +163,8 @@ export async function berichtPdf(pl, { links = {}, bild }) {
 
   neueSeite();
   band(titel, BAND, 15);
-  const kopf = [antworten.kunde?.wert, antworten.projektnr?.wert, antworten.datum?.wert].filter(Boolean).join("  ·  ");
+  const v = abschluss ? "ab_" : "";
+  const kopf = [antworten[v + "kunde"]?.wert, antworten[v + "projektnr"]?.wert, antworten[v + "datum"]?.wert].filter(Boolean).join("  ·  ");
   if (kopf) { const w = normal.widthOfTextAtSize(winAnsi(kopf), 10); text(kopf, RAND + (BREITE - w) / 2, normal, 10, GRAU); y -= 26; }
 
   const monteure = pl.ergebnis?.monteure;
@@ -175,6 +182,25 @@ export async function berichtPdf(pl, { links = {}, bild }) {
       if (e.medien.length) { medien(e.medien); y -= 6; }
     }
     y -= 14; // Luft vor dem nächsten Balken, auch wenn die letzte Zeile grau ist
+  }
+
+  // Abschlussbericht: fester Abnahmetext und Unterschrift des Kunden (PNG aus der App) mit Name und Datum.
+  if (abschluss) {
+    platz(40 + 3 * 30 + 110);
+    band("Abnahme", BAND_HELL, 11.5);
+    for (const absatz of ABNAHME_TEXT) for (const z of umbrechen(absatz, normal, 9.5, BREITE - 12)) { platz(14); text(z, RAND + 6, normal, 9.5); y -= 12.5; }
+    y -= 10;
+    const u = antworten.ab_unterschrift, datei = u?.dateien?.find((d) => d.art === "bild");
+    if (datei) {
+      const roh = Uint8Array.from(await bild(datei.id));
+      let img = null;
+      try { img = await doc.embedPng(roh); } catch { try { img = await doc.embedJpg(roh); } catch { /* nicht lesbar */ } }
+      if (img) { const h = 70, b = Math.min(220, (img.width / img.height) * h); platz(h + 30); seite.drawImage(img, { x: 595 - RAND - b, y: y - h, width: b, height: (img.height / img.width) * b }); y -= h + 14; }
+    }
+    const zeileU = `${u?.wert || "Nicht unterschrieben"}, ${antworten.ab_datum?.wert || ""}`.replace(/, $/, "");
+    seite.drawLine({ start: { x: 595 - RAND - 220, y: y + 10 }, end: { x: 595 - RAND, y: y + 10 }, thickness: 0.5, color: GRAU });
+    text(zeileU, 595 - RAND - normal.widthOfTextAtSize(winAnsi(zeileU), 9.5), normal, 9.5);
+    y -= 20;
   }
 
   // Fußzeile mit Seitenzahl
