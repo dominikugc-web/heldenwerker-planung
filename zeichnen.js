@@ -4,11 +4,14 @@
 // weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
 // Seit 26.11. ist der Stift immer gerade (das laufende Stück spannt vom letzten Haltepunkt zum Finger) und endet mit Pfeilspitze.
 // Produkt: freigestelltes Gerät aus der Liste einsetzen, verschieben, am Griff unten rechts größer/kleiner ziehen (25.11.).
+// 3D (27.11.): Geräte mit Modell liegen erst durchsichtig über dem Foto, 1 Finger dreht, 2 Finger schieben und zoomen.
+// "Einsetzen" macht ein Bild davon und setzt es genau an diese Stelle als normales Produkt.
 import { api, serverUrl, zustand } from "./api.js";
 // Halten = die letzten HALTEN_MS lag der Finger innerhalb von RUHE_PX Bildschirmpunkten. Ein echter Finger zittert
 // und wandert dabei ein paar Punkte; 8 Punkte ab dem ersten Ruhepunkt waren am Handy zu streng (25.11.).
 const HALTEN_MS = 450, RUHE_PX = 16;
 const FARBEN = [["#e8667e", "Rot"], ["#f5d020", "Gelb"], ["#ffffff", "Weiß"]];
+const MODEL_VIEWER = "https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js";
 const EIGENE = "planung-farben", MAX_EIGENE = 8; // eigene Farben bleiben auf dem Gerät; die älteste fällt raus
 const eigeneFarben = () => { try { return JSON.parse(localStorage.getItem(EIGENE)) || []; } catch { return []; } };
 const eigeneMerken = (liste) => { try { localStorage.setItem(EIGENE, JSON.stringify(liste)); } catch { /* privates Fenster */ } };
@@ -28,6 +31,7 @@ export function zeichnen(blob) {
         <div class="palette"></div>
         <div class="textleiste" hidden><button class="pill" data-kleiner aria-label="Text kleiner">A−</button><button class="pill" data-groesser aria-label="Text größer">A+</button><button class="pill" data-textweg>Text löschen</button></div>
         <div class="produktleiste" hidden><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
+        <div class="modellleiste"><span>1 Finger drehen, 2 Finger schieben und zoomen</span><button class="pill" data-modellweg>Abbrechen</button><button class="pill" data-modellein style="background:#fff;color:#000;font-weight:600">Einsetzen</button></div>
         <div class="reihe"><button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
         <select class="pill produktwahl" aria-label="Produkt einsetzen" disabled><option value="">Produkt …</option></select>
         <button class="pill" data-rueck aria-label="Rückgängig" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button><button class="pill" data-vor aria-label="Wiederholen" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button></div></div>`;
@@ -73,16 +77,19 @@ export function zeichnen(blob) {
     const griffR = () => 26 * (c.width / c.getBoundingClientRect().width); // Griff etwa 26 Bildschirmpunkte, egal wie groß das Foto ist
     const trifftProdukt = (p) => striche.findLast((s) => s.art === "produkt" && p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h);
     const amGriff = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - (s.y + s.h)) <= griffR();
-    const wahl = el.querySelector(".produktwahl"), bilder = new Map();
+    const wahl = el.querySelector(".produktwahl"), bilder = new Map(), modelle = new Map(); // modelle: id -> GLB-Adresse, sobald geladen
+    const mitModell = new Set();
     if (!zustand.demo) api("/api/produkte").then((liste) => {
       if (!liste.length) return;
       const gruppen = [...new Set(liste.map((x) => x.bereich))];
-      wahl.innerHTML = `<option value="">Produkt …</option>` + gruppen.map((g) => `<optgroup label="${g}">${liste.filter((x) => x.bereich === g).map((x) => `<option value="${x.id}">${x.name}</option>`).join("")}</optgroup>`).join("");
+      wahl.innerHTML = `<option value="">Produkt …</option>` + gruppen.map((g) => `<optgroup label="${g}">${liste.filter((x) => x.bereich === g).map((x) => `<option value="${x.id}">${x.name}${x.modell ? " (3D)" : ""}</option>`).join("")}</optgroup>`).join("");
+      liste.filter((x) => x.modell).forEach((x) => mitModell.add(x.id));
       wahl.disabled = false;
     }).catch(() => { /* ohne Netz keine Produkte, alles andere geht */ });
     wahl.addEventListener("change", async () => {
       const id = wahl.value; wahl.value = "";
       if (!id) return;
+      if (mitModell.has(id)) return modellOeffnen(id);
       try {
         if (!bilder.has(id)) {
           const r = await fetch(serverUrl("/api/produkte/" + encodeURIComponent(id)));
@@ -96,6 +103,50 @@ export function zeichnen(blob) {
         merken(); striche.push(neu); textAuswahl(neu); malen();
       } catch (e) { alert(e.message || "Produkt konnte nicht geladen werden"); }
     });
+
+    let mv = null;
+    async function modellOeffnen(id) {
+      try {
+        await import(MODEL_VIEWER);
+        if (!modelle.has(id)) {
+          const r = await fetch(serverUrl("/api/produkte/" + encodeURIComponent(id) + "/3d"));
+          if (!r.ok) throw new Error("3D-Modell nicht geladen");
+          modelle.set(id, URL.createObjectURL(await r.blob()));
+        }
+      } catch (e) { return alert(e.message || "3D-Modell konnte nicht geladen werden"); }
+      textAuswahl(null); malen();
+      mv = document.createElement("model-viewer");
+      mv.className = "modell3d";
+      for (const [k, v] of Object.entries({
+        src: modelle.get(id), "camera-controls": "", "interaction-prompt": "none", "touch-action": "none",
+        "camera-orbit": "-30deg 75deg 4m", "min-camera-orbit": "auto 0deg 0.5m", "max-camera-orbit": "auto 180deg 30m", // weit rauszoomen, für Geräte weiter hinten im Bild
+        "shadow-intensity": /innen/.test(id) ? "0" : "1", // Wandgeräte werfen keinen Schatten auf den Boden
+      })) mv.setAttribute(k, v);
+      mv.addEventListener("pointerdown", (e) => e.stopPropagation()); // nicht gleichzeitig auf dem Foto zeichnen
+      flaeche.append(mv); el.classList.add("im3d");
+    }
+    function modellSchliessen() { mv?.remove(); mv = null; el.classList.remove("im3d"); }
+    async function modellEinsetzen() {
+      const blob = await mv.toBlob({ idealAspect: false }), voll = await createImageBitmap(blob);
+      const r = sichtbar(voll);
+      if (!r) return modellSchliessen();
+      const m = mv.getBoundingClientRect(), fx = m.width / voll.width, fy = m.height / voll.height;
+      const a = punkt({ clientX: m.left + r.x * fx, clientY: m.top + r.y * fy });
+      const b = punkt({ clientX: m.left + (r.x + r.w) * fx, clientY: m.top + (r.y + r.h) * fy });
+      const neu = { art: "produkt", dreiD: true, bild: await createImageBitmap(voll, r.x, r.y, r.w, r.h), x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+      modellSchliessen(); merken(); striche.push(neu); textAuswahl(neu); malen();
+    }
+    // Rahmen um alle nicht durchsichtigen Punkte (Gerät samt Bodenschatten)
+    function sichtbar(bmp) {
+      const k = document.createElement("canvas"); k.width = bmp.width; k.height = bmp.height;
+      const kx = k.getContext("2d", { willReadFrequently: true }); kx.drawImage(bmp, 0, 0);
+      const d = kx.getImageData(0, 0, k.width, k.height).data;
+      let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
+      for (let y = 0; y < k.height; y++) for (let x = 0; x < k.width; x++) {
+        if (d[(y * k.width + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+      }
+      return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    }
 
     // Pfeilspitze in der Mitte einer Geraden, zeigt in Zeichenrichtung; zu kurze Stücke bekommen keine.
     function pfeilMitte(a, b) {
@@ -123,7 +174,7 @@ export function zeichnen(blob) {
         ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = breite;
         ctx.beginPath();
         if (s.art === "produkt") {
-          ctx.shadowBlur = breite * 1.5; ctx.drawImage(s.bild, s.x, s.y, s.w, s.h); ctx.shadowBlur = 0;
+          ctx.shadowBlur = s.dreiD ? 0 : breite * 1.5; ctx.drawImage(s.bild, s.x, s.y, s.w, s.h); ctx.shadowBlur = 0;
           if (s === gewaehlt) { // Rahmen und Griff nur zum Bearbeiten
             ctx.setLineDash([breite * 2, breite * 1.5]); ctx.lineWidth = Math.max(2, breite / 2.5); ctx.strokeStyle = "#fff";
             ctx.strokeRect(s.x, s.y, s.w, s.h); ctx.setLineDash([]);
@@ -274,6 +325,8 @@ export function zeichnen(blob) {
         malen();
       }
       if (gewaehlt && "textweg" in b.dataset) { merken(); striche.splice(striche.indexOf(gewaehlt), 1); textAuswahl(null); malen(); }
+      if ("modellweg" in b.dataset) modellSchliessen();
+      if ("modellein" in b.dataset) modellEinsetzen().catch(() => { modellSchliessen(); alert("3D-Bild konnte nicht erzeugt werden"); });
       if ("rueck" in b.dataset) springen(zurueckListe, vorListe);
       if ("vor" in b.dataset) springen(vorListe, zurueckListe);
       if ("zoomweg" in b.dataset) zoomSetzen({ s: 1, x: 0, y: 0 });

@@ -204,6 +204,12 @@ body.tastatur .chatleiste { padding-bottom: 8px; }
 .zeichnen canvas { max-width: 100%; max-height: 100%; touch-action: none; border-radius: 6px; transform-origin: 0 0; }
 .zeichnen .palette, .zeichnen .reihe, .zeichnen .textleiste, .zeichnen .produktleiste { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; width: 100%; }
 .zeichnen .textleiste[hidden], .zeichnen .produktleiste[hidden] { display: none; }
+.zeichnen .flaeche { position: relative; }
+.zeichnen model-viewer.modell3d { position: absolute; inset: 0; width: 100%; height: 100%; background: transparent; --poster-color: transparent; }
+.zeichnen .modellleiste { display: none; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; width: 100%; }
+.zeichnen .modellleiste span { width: 100%; text-align: center; font-size: 14px; opacity: .8; }
+.zeichnen.im3d .modellleiste { display: flex; }
+.zeichnen.im3d .werkzeuge > :not(.modellleiste), .zeichnen.im3d .oben { display: none; }
 .zeichnen select.produktwahl { width: auto; max-width: 9.5em; min-height: 40px; padding: 0 14px; border-radius: 999px; font-size: 15px; font-weight: 550; appearance: none; text-align: center; }
 .zeichnen select.produktwahl:disabled { opacity: .45; }
 .zeichnen .farbe.plus { display: inline-flex; align-items: center; justify-content: center; position: relative; border: 2px dashed rgba(255,255,255,.6); color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
