@@ -174,6 +174,12 @@ test("Inneneinheit WP: Bosch-Inneneinheiten statt Außengeräte", () => {
   assert.ok(!f.optionen.some((o) => /Compress|Supraeco|Climate/.test(o)));
 });
 
+test("Inneneinheit kommt direkt vor dem Bosch-Modell (Dominik, 27.11.)", () => {
+  const i = KATALOG.findIndex((f) => f.id === "inneneinheit");
+  assert.equal(KATALOG[i + 1].id, "bosch_modell");
+  assert.equal(KATALOG[i].bereich, KATALOG[i + 1].bereich);
+});
+
 test("WP-Außeneinheit wird direkt per Foto erfasst", () => {
   const f = frageNach("ausseneinheit");
   assert.equal(f.art, "foto");

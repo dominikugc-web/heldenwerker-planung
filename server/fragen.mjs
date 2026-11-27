@@ -127,6 +127,9 @@ const F = [
 
   // Ohne PV gibt es keinen AC-Teil; dann kommt das Zählerschrank-Foto zu Beginn der Wärmepumpe (Dominik, 24.11.).
   ["wp_bestand", "foto_zaehlerschrank_wp", "Foto: Zählerschrank", "foto", { pflicht: true, titel: "Zählerschrank", wenn: { frage: "typ", ist: ["Wärmepumpe", "Wärmepumpe, Klimaanlage"] } }],
+  // Bauform der Inneneinheit zur CS6800i/CS8800i AW (Bosch-Kürzel E, M, MB). Das WP-Modell selbst steht in bosch_modell (Dominik, 24.11.).
+  // Seit 27.11. direkt vor dem Bosch-Modell; wird aus dem Lieferschein vorausgefüllt (server/lieferschein.mjs).
+  ["wp_bestand", "inneneinheit", "Inneneinheit (Bosch)", "auswahl", { optionen: ["E · wandhängend, Speicher extern", "M · bodenstehend mit Warmwasserspeicher", "MB · Puffertower", "Sonstige (Notiz)"] }],
   ["wp_bestand", "bosch_modell", "Bosch-Modell", "text"],
   ["wp_bestand", "wp_leistung", "WP-Leistung", "zahl", { einheit: "kW" }],
   ["wp_bestand", "bestandsheizung", "Bestandsheizung", "auswahl", { optionen: ["Ölheizung", "Gasheizung", "Pelletheizung", "Fernwärme", "Sonstige (Notiz)"] }],
@@ -145,8 +148,6 @@ const F = [
   ["wp_bestand", "hk_tausch", "Heizkörper-Tausch nötig?", "janein"],
   ["wp_bestand", "warmwasser_wp", "Warmwasser über WP?", "janein"],
 
-  // Bauform der Inneneinheit zur CS6800i/CS8800i AW (Bosch-Kürzel E, M, MB). Das WP-Modell selbst steht in bosch_modell (Dominik, 24.11.).
-  ["wp_standort", "inneneinheit", "Inneneinheit (Bosch)", "auswahl", { optionen: ["E · wandhängend, Speicher extern", "M · bodenstehend mit Warmwasserspeicher", "MB · Puffertower", "Sonstige (Notiz)"] }],
   // Standort der Außeneinheit direkt als Foto (Dominik, 24.11.); ID bleibt, alte Text-Antworten bleiben sichtbar.
   ["wp_standort", "ausseneinheit", "Foto: Außeneinheit Standort", "foto", { titel: "Außeneinheit Standort" }],
   ["wp_standort", "abstand_innen_aussen", "Abstand innen zu außen", "zahl", { einheit: "m" }],

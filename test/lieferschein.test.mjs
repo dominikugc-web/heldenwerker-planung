@@ -40,9 +40,22 @@ test("Modul aus der Liste wird erkannt (Hersteller, Serie, Watt)", () => {
 
 test("Wärmepumpen-Lieferschein: Modell mit Leistungsbereich, Warmwasser, alte Heizung, Kaskade; Puffer ist kein PV-Speicher", () => {
   const a = antwortenAusLieferscheinen([WP]);
-  assert.deepEqual(werte(a), { typ: "Wärmepumpe", bosch_modell: "Bosch CS6800i AW, 10-12 kW", warmwasser_wp: "ja", bestandsheizung: "Ölheizung", kaskade: "ja" });
+  assert.deepEqual(werte(a), { typ: "Wärmepumpe", bosch_modell: "Bosch CS6800i AW, 10-12 kW", warmwasser_wp: "ja", bestandsheizung: "Ölheizung", kaskade: "ja", inneneinheit: "E · wandhängend, Speicher extern" });
   const b = antwortenAusLieferscheinen([{ nr: "LS-2", produkte: [p("Bosch Luft-Wasser-Wärmepumpe AW 7 KW", "Bosch CS6800i AW inkl. Inneneinheit")] }]);
   assert.equal(b.wp_leistung.wert, "7");
+  assert.equal(b.inneneinheit, undefined, "ohne Speicher oder Kürzel nichts raten");
+});
+
+// Echte Lieferscheine (27.11.): Puffertower = MB, Kürzel im Namen gilt, sonst separater Warmwasserspeicher = E.
+test("Inneneinheit aus dem Lieferschein: Puffertower, Kürzel im Namen, externer Warmwasserspeicher", () => {
+  const wp = p("Bosch Luft-Wasser-Wärmepumpe AW 5-7 KW", "Bosch CS6800i AW inkl. Inneneinheit");
+  const tower = antwortenAusLieferscheinen([{ nr: "LS-567", produkte: [wp, p("Bosch Puffertower", "mit 70 Liter Pufferspeicher und integrierter Inneneinheit"), p("Bosch Warmwasserspeicher WH 290")] }]);
+  assert.equal(tower.inneneinheit.wert, "MB · Puffertower");
+  assert.equal(tower.inneneinheit.quelle, "LS-567");
+  const kuerzel = antwortenAusLieferscheinen([{ nr: "LS-540", produkte: [p("Bosch Luft/Wasser-Wärmepumpe Compress CS6800iAW 12 M, AW 10 OR-T", "Bosch CS6800i AW inkl. Inneneinheit"), p("Bosch Warmwasserspeicher WH 290")] }]);
+  assert.equal(kuerzel.inneneinheit.wert, "M · bodenstehend mit Warmwasserspeicher");
+  const e = antwortenAusLieferscheinen([{ nr: "LS-541", produkte: [p("Bosch Luft/Wasser-Wärmepumpe Compress CS6800iAW 12 E, AW 10 OR-T oder AW 12 OR-T")] }]);
+  assert.equal(e.inneneinheit.wert, "E · wandhängend, Speicher extern");
 });
 
 test("PV und Wärmepumpe zusammen ergibt beide Typen; der neueste Lieferschein gewinnt", () => {

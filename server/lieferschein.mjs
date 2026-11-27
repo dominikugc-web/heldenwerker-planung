@@ -10,7 +10,7 @@ const MARKEN = ["Sungrow", "Fronius", "SMA", "GoodWe", "Huawei", "Deye", "EcoFlo
 
 function ausEinem(ls) {
   const a = {}, speicher = [];
-  let pv = false, wp = false;
+  let pv = false, wp = false, kuerzel = null, tower = false, wwSpeicher = false;
   const setze = (id, wert, notiz) => { if (wert && !(id in a)) a[id] = { wert: String(wert), ...(notiz && { notiz }) }; };
   for (const { name = "", beschreibung = "", menge = 1 } of ls.produkte || []) {
     const n = name.trim(), watt = n.match(/\b(\d{3})\s*(?:W|Watt)\b/i);
@@ -28,8 +28,9 @@ function ausEinem(ls) {
       const ziel = k && marke && (marke === "EcoFlow" ? `EcoFlow PowerOcean ${kw(zahl(k)).replace(",0 kW", " kW")}` : `${marke} ${kw(zahl(k))}`);
       const treffer = ziel && option("wechselrichter", (o) => o === ziel);
       setze("wechselrichter", treffer || "Sonstige (Notiz)", treffer ? "" : "Laut Lieferschein: " + n);
-    } else if (/luft-wasser-wärmepumpe/i.test(n)) {
+    } else if (/luft[-/]wasser-wärmepumpe/i.test(n)) {
       wp = true;
+      kuerzel ??= n.match(/CS\s?\d{4}i\s?AW\s*\d+\s*(MB|M|E)\b/i)?.[1].toUpperCase(); // z. B. "Compress CS6800iAW 12 E"
       const modell = beschreibung.match(/Bosch\s+(CS\s?\d+i\s*AW)/i)?.[1], l = n.match(/AW\s*(\d+(?:[.,]\d+)?)(?:\s*-\s*(\d+(?:[.,]\d+)?))?\s*KW/i);
       setze("bosch_modell", [modell ? "Bosch " + modell : n, l && (l[2] ? `${l[1]}-${l[2]} kW` : `${l[1]} kW`)].filter(Boolean).join(", "));
       if (l && !l[2]) setze("wp_leistung", l[1]);
@@ -42,11 +43,16 @@ function ausEinem(ls) {
     if (/kaskade/i.test(n)) setze("kaskade", "ja");
     if (/heizstab/i.test(n)) setze("heizstab", "ja");
     if (/solarthermie/i.test(n)) setze("solarthermie", "ja");
-    if (/warmwasserspeicher/i.test(n)) setze("warmwasser_wp", "ja");
+    if (/warmwasserspeicher/i.test(n)) { setze("warmwasser_wp", "ja"); wwSpeicher = true; }
+    if (/puffertower/i.test(n)) tower = true;
     const alt = n.match(/demontage.*alten\s+(öl|gas|pellet)/i)?.[1];
     if (alt) setze("bestandsheizung", { öl: "Ölheizung", gas: "Gasheizung", pellet: "Pelletheizung" }[alt.toLowerCase()]);
   }
   if (speicher.length) setze("speicher", speicher.join(", "));
+  // Inneneinheit (27.11., aus 359 echten Lieferscheinen): Kürzel im Namen gilt, Puffertower = MB, separater Warmwasserspeicher
+  // = wandhängend E. Ohne Hinweis nichts raten.
+  const bauform = kuerzel || (tower ? "MB" : wp && wwSpeicher ? "E" : null);
+  if (bauform) setze("inneneinheit", option("inneneinheit", (o) => o.startsWith(bauform + " ")));
   return { a, pv, wp };
 }
 
