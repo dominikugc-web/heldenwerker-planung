@@ -30,6 +30,17 @@ route("GET", "/api/planungen", async (req, res, p, k) => {
 });
 route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k, k.planungen.laden(p.id))));
 
+async function besichtigungVorbefuellt(k, projekte) {
+  const hero = k.hero();
+  const heizlast = async (id) => { const d = await hero.heizlastBericht(id); return d ? antwortenAusHeizlast(await heizlastAusPdf(await hero.laden(d.url))) : {}; };
+  const [ls, hl] = await Promise.all([
+    Promise.allSettled(projekte.map((p) => hero.lieferscheine(p.id).then(antwortenAusLieferscheinen))),
+    Promise.allSettled(projekte.map((p) => heizlast(p.id))),
+  ]);
+  for (const [name, liste] of [["Lieferscheine", ls], ["Heizlast", hl]]) for (const x of liste) if (x.status === "rejected") console.error(name + ":", String(x.reason?.message).slice(0, 200));
+  return Object.assign({}, ...hl.map((x) => x.value || {}), ...ls.map((x) => x.value || {}));
+}
+
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
@@ -38,14 +49,7 @@ route("POST", "/api/planungen", async (req, res, p, k) => {
   // Was schon in Lieferscheinen und im Heizlastbericht steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
   // Lieferschein vor Heizlast: dort steht die echte Außeneinheit, die Heizlast ist nur der Richtwert.
   const projekte = projekteAus(b);
-  const hero = k.hero();
-  const heizlast = async (id) => { const d = await hero.heizlastBericht(id); return d ? antwortenAusHeizlast(await heizlastAusPdf(await hero.laden(d.url))) : {}; };
-  const [ls, hl] = await Promise.all([
-    Promise.allSettled(projekte.map((p) => hero.lieferscheine(p.id).then(antwortenAusLieferscheinen))),
-    Promise.allSettled(projekte.map((p) => heizlast(p.id))),
-  ]);
-  for (const [name, liste] of [["Lieferscheine", ls], ["Heizlast", hl]]) for (const x of liste) if (x.status === "rejected") console.error(name + ":", String(x.reason?.message).slice(0, 200));
-  const vorbefuellt = Object.assign({}, ...hl.map((x) => x.value || {}), ...ls.map((x) => x.value || {}));
+  const vorbefuellt = await besichtigungVorbefuellt(k, projekte);
   const typen = RICHTUNGEN.filter((r) => [].concat(b.typen || []).includes(r));
   if (typen.length) vorbefuellt.typ = { wert: typen.join(", ") };
   const nummer = projekte.map((p) => p.nummer).filter(Boolean).join(", ") || b.nummer;
@@ -80,21 +84,22 @@ async function abschlussAnlegen(b, res, k) {
     kunde: b.kunde, adresse: b.adresse, nummer, vorbefuellt }));
 }
 
-// Abschlussbericht komplett neu starten (Dominik, 27.11.): alle Antworten, Fotos und die Unterschrift weg, wie frisch angelegt.
-// Kopf (Kunde, Projekt, Adresse) und Monteure bleiben, Lieferschein wird neu gelesen. Gesendet: neuen Bericht anlegen.
+// Neu starten (Dominik, 27.11.), Abschlussbericht und Besichtigung: alle Antworten, Fotos, Unterschrift und Zusammenfassung weg,
+// wie frisch angelegt. Kopf (Kunde, Projekt, Adresse, Datum heute), Typ bzw. Bericht und Monteure bleiben, Lieferschein (und Heizlast)
+// werden neu gelesen. Schon gesendet (oder am Senden): nicht hier, die App legt dann eine neue Planung an.
 route("POST", "/api/planungen/:id/neustart", async (req, res, p, k) => {
-  const pl = k.planungen.laden(p.id);
-  if (!istAbschluss(pl.antworten)) throw fehler(400, "Nur Abschlussberichte lassen sich neu starten");
-  if (abschlussGesperrt(pl)) throw fehler(409, "Der Bericht ist schon gesendet. Bitte einen neuen Bericht anlegen.");
+  const pl = k.planungen.laden(p.id), abschluss = istAbschluss(pl.antworten);
+  if (pl.status === "gesendet" || pl.senden) throw fehler(409, "Schon gesendet. Bitte neu anlegen.");
   let vorbefuellt = {};
-  try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(pl.projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
+  if (abschluss) try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(pl.projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
+  else vorbefuellt = await besichtigungVorbefuellt(k, pl.projekte?.length ? pl.projekte : [{ id: pl.projektId }]);
   const jetzt = new Date(), heute = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
   const vor = (wert) => ({ wert: String(wert || "").trim(), uebersprungen: false, dateien: [], notiz: "", zeit: jetzt.toISOString() });
   const frisch = k.planungen.laden(p.id), alt = frisch.antworten;
-  const antworten = { bericht: vor(BERICHTE[berichtVon(alt)]), ab_datum: vor(heute) };
-  for (const id of ["ab_kunde", "ab_projektnr", "ab_adresse", "ab_monteure"]) if (alt[id]?.wert) antworten[id] = vor(alt[id].wert);
+  const antworten = abschluss ? { bericht: vor(BERICHTE[berichtVon(alt)]), ab_datum: vor(heute) } : { datum: vor(heute), ...(alt.typ?.wert && { typ: vor(alt.typ.wert) }) };
+  for (const id of abschluss ? ["ab_kunde", "ab_projektnr", "ab_adresse", "ab_monteure"] : ["kunde", "projektnr", "adresse"]) if (alt[id]?.wert) antworten[id] = vor(alt[id].wert);
   for (const [id, x] of Object.entries(vorbefuellt)) antworten[id] ??= { ...vor(x.wert), notiz: x.notiz || "", quelle: x.quelle };
-  Object.assign(frisch, { antworten, status: "offen", ergebnis: null });
+  Object.assign(frisch, { antworten, status: "offen", ergebnis: null, verlauf: [] });
   delete frisch.senden;
   k.planungen.speichern(frisch);
   json(res, 200, frisch);

@@ -136,3 +136,21 @@ test("Bericht neu starten: Antworten und Unterschrift weg, Kopf und Monteure ble
     assert.equal((await post(s, `/api/planungen/${p.id}/neustart`, {})).status, 409);
   } finally { await s.stop(); }
 });
+
+test("Besichtigung neu starten: Antworten und Zusammenfassung weg, Kundendaten und Typ bleiben; gesendet geht nicht", async () => {
+  const s = await testServer();
+  try {
+    const p = await (await post(s, "/api/planungen", { projektId: 11541539, projektTitel: "UNB-1149, Muster", kunde: "Erika Muster", nummer: "UNB-1149", adresse: "Weg 1", typen: ["PV"] })).json();
+    await put(s, `/api/planungen/${p.id}/antworten/dachbelag`, { wert: "Pfanne" });
+    const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei, "utf8")), status: "zusammengefasst", ergebnis: { monteure: {}, fehlt: [] } }));
+    const neu = await (await post(s, `/api/planungen/${p.id}/neustart`, {})).json();
+    assert.equal(neu.antworten.dachbelag, undefined);
+    assert.equal(neu.antworten.kunde.wert, "Erika Muster");
+    assert.equal(neu.antworten.typ.wert, "PV");
+    assert.equal(neu.status, "offen");
+    assert.equal(neu.ergebnis, null);
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei, "utf8")), status: "gesendet" }));
+    assert.equal((await post(s, `/api/planungen/${p.id}/neustart`, {})).status, 409);
+  } finally { await s.stop(); }
+});
