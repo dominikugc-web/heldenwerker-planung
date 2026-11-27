@@ -49,7 +49,7 @@ a { color: var(--accent); }
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
 
 /* Inhalt läuft bis ganz an den oberen Rand, ohne Streifen unter der Statusleiste (Dominik, 23.11.) */
-main { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain;
+main { position: fixed; inset: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: calc(env(safe-area-inset-top) + 18px) max(16px, calc(50% - 280px)) calc(env(safe-area-inset-bottom) + 94px); }
 h1 { font-size: 30px; font-weight: 650; margin: 6px 0 var(--gap); letter-spacing: -.01em; }
 h2 { font-size: 21px; margin: 0 0 var(--gap); }
@@ -121,7 +121,7 @@ textarea { resize: vertical; line-height: 1.4; }
 .segctl button[aria-pressed="true"] { background: light-dark(#fff, rgba(255,255,255,.16)); color: var(--txt); font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 
 /* Schwebende Tab-Leiste */
-.tabs { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(6px, calc(env(safe-area-inset-bottom) - 28px)); width: min(calc(100% - 100px), 380px);
+.tabs { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(10px, calc(env(safe-area-inset-bottom) - 20px)); width: min(calc(100% - 100px), 380px);
   display: flex; padding: 5px; border-radius: 32px; background: var(--leiste); backdrop-filter: blur(16px) saturate(1.8); -webkit-backdrop-filter: blur(16px) saturate(1.8);
   box-shadow: 0 10px 30px rgba(0,0,0,.3); z-index: 5; }
 .tabs button { position: relative; z-index: 1; flex: 1; height: 50px; border-radius: 26px; display: flex; align-items: center; justify-content: center; color: var(--mut); transition: color .25s, transform .2s; }
@@ -131,7 +131,7 @@ textarea { resize: vertical; line-height: 1.4; }
 .tabs .plus { color: #fff; }
 .tabs .plus span { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 50%, transparent); }
 .tabs .plus[aria-current="page"] { background: none; color: #fff; }
-.fbbtn { position: absolute; right: max(12px, calc(50% - 190px - 72px)); bottom: max(6px, calc(env(safe-area-inset-bottom) - 28px)); z-index: 5; width: 60px; height: 60px; border-radius: 50%;
+.fbbtn { position: fixed; right: max(12px, calc(50% - 190px - 72px)); bottom: max(10px, calc(env(safe-area-inset-bottom) - 20px)); z-index: 5; width: 60px; height: 60px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; color: #f5c33b; background: var(--leiste); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .fbbtn svg { width: 27px; height: 27px; } .fbbtn:active { transform: scale(.88); }
 @media (max-width: 480px) { .tabs { left: 12px; transform: none; width: calc(100% - 96px); } .fbbtn { right: 12px; } }
