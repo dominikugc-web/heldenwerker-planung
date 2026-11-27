@@ -1,12 +1,7 @@
 // Prüfansicht nach dem Zusammenfassen: Monteur-Text bearbeiten, Antworten kontrollieren, Protokoll ansehen, dann nach HERO.
 import { api, dateiUrl, serverUrl, zustand } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, zurueck, IKON } from "./ui.js";
-import { sichtbar, berichtKey } from "./chat.js";
-
-// Abschlussbericht: was vor dem Senden noch fehlt (wie fehltZumSenden auf dem Server).
-const hatBild = (a) => (a?.dateien || []).some((d) => d.art === "bild");
-const fehltAbschluss = (katalog, antworten) => [...sichtbar(katalog, antworten).filter((f) => f.pflicht && !hatBild(antworten[f.id]) && !(antworten[f.id]?.uebersprungen && antworten[f.id]?.notiz)).map((f) => f.titel),
-  ...(hatBild(antworten.ab_unterschrift) && antworten.ab_unterschrift.wert ? [] : ["Unterschrift des Kunden"])];
+import { berichtKey, fehltFragen } from "./chat.js";
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
   ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
@@ -15,7 +10,9 @@ export async function pruefAnsicht(el, id, signal) {
   const [planung, { katalog, bereiche }] = await Promise.all([api("/api/planungen/" + id, { signal }), api("/api/fragen", { signal })]);
   const antworten = planung.antworten || {}, abschluss = !!berichtKey(katalog, antworten), gesperrt = abschluss && planung.status === "gesendet";
   if (!planung.ergebnis && !abschluss) { location.hash = "chat/" + id; return; }
-  const e = abschluss ? { fehlt: gesperrt ? [] : fehltAbschluss(katalog, antworten), monteure: {} } : planung.ergebnis;
+  // Was fehlt, rechnet die Seite selbst aus dem aktuellen Stand (nach dem Nachholen ist die Liste sofort kürzer).
+  const fehlt = gesperrt ? [] : fehltFragen(katalog, antworten).map((f) => f.titel || f.frage);
+  const e = { ...(abschluss ? { monteure: {} } : planung.ergebnis), fehlt };
   const beantwortet = katalog.filter((f) => { const a = antworten[f.id]; if (f.id === "bericht") return false; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
   const wert = (f, a) => [a.wert && (f.art === "janein" ? a.wert[0].toUpperCase() + a.wert.slice(1) : a.wert + (f.einheit ? " " + f.einheit : "")),
     a.dateien?.length ? `${a.dateien.length} Datei${a.dateien.length > 1 ? "en" : ""}` : "", f.abschluss && f.pflicht && a.uebersprungen && !a.dateien?.length ? "Nicht möglich: " + (a.notiz || "") : a.notiz ? "✎ Notiz" : ""].filter(Boolean).join(" · ");
@@ -24,7 +21,7 @@ export async function pruefAnsicht(el, id, signal) {
   el.innerHTML = `<div class="kopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button><h1>Prüfen</h1><span class="muted small" id="gespeichert"></span></div>
     <p class="unter">${abschluss ? esc("Abnahmeprotokoll " + antworten.bericht.wert) + "<br>" : ""}${esc(antworten.kunde?.wert || antworten.ab_kunde?.wert || planung.projektTitel)}<br>Aufgenommen von ${esc(planung.personName || planung.person)}</p>
     <div id="ergebnis"></div>
-    ${e.fehlt.length ? `<div class="karte fehlt"><b>${abschluss ? "Vor dem Senden fehlt noch" : "Es fehlen noch Fotos"}</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p></div>` : ""}
+    ${e.fehlt.length ? `<a class="karte fehlt" href="#chat/${esc(planung.id)}/fehlt"><b>${abschluss ? "Vor dem Senden fehlt noch" : "Es fehlen noch Fotos"}</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p><span class="nachholen">Jetzt nachholen ${IKON.pfeil}</span></a>` : ""}
     ${abschluss ? "" : `<div class="label">Für die Monteure</div>
     <div class="gruppe">`}${abschluss ? "" : ABSCHNITTE.map(([k, t]) => `<div class="feld abschnitt"><div class="abschnittkopf"><span>${t}</span><button class="stiftknopf" data-bearbeiten="${k}" aria-label="${t} bearbeiten" aria-pressed="false">${IKON.stift}</button></div><textarea data-abschnitt="${k}" rows="1" readonly placeholder="Eine Zeile pro Punkt">${esc((e.monteure[k] || []).join("\n"))}</textarea></div>`).join("") + "</div>"}
     ${[...new Set(beantwortet.map((f) => f.bereich))].map((b) => `<div class="label">${esc(bereiche[b])}</div><div class="gruppe">${beantwortet.filter((f) => f.bereich === b).map((f) =>
