@@ -75,11 +75,23 @@ test("fehltZumSenden: Pflichtfotos und Unterschrift", async () => {
   } finally { await s.stop(); }
 });
 
-test("Bericht-Typ lässt sich nach dem Anlegen nicht mehr ändern", async () => {
+test("Bericht-Typ im Formular wechseln: bleibt gewechselt, gemeinsame Antworten bleiben, Unterschrift weg; leer oder Besichtigung geht nicht", async () => {
   const s = await testServer();
   try {
     const p = await bericht(s);
-    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/bericht`, { wert: "Klima" })).status, 400);
+    await put(s, `/api/planungen/${p.id}/antworten/ab_komponenten_ok`, { wert: "ja" });
+    await unterschreiben(s, p.id);
+    const r = await put(s, `/api/planungen/${p.id}/antworten/bericht`, { wert: "Klima" });
+    assert.equal(r.status, 200);
+    const a = (await r.json()).antworten;
+    assert.equal(a.bericht.wert, "Klima");
+    assert.equal(a.ab_komponenten_ok.wert, "ja");
+    assert.equal(a.ab_unterschrift, undefined);
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_klima_vakuum`, { wert: "5" })).status, 200);
+    assert.equal((await laden(s, p.id)).antworten.bericht.wert, "Klima", "nach weiterer Antwort immer noch Klima");
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/bericht`, { uebersprungen: true })).status, 400);
+    const b = await (await post(s, "/api/planungen", { projektId: 11541539, projektTitel: "X", typen: ["PV"] })).json();
+    assert.equal((await put(s, `/api/planungen/${b.id}/antworten/bericht`, { wert: "Klima" })).status, 400);
   } finally { await s.stop(); }
 });
 

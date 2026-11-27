@@ -11,8 +11,9 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   const abschluss = istAbschluss(pl.antworten);
   // Ein Abschlussbericht bleibt nach dem Senden wie unterschrieben; Korrektur = neuer Bericht.
   if (abschlussGesperrt(pl)) throw fehler(409, "Bericht ist gesendet");
-  // Besichtigung und Abschlussbericht nicht mischen. Startfrage "bericht" nur, solange keine Besichtigung begonnen ist.
-  if (f.id === "bericht" ? !!pl.antworten?.typ?.wert || abschluss : !!f.abschluss !== abschluss) throw fehler(400, "Frage passt nicht zu dieser Planung");
+  // Besichtigung und Abschlussbericht nicht mischen. Den Bericht (Dachmontage DC, Elektrik AC …) darf man im Formular wechseln
+  // (Dominik, 27.11.): gemeinsame Antworten bleiben, Fragen des alten Berichts werden nur ausgeblendet. Nie bei einer Besichtigung.
+  if (f.id === "bericht" ? !!pl.antworten?.typ?.wert : !!f.abschluss !== abschluss) throw fehler(400, "Frage passt nicht zu dieser Planung");
   const b = await leseJson(req);
   const alt = pl.antworten?.[f.id] || { wert: "", uebersprungen: false, dateien: [], notiz: "" };
   const neu = { ...alt, zeit: new Date().toISOString() };
@@ -23,6 +24,7 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   if (abschluss && f.pflicht && neu.uebersprungen && !neu.notiz) throw fehler(400, "Bitte einen Grund angeben, warum das Foto fehlt");
   // Ohne Unterschrift kein Abschluss (Dominik, 27.11.): sie lässt sich nicht überspringen.
   if (f.art === "unterschrift" && neu.uebersprungen) throw fehler(400, "Die Unterschrift des Kunden ist Pflicht");
+  if (f.id === "bericht" && abschluss && (neu.uebersprungen || !neu.wert)) throw fehler(400, "Bitte einen Bericht wählen");
   if ("dateien" in b) {
     neu.dateien = k.planungen.dateienPruefen(pl, (b.dateien || []).map((d) => ({ id: d.id })));
     // Sprachnotizen einmal mit Whisper umwandeln; der Text bleibt an der Datei.
