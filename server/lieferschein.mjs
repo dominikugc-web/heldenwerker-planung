@@ -95,6 +95,8 @@ export function abschlussAusLieferscheinen(liste = []) {
     const innen = p.filter((x) => /klima/i.test(x.name) && /inneneinheit/i.test(x.name));
     const aussen = p.filter((x) => /klimagerät|split-klima/i.test(x.name) && !/inneneinheit|konsole/i.test(x.name));
     const optimierer = p.filter((x) => /tigo|optimierer/i.test(x.name));
+    if (p.some((x) => /warmwasserspeicher/i.test(x.name))) setze("ab_wp_ww_da", "ja", ls.nr);
+    if (p.some((x) => /pufferspeicher/i.test(x.name))) setze("ab_wp_puffer_da", "ja", ls.nr);
     setze("ab_klima_aussen", aussen.map(mitMenge).join(", "), ls.nr);
     setze("ab_klima_innen", innen.map(mitMenge).join(", "), ls.nr);
     setze("ab_dach_optimierer", optimierer.map(mitMenge).join(", "), ls.nr);

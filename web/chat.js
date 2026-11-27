@@ -206,6 +206,7 @@ const neueId = () => crypto.randomUUID().replaceAll("-", "").slice(0, 16);
 // Die App stellt die Fragen aus dem Katalog der Reihe nach. Antworten per Knopf, Liste oder Eingabe, jede Frage
 // kann übersprungen und später geändert werden. Fotos, Videos und Sprachnotizen hängen an der jeweiligen Frage.
 let katalogCache = null;
+const bildMass = new Map(); // Foto-ID -> Seitenverhältnis, damit Einzelfotos beim Neuzeichnen sofort ihre Höhe haben
 const ladeKatalog = async () => (katalogCache ??= await api("/api/fragen"));
 
 // Gleiche Regeln wie auf dem Server (server/fragen.mjs): Typ blendet Bereiche aus, Folgefragen nur bei passender Antwort.
@@ -339,12 +340,18 @@ export async function chatAnsicht(el, id) {
     if (a.uebersprungen) teile.push(`<span class="muted">übersprungen</span>`);
     else if (a.wert) teile.push(esc(mitEinheit(f, a.wert)));
     const bilder = (a.dateien || []).filter((d) => d.art === "bild"), andere = (a.dateien || []).filter((d) => d.art !== "bild");
-    if (bilder.length) teile.push(`<span class="album${bilder.length === 1 ? " einzeln" : ""}">${bilder.map((d) => `<img src="${esc(bildSrc(d))}" alt="" loading="lazy">`).join("")}</span>`);
+    if (bilder.length) teile.push(`<span class="album${bilder.length === 1 ? " einzeln" : ""}">${bilder.map((d) => `<img src="${esc(bildSrc(d))}" alt="" data-mass="${esc(d.id)}"${bilder.length === 1 ? ` style="aspect-ratio:${bildMass.get(d.id) || "3 / 4"}"` : ""}>`).join("")}</span>`);
     for (const d of andere) teile.push(d.art === "audio" ? `<span class="klein">🎙 ${esc(d.text || "Sprachnotiz")}</span>` : `<span class="klein">${d.art === "video" ? "🎬" : "📄"} ${esc(d.name)}</span>`);
     if (a.notiz) teile.push(`<span class="klein">✎ ${esc(a.notiz)}</span>`);
     if (a.quelle) teile.push(`<span class="quelle">📄 aus ${esc(a.quelle)}, bitte prüfen</span>`);
     return `<button class="blase planer antwortblase${bilder.length ? " mitalbum" : ""}" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
   }
+  verlauf.addEventListener("load", (e) => {
+    const i = e.target;
+    if (!i.dataset?.mass || !i.naturalWidth || bildMass.has(i.dataset.mass)) return;
+    bildMass.set(i.dataset.mass, `${i.naturalWidth} / ${i.naturalHeight}`);
+    if (i.closest(".einzeln")) i.style.aspectRatio = bildMass.get(i.dataset.mass);
+  }, true);
   verlauf.addEventListener("click", (e) => { const b = e.target.closest("[data-bearbeite]"); if (b) { bearbeite = b.dataset.bearbeite; zeichne(); } });
 
   // ---------- Eingabe für die aktuelle Frage ----------

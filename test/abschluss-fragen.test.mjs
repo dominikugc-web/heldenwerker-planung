@@ -37,3 +37,11 @@ test("istAbschluss und berichtVon", () => {
   assert.equal(istAbschluss({ bericht: { wert: "Klima" } }), true);
   assert.equal(berichtVon({ bericht: { wert: "Wärmepumpe" } }), "wp");
 });
+
+test("WP-Bericht: Typenschild Warmwasser- und Pufferspeicher nur, wenn verbaut", () => {
+  const ids = (a) => sichtbar({ bericht: { wert: "Wärmepumpe" }, ...a }).map((f) => f.id);
+  assert.ok(!ids({}).includes("ab_wp_foto_typenschild_warmwasserspeicher"));
+  const mit = ids({ ab_wp_ww_da: { wert: "ja" }, ab_wp_puffer_da: { wert: "ja" } });
+  assert.ok(mit.includes("ab_wp_foto_typenschild_warmwasserspeicher") && mit.includes("ab_wp_foto_typenschild_pufferspeicher"));
+  assert.ok(frageNach("ab_wp_foto_typenschild_pufferspeicher").pflicht);
+});

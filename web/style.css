@@ -308,10 +308,11 @@ body.wischt main { overflow: hidden; }
 .antwortblase.mitalbum { padding: 4px; width: min(78vw, 340px); }
 .antwortblase.mitalbum > :not(.album) { padding: 2px 10px; }
 .album { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; border-radius: 18px; overflow: hidden; }
-.album img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; background: rgba(0,0,0,.15); }
+.album:not(.einzeln) img { aspect-ratio: 3 / 4; }
+.album img { width: 100%; object-fit: cover; display: block; background: rgba(0,0,0,.15); }
 .album:not(.einzeln) img:last-child:nth-child(odd) { grid-column: span 2; aspect-ratio: 3 / 2; }
 .album.einzeln { grid-template-columns: 1fr; }
-.album.einzeln img { aspect-ratio: auto; max-height: 420px; grid-column: auto; }
+.album.einzeln img { max-height: 420px; grid-column: auto; } /* Seitenverhältnis steht am Bild (chat.js) */
 .daumen img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; display: block; }
 .zeile .daumen img { width: 40px; height: 40px; }
 .steuerung { display: grid; gap: 10px; padding: 12px 12px max(10px, calc(env(safe-area-inset-bottom) - 6px)); margin: 0 -2px 6px; border-radius: 26px; background: light-dark(#fff, #2a2a2a); box-shadow: 0 6px 20px rgba(0,0,0,.25); }

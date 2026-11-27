@@ -65,3 +65,11 @@ test("Lieferschein füllt die Abschlussfelder", () => {
   assert.equal(a.ab_klima_aussen.wert, "Bosch Klimagerät Multisplit 5,3kW CL5000M53/2E");
   assert.equal(a.ab_klima_innen.wert, "2 x Bosch Klimagerät Inneneinheit 2,6kW CL3200iUW26E Schlafzimmer");
 });
+
+test("Lieferschein: Warmwasser- und Pufferspeicher als verbaut vorbelegt", () => {
+  const a = abschlussAusLieferscheinen([{ nr: "LS-2", datum: "2026-11-01", produkte: [
+    { name: "Bosch Warmwasserspeicher Stora WH 370 LP", menge: 1 }, { name: "Bosch Pufferspeicher Stora BH 200", menge: 1 },
+  ] }]);
+  assert.equal(a.ab_wp_ww_da.wert, "ja");
+  assert.equal(a.ab_wp_puffer_da.wert, "ja");
+});

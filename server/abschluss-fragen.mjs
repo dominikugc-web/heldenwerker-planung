@@ -78,6 +78,8 @@ const F = [
     ["ab_wp", "ab_wp_aussen", "Außeneinheit", "text"],
     ["ab_wp", "ab_wp_innen", "Inneneinheit", "text"],
     ["ab_wp", "ab_wp_speicher", "Speicher", "text"],
+    ["ab_wp", "ab_wp_ww_da", "Warmwasserspeicher verbaut?", "janein"],
+    ["ab_wp", "ab_wp_puffer_da", "Pufferspeicher verbaut?", "janein"],
     ["ab_wp", "ab_wp_inbetrieb", "Inbetriebnahme erfolgt?", "janein"],
     ["ab_wp", "ab_wp_heizkurve", "Heizkurve eingestellt?", "janein"],
     ["ab_wp", "ab_wp_altkessel", "Altkessel demontiert?", "auswahl", { optionen: ["Ja", "Nein", "Entfällt"] }],
@@ -87,6 +89,8 @@ const F = [
   foto("wp", "Wanddurchführung gedämmt"),
   foto("wp", "Inneneinheit mit Hydraulik"),
   foto("wp", "Typenschilder innen und außen"),
+  foto("wp", "Typenschild Warmwasserspeicher", { wenn: { frage: "ab_wp_ww_da", ist: "ja" } }),
+  foto("wp", "Typenschild Pufferspeicher", { wenn: { frage: "ab_wp_puffer_da", ist: "ja" } }),
   foto("wp", "Elektroanschluss"),
   foto("wp", "Regler-Display"),
 
