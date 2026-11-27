@@ -80,6 +80,26 @@ async function abschlussAnlegen(b, res, k) {
     kunde: b.kunde, adresse: b.adresse, nummer, vorbefuellt }));
 }
 
+// Abschlussbericht komplett neu starten (Dominik, 27.11.): alle Antworten, Fotos und die Unterschrift weg, wie frisch angelegt.
+// Kopf (Kunde, Projekt, Adresse) und Monteure bleiben, Lieferschein wird neu gelesen. Gesendet: neuen Bericht anlegen.
+route("POST", "/api/planungen/:id/neustart", async (req, res, p, k) => {
+  const pl = k.planungen.laden(p.id);
+  if (!istAbschluss(pl.antworten)) throw fehler(400, "Nur Abschlussberichte lassen sich neu starten");
+  if (abschlussGesperrt(pl)) throw fehler(409, "Der Bericht ist schon gesendet. Bitte einen neuen Bericht anlegen.");
+  let vorbefuellt = {};
+  try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(pl.projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
+  const jetzt = new Date(), heute = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
+  const vor = (wert) => ({ wert: String(wert || "").trim(), uebersprungen: false, dateien: [], notiz: "", zeit: jetzt.toISOString() });
+  const frisch = k.planungen.laden(p.id), alt = frisch.antworten;
+  const antworten = { bericht: vor(BERICHTE[berichtVon(alt)]), ab_datum: vor(heute) };
+  for (const id of ["ab_kunde", "ab_projektnr", "ab_adresse", "ab_monteure"]) if (alt[id]?.wert) antworten[id] = vor(alt[id].wert);
+  for (const [id, x] of Object.entries(vorbefuellt)) antworten[id] ??= { ...vor(x.wert), notiz: x.notiz || "", quelle: x.quelle };
+  Object.assign(frisch, { antworten, status: "offen", ergebnis: null });
+  delete frisch.senden;
+  k.planungen.speichern(frisch);
+  json(res, 200, frisch);
+});
+
 route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {
   const q = k.query, vorher = k.planungen.laden(p.id);
   // Abschlussbericht: nach Sendebeginn nichts mehr, die Unterschrift nie überschreiben; ein überschriebenes Foto braucht eine neue Unterschrift.

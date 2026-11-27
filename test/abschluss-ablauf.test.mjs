@@ -115,3 +115,24 @@ test("Unterschrift lässt sich nicht überspringen", async () => {
     assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_unterschrift`, { uebersprungen: true })).status, 400);
   } finally { await s.stop(); }
 });
+
+test("Bericht neu starten: Antworten und Unterschrift weg, Kopf und Monteure bleiben; gesendet geht nicht", async () => {
+  const s = await testServer();
+  try {
+    const p = await (await post(s, "/api/planungen", { bericht: "ac", projektId: 11541539, projektTitel: "UNB-1149, Muster", kunde: "Erika Muster", nummer: "UNB-1149", monteure: ["Max M."] })).json();
+    await put(s, `/api/planungen/${p.id}/antworten/ab_ac_wr`, { wert: "Sungrow 10 kW" });
+    await unterschreiben(s, p.id);
+    const r = await post(s, `/api/planungen/${p.id}/neustart`, {});
+    assert.equal(r.status, 200);
+    const neu = await r.json();
+    assert.equal(neu.id, p.id);
+    assert.equal(neu.antworten.ab_ac_wr, undefined);
+    assert.equal(neu.antworten.ab_unterschrift, undefined);
+    assert.equal(neu.antworten.ab_kunde.wert, "Erika Muster");
+    assert.equal(neu.antworten.ab_monteure.wert, "Max M.");
+    assert.equal(neu.antworten.bericht.wert, "Elektrik AC");
+    const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei, "utf8")), status: "gesendet" }));
+    assert.equal((await post(s, `/api/planungen/${p.id}/neustart`, {})).status, 409);
+  } finally { await s.stop(); }
+});
