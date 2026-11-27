@@ -13,7 +13,7 @@ test("Produkte: Liste nach Bereich, nur mit vorhandenem Bild, Bild als PNG, Frem
     fs.mkdirSync(ordner, { recursive: true });
     fs.writeFileSync(path.join(ordner, "bosch-wp-aussen.png"), "PNGDATEN");
     const liste = await (await fetch(s.url + "/api/produkte")).json();
-    assert.deepEqual(liste, [{ id: "bosch-wp-aussen", name: "Bosch Außengerät", bereich: "Wärmepumpe" }]);
+    assert.deepEqual(liste, [{ id: "bosch-wp-aussen", name: "Bosch Außengerät", bereich: "Wärmepumpe", boden: true }]);
     const r = await fetch(s.url + "/api/produkte/bosch-wp-aussen");
     assert.equal(r.headers.get("content-type"), "image/png");
     assert.equal(await r.text(), "PNGDATEN");
@@ -27,6 +27,12 @@ test("Produkte: alle Bereiche abgedeckt, IDs eindeutig, keine Gedankenstriche", 
   assert.equal(new Set(ids).size, ids.length);
   for (const b of ["Wärmepumpe", "Klimaanlage", "Wechselrichter", "Speicher", "Wallbox"]) assert.ok(PRODUKTE.some((p) => p.bereich === b), b);
   assert.ok(PRODUKTE.every((p) => !/[–—]/.test(p.name)));
+});
+
+test("Produkte: Bodengeräte markiert (3D-Schatten nur dort), Wandgeräte nicht", () => {
+  const boden = PRODUKTE.filter((p) => p.boden).map((p) => p.id).sort();
+  assert.deepEqual(boden, ["bosch-klima-aussen", "bosch-pufferspeicher", "bosch-warmwasserspeicher", "bosch-wp-aussen", "ecoflow-ocean-2", "ecoflow-powerocean", "ecoflow-speicher", "fronius-reserva", "goodwe-esa"]);
+  assert.ok(!PRODUKTE.find((p) => p.id === "fronius-gen24").boden);
 });
 
 test("Produkte: 3D-Modell als GLB, in der Liste markiert, ohne Datei 404", async () => {

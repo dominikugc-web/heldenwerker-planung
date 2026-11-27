@@ -6,25 +6,26 @@ import path from "node:path";
 import { route, json, fehler } from "./router.mjs";
 
 export const PRODUKTE = [
-  ["bosch-wp-aussen", "Bosch Außengerät", "Wärmepumpe"],
+  ["bosch-wp-aussen", "Bosch Außengerät", "Wärmepumpe", "boden"],
   ["bosch-wp-innen-wand", "Bosch Inneneinheit wandhängend", "Wärmepumpe"],
-  ["bosch-warmwasserspeicher", "Bosch Warmwasserspeicher", "Wärmepumpe"],
-  ["bosch-pufferspeicher", "Bosch Pufferspeicher", "Wärmepumpe"],
+  ["bosch-warmwasserspeicher", "Bosch Warmwasserspeicher", "Wärmepumpe", "boden"],
+  ["bosch-pufferspeicher", "Bosch Pufferspeicher", "Wärmepumpe", "boden"],
   ["bosch-klima-innen", "Bosch Innengerät", "Klimaanlage"],
-  ["bosch-klima-aussen", "Bosch Außengerät", "Klimaanlage"],
+  ["bosch-klima-aussen", "Bosch Außengerät", "Klimaanlage", "boden"],
   ["fronius-gen24", "Fronius GEN24", "Wechselrichter"],
   ["goodwe-wechselrichter", "GoodWe", "Wechselrichter"],
   ["ecoflow-wechselrichter", "EcoFlow PowerOcean", "Wechselrichter"],
-  ["goodwe-esa", "GoodWe ESA", "Wechselrichter"],
-  ["fronius-reserva", "Fronius Reserva", "Speicher"],
+  ["goodwe-esa", "GoodWe ESA", "Wechselrichter", "boden"],
+  ["fronius-reserva", "Fronius Reserva", "Speicher", "boden"],
   ["goodwe-lynx-d", "GoodWe Lynx D", "Speicher"],
-  ["ecoflow-speicher", "EcoFlow PowerOcean Batterie", "Speicher"],
-  ["ecoflow-ocean-2", "EcoFlow OCEAN 2", "Speicher"],
-  ["ecoflow-powerocean", "EcoFlow PowerOcean komplett", "Speicher"],
+  ["ecoflow-speicher", "EcoFlow PowerOcean Batterie", "Speicher", "boden"],
+  ["ecoflow-ocean-2", "EcoFlow OCEAN 2", "Speicher", "boden"],
+  ["ecoflow-powerocean", "EcoFlow PowerOcean komplett", "Speicher", "boden"],
   ["fronius-wattpilot-flex", "Fronius Wattpilot Flex", "Wallbox"],
   ["goodwe-hca-g2", "GoodWe HCA G2", "Wallbox"],
   ["ecoflow-powerpulse-2", "EcoFlow PowerPulse 2", "Wallbox"],
-].map(([id, name, bereich]) => ({ id, name, bereich }));
+// "boden": steht auf dem Boden, das 3D-Modell bekommt beim Bemalen einen Bodenschatten (27.11.).
+].map(([id, name, bereich, boden]) => ({ id, name, bereich, ...(boden && { boden: true }) }));
 
 // Optional daten/produkte/<id>.glb: 3D-Modell, das man beim Bemalen über dem Foto dreht (27.11.).
 const datei = (k, id, endung = ".png") => path.join(k.datenDir, "produkte", id + endung);
