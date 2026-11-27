@@ -5,6 +5,28 @@ import fs from "node:fs";
 import path from "node:path";
 import { route, json, fehler } from "./router.mjs";
 
+// Kurzbeschreibung fürs Produktblatt beim Bemalen: Modell und Maße B x H x T (Quellen in blender-3d/geraete/recherche, 27.11.).
+const TEXTE = {
+  "bosch-wp-aussen": "Compress CS6800i AW Außeneinheit, 1350 x 1100 x 540 mm",
+  "bosch-wp-innen-wand": "Compress CS6800i AW Inneneinheit E, wandhängend, 400 x 710 x 300 mm",
+  "bosch-warmwasserspeicher": "Stora WH 370 LP, 352 l, 750 x 1591 mm",
+  "bosch-pufferspeicher": "Stora BH 200, 203 l, 600 x 1530 mm",
+  "bosch-klima-innen": "Climate Split-Innengerät, Wandmontage",
+  "bosch-klima-aussen": "Climate Split-Außengerät",
+  "fronius-gen24": "Symo GEN24 Plus, Hybrid 3-phasig, 529 x 595 x 180 mm",
+  "goodwe-wechselrichter": "ET G2 Hybrid 3-phasig, 496 x 460 x 221 mm",
+  "ecoflow-wechselrichter": "PowerOcean Hybrid 3-phasig, 588 x 380 x 175 mm",
+  "goodwe-esa": "ESA All-in-one, Wechselrichter mit Batterie, 800 x 1033 x 270 mm",
+  "fronius-reserva": "Reserva 12.6, 12,6 kWh, 780 x 1360 x 176 mm",
+  "goodwe-lynx-d": "Lynx Home D, Batteriemodul 5 kWh, 700 x 380 x 170 mm",
+  "ecoflow-speicher": "PowerOcean LFP-Batterie, 3 Module 15,3 kWh, 680 x 1406 x 183 mm",
+  "ecoflow-ocean-2": "OCEAN 2, Wechselrichter mit Batteriemodulen, 680 x 1244 x 203 mm",
+  "ecoflow-powerocean": "PowerOcean komplett mit Batteriestapel, 680 x 1406 x 183 mm",
+  "fronius-wattpilot-flex": "Wattpilot Flex Home 11/22 kW, 195 x 325 x 105 mm",
+  "goodwe-hca-g2": "HCA G2 Wallbox 7/11/22 kW, 208 x 450 x 170 mm",
+  "ecoflow-powerpulse-2": "PowerPulse 2 Wallbox 11/22 kW, 226 x 333 x 145 mm",
+};
+
 export const PRODUKTE = [
   ["bosch-wp-aussen", "Bosch Außengerät", "Wärmepumpe", "boden"],
   ["bosch-wp-innen-wand", "Bosch Inneneinheit wandhängend", "Wärmepumpe"],
@@ -25,7 +47,7 @@ export const PRODUKTE = [
   ["goodwe-hca-g2", "GoodWe HCA G2", "Wallbox"],
   ["ecoflow-powerpulse-2", "EcoFlow PowerPulse 2", "Wallbox"],
 // "boden": steht auf dem Boden, das 3D-Modell bekommt beim Bemalen einen Bodenschatten (27.11.).
-].map(([id, name, bereich, boden]) => ({ id, name, bereich, ...(boden && { boden: true }) }));
+].map(([id, name, bereich, boden]) => ({ id, name, bereich, ...(boden && { boden: true }), text: TEXTE[id] || "" }));
 
 // Optional daten/produkte/<id>.glb: 3D-Modell, das man beim Bemalen über dem Foto dreht (27.11.).
 // "modell" in der Liste ist der Änderungsstempel der Datei; die App hängt ihn an die Adresse, so kommt ein neu gebautes Modell trotz Cache sofort an.

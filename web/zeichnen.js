@@ -1,4 +1,4 @@
-// In Fotos zeichnen: Stift, Pfeil, Text (verschieben, Größe ändern), eigene Farben, Zoomen mit zwei Fingern,
+// In Fotos zeichnen: Stift (gerade Linien mit Pfeilspitze), Text (verschieben, Größe ändern), Farbregler, Zoomen mit zwei Fingern,
 // Rückgängig. Ergebnis in voller Auflösung.
 // Stift: Finger kurz still halten macht das Stück seit dem letzten Haltepunkt zu einer geraden Linie mit Richtungspfeil;
 // weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
@@ -8,15 +8,26 @@
 // Gerätemitte, 2 Finger verschieben den Kasten frei übers Bild und zoomen ihn (Dominik, 27.11.).
 // "Einsetzen" macht ein Bild davon und setzt es genau an diese Stelle als normales Produkt. Ein eingesetztes 3D-Gerät
 // lässt sich über „3D drehen“ wieder in den Kasten holen; das X oben rechts am Produkt löscht es (Dominik, 27.11.).
+// Aufbau seit 27.11. wie der WhatsApp-Editor (Dominik): oben links Stift, Text, Produkte, oben rechts Zurück/Vor,
+// beim Stift rechts ein senkrechter Farbregler, unten Abbrechen und Speichern, die Leisten für Text und Produkt direkt darüber.
+// Produkte öffnen sich als Blatt von unten mit Bild und Beschreibung. Der eigene Pfeil-Knopf ist weg: der Stift zieht schon Pfeile.
 import { api, serverUrl, zustand } from "./api.js";
 // Halten = die letzten HALTEN_MS lag der Finger innerhalb von RUHE_PX Bildschirmpunkten. Ein echter Finger zittert
 // und wandert dabei ein paar Punkte; 8 Punkte ab dem ersten Ruhepunkt waren am Handy zu streng (25.11.).
 const HALTEN_MS = 450, RUHE_PX = 16;
-const FARBEN = [["#e8667e", "Rot"], ["#f5d020", "Gelb"], ["#ffffff", "Weiß"]];
+// Farbregler von oben nach unten: Weiß, Grau, Schwarz, dann die Regenbogenfarben (wie WhatsApp).
+const REGLER = [[0, "#ffffff"], [0.07, "#8e8e93"], [0.14, "#000000"], [0.2, "#ff3b30"], [0.33, "#ffcc00"], [0.46, "#34c759"], [0.59, "#00c7be"], [0.72, "#0a84ff"], [0.86, "#bf5af2"], [1, "#ff2d78"]];
+const START_FARBE = 0.2; // Rot
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+function reglerFarbe(t) {
+  const i = Math.max(1, REGLER.findIndex(([p]) => p >= t)), [p0, f0] = REGLER[i - 1], [p1, f1] = REGLER[i];
+  const k = p1 === p0 ? 0 : (t - p0) / (p1 - p0), a = hex(f0), b = hex(f1);
+  return "#" + a.map((x, j) => Math.round(x + (b[j] - x) * k).toString(16).padStart(2, "0")).join("");
+}
+const SVG = (d, extra = "") => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
+const IKON_STIFT = SVG('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>');
+const IKON_PRODUKT = SVG('<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>');
 const MODEL_VIEWER = "https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js";
-const EIGENE = "planung-farben", MAX_EIGENE = 8; // eigene Farben bleiben auf dem Gerät; die älteste fällt raus
-const eigeneFarben = () => { try { return JSON.parse(localStorage.getItem(EIGENE)) || []; } catch { return []; } };
-const eigeneMerken = (liste) => { try { localStorage.setItem(EIGENE, JSON.stringify(liste)); } catch { /* privates Fenster */ } };
 
 export function zeichnen(blob) {
   return new Promise(async (fertig) => {
@@ -27,21 +38,24 @@ export function zeichnen(blob) {
     const el = document.createElement("div");
     el.className = "zeichnen";
     el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Im Foto zeichnen");
-    el.innerHTML = `<div class="oben"><button class="pill" data-abbrechen>Abbrechen</button><button class="pill" data-zoomweg hidden>Zoom zurück</button><button class="pill" data-fertig style="background:#fff;color:#000;font-weight:600">Speichern</button></div>
+    el.innerHTML = `<div class="oben">
+        <div class="gruppe"><button class="rund" data-werkzeug="stift" aria-pressed="true" aria-label="Stift">${IKON_STIFT}</button><button class="rund" data-werkzeug="text" aria-pressed="false" aria-label="Text"><b>Aa</b></button><button class="rund" data-produkte aria-label="Produkt einsetzen" disabled>${IKON_PRODUKT}</button></div>
+        <div class="gruppe"><button class="rund" data-rueck aria-label="Rückgängig" disabled>${SVG('<path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>')}</button><button class="rund" data-vor aria-label="Wiederholen" disabled>${SVG('<path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>')}</button></div></div>
       <div class="flaeche"><canvas></canvas></div>
+      <div class="farbregler" role="slider" aria-label="Farbe" aria-valuemin="0" aria-valuemax="100"><span class="knopf"></span></div>
       <div class="werkzeuge">
-        <div class="palette"></div>
         <div class="textleiste" hidden><button class="pill" data-kleiner aria-label="Text kleiner">A−</button><button class="pill" data-groesser aria-label="Text größer">A+</button><button class="pill" data-textweg>Text löschen</button></div>
         <div class="produktleiste" hidden><button class="pill" data-drehen>3D drehen</button><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
-        <div class="modellleiste"><span>1 Finger drehen, 2 Finger verschieben und zoomen</span><button class="pill" data-modellweg>Abbrechen</button><button class="pill" data-modellein style="background:#fff;color:#000;font-weight:600">Einsetzen</button></div>
-        <div class="reihe"><button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
-        <select class="pill produktwahl" aria-label="Produkt einsetzen" disabled><option value="">Produkt …</option></select>
-        <button class="pill" data-rueck aria-label="Rückgängig" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button><button class="pill" data-vor aria-label="Wiederholen" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button></div></div>`;
+        <div class="modellleiste"><span>1 Finger drehen, 2 Finger verschieben und zoomen</span><button class="pill" data-modellweg>Abbrechen</button><button class="pill hell" data-modellein>Einsetzen</button></div>
+        <button class="pill" data-zoomweg hidden>Zoom zurück</button>
+        <div class="unten"><button class="pill" data-abbrechen>Abbrechen</button><button class="pill hell" data-fertig>Speichern</button></div>
+      </div>
+      <div class="produktblatt" hidden><div class="blattkopf"><b>Produkt einsetzen</b><button class="pill" data-blattzu>Schließen</button></div><div class="blattliste"></div></div>`;
     document.body.append(el);
     const c = el.querySelector("canvas"), ctx = c.getContext("2d"), flaeche = el.querySelector(".flaeche");
     c.width = img.naturalWidth; c.height = img.naturalHeight;
     const breite = Math.max(5, c.width * 0.009); // Strich wirkt auf jedem Foto gleich dick
-    let farbe = FARBEN[0][0], werkzeug = "stift", striche = [], aktiv = null;
+    let farbe = reglerFarbe(START_FARBE), werkzeug = "stift", striche = [], aktiv = null;
     let gewaehlt = null, ziehen = null, kandidat = null; // Text: ausgewählt, wird verschoben, neuer Text beim Loslassen
     // Rückgängig/Wiederholen (26.11.): vor jeder Änderung eine Kopie aller Striche merken. Fertige Striche ändern nur
     // ihre obersten Felder (Lage, Größe, Farbe), darum reicht eine flache Kopie je Strich.
@@ -51,20 +65,19 @@ export function zeichnen(blob) {
     const merken = (ohne) => { zurueckListe.push(kopie(ohne)); vorListe.length = 0; knoepfe(); };
     function springen(von, nach) { if (!von.length) return; nach.push(kopie()); striche = von.pop(); textAuswahl(null); knoepfe(); malen(); }
 
-    // ---------- Farben: drei feste, dazu eigene über den Plus-Knopf ----------
-    const palette = el.querySelector(".palette");
-    function farbenZeichnen() {
-      const alle = [...FARBEN, ...eigeneFarben().map((f) => [f, "Eigene Farbe " + f])];
-      palette.innerHTML = alle.map(([f, n]) => `<button class="farbe" style="background:${f}" data-farbe="${f}" aria-label="${n}" aria-pressed="${f === farbe}"></button>`).join("")
-        + `<label class="farbe plus" aria-label="Eigene Farbe hinzufügen">+<input type="color" value="${farbe}"></label>`;
-      palette.querySelector("input").addEventListener("change", (e) => {
-        const f = e.target.value.toLowerCase();
-        if (!FARBEN.some(([x]) => x === f)) eigeneMerken([...eigeneFarben().filter((x) => x !== f), f].slice(-MAX_EIGENE));
-        farbeWaehlen(f);
-      });
+    // ---------- Farbe: senkrechter Regler rechts, sichtbar beim Stift und bei ausgewähltem Text ----------
+    const regler = el.querySelector(".farbregler"), reglerKnopf = regler.querySelector(".knopf");
+    let reglerT = START_FARBE;
+    function reglerZeigen() {
+      regler.hidden = !(werkzeug === "stift" || gewaehlt?.art === "text");
+      reglerKnopf.style.top = reglerT * 100 + "%"; reglerKnopf.style.background = farbe; regler.setAttribute("aria-valuenow", Math.round(reglerT * 100));
     }
-    function farbeWaehlen(f) { farbe = f; if (gewaehlt?.art === "text" && gewaehlt.farbe !== f) { merken(); gewaehlt.farbe = f; } farbenZeichnen(); malen(); }
-    farbenZeichnen();
+    function farbeWaehlen(f) { farbe = f; if (gewaehlt?.art === "text" && gewaehlt.farbe !== f) { gewaehlt.farbe = f; } reglerZeigen(); malen(); }
+    let reglerZug = false;
+    const reglerSetzen = (e) => { const r = regler.getBoundingClientRect(); reglerT = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)); farbeWaehlen(reglerFarbe(reglerT)); };
+    regler.addEventListener("pointerdown", (e) => { regler.setPointerCapture(e.pointerId); reglerZug = true; if (gewaehlt?.art === "text") merken(); reglerSetzen(e); regler.classList.add("aktiv"); });
+    regler.addEventListener("pointermove", (e) => reglerZug && reglerSetzen(e));
+    for (const t of ["pointerup", "pointercancel"]) regler.addEventListener(t, () => { reglerZug = false; regler.classList.remove("aktiv"); });
 
     // ---------- Text ----------
     const textHoehe = (s) => breite * 7 * s.groesse;
@@ -73,26 +86,33 @@ export function zeichnen(blob) {
     const trifft = (p) => striche.findLast((s) => { if (s.art !== "text") return false; const b = textBox(s), r = breite * 2; return p.x >= b.x - r && p.x <= b.x + b.w + r && p.y >= b.y - r && p.y <= b.y + b.h + r; });
     const textleiste = el.querySelector(".textleiste"), produktleiste = el.querySelector(".produktleiste");
     // Ausgewählt ist ein Text oder ein Produkt; die passende Leiste erscheint.
-    const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = s?.art !== "text"; produktleiste.hidden = s?.art !== "produkt"; el.querySelector("[data-drehen]").hidden = !s?.modell; };
+    const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = s?.art !== "text"; produktleiste.hidden = s?.art !== "produkt"; el.querySelector("[data-drehen]").hidden = !s?.modell; if (s?.art === "text") farbe = s.farbe; reglerZeigen(); };
 
     // ---------- Produkte ----------
     const griffR = () => 26 * (c.width / c.getBoundingClientRect().width); // Griff etwa 26 Bildschirmpunkte, egal wie groß das Foto ist
     const trifftProdukt = (p) => striche.findLast((s) => s.art === "produkt" && p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h);
     const amGriff = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - (s.y + s.h)) <= griffR();
     const amX = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - s.y) <= griffR();
-    const wahl = el.querySelector(".produktwahl"), bilder = new Map(), modelle = new Map(); // modelle: id -> GLB-Adresse, sobald geladen
+    const produktKnopf = el.querySelector("[data-produkte]"), blatt = el.querySelector(".produktblatt"), bilder = new Map(), modelle = new Map(); // modelle: id -> GLB-Adresse, sobald geladen
     const mitModell = new Map(), amBoden = new Set(); // mitModell: id -> Änderungsstempel der GLB
+    const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (z) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[z]);
     if (!zustand.demo) api("/api/produkte").then((liste) => {
       if (!liste.length) return;
       const gruppen = [...new Set(liste.map((x) => x.bereich))];
-      wahl.innerHTML = `<option value="">Produkt …</option>` + gruppen.map((g) => `<optgroup label="${g}">${liste.filter((x) => x.bereich === g).map((x) => `<option value="${x.id}">${x.name}${x.modell ? " (3D)" : ""}</option>`).join("")}</optgroup>`).join("");
+      el.querySelector(".blattliste").innerHTML = gruppen.map((g) => `<div class="blattgruppe">${esc(g)}</div>` + liste.filter((x) => x.bereich === g).map((x) =>
+        `<button class="produktzeile" data-produkt="${esc(x.id)}"><img src="${esc(serverUrl("/api/produkte/" + encodeURIComponent(x.id)))}" alt="" loading="lazy"><span class="text"><b>${esc(x.name)}</b><span>${esc(x.text || "")}</span></span>${x.modell ? '<span class="badge3d">3D</span>' : ""}</button>`).join("")).join("");
       liste.filter((x) => x.modell).forEach((x) => mitModell.set(x.id, x.modell));
       liste.filter((x) => x.boden).forEach((x) => amBoden.add(x.id));
-      wahl.disabled = false;
+      produktKnopf.disabled = false;
     }).catch(() => { /* ohne Netz keine Produkte, alles andere geht */ });
-    wahl.addEventListener("change", async () => {
-      const id = wahl.value; wahl.value = "";
-      if (!id) return;
+    const blattZeigen = (an) => { blatt.hidden = !an; el.classList.toggle("blattoffen", an); };
+    produktKnopf.addEventListener("click", () => blattZeigen(true));
+    blatt.addEventListener("click", (e) => {
+      if (e.target.closest("[data-blattzu]")) return blattZeigen(false);
+      const z = e.target.closest("[data-produkt]"); if (!z) return;
+      blattZeigen(false); produktEinsetzen(z.dataset.produkt);
+    });
+    async function produktEinsetzen(id) {
       if (mitModell.has(id)) return modellOeffnen(id);
       try {
         if (!bilder.has(id)) {
@@ -106,7 +126,7 @@ export function zeichnen(blob) {
         const neu = { art: "produkt", bild, x: mitteBild.x - w / 2, y: mitteBild.y - h / 2, w, h };
         merken(); striche.push(neu); textAuswahl(neu); malen();
       } catch (e) { alert(e.message || "Produkt konnte nicht geladen werden"); }
-    });
+    }
 
     let mv = null, mvId = null, bearbeitet = null, kasten = null, mvFinger = new Map(), mvZug = null;
     // Kasten bleibt mindestens zur Hälfte auf der Fläche; ganz draußen zeichnet model-viewer nichts und es käme kein Bild heraus.
@@ -276,7 +296,7 @@ export function zeichnen(blob) {
       }
       ctx.shadowBlur = 0;
     }
-    malen();
+    malen(); reglerZeigen();
 
     // ---------- Zoom: zwei Finger ziehen auseinander und verschieben; ein Finger zeichnet ----------
     let zoom = { s: 1, x: 0, y: 0 }, geste = null, warten = false; // warten: nach dem Zoomen erst alle Finger heben
@@ -358,7 +378,7 @@ export function zeichnen(blob) {
       if (aktiv.art === "stift") { const t = performance.now(); spur.push({ t, x: e.clientX, y: e.clientY }); spur = spur.filter((s) => s.t > t - 2000); }
       if (haltepunkt && Math.hypot(e.clientX - haltepunkt.x, e.clientY - haltepunkt.y) <= RUHE_PX) return;
       haltepunkt = null;
-      if (aktiv.art === "pfeil") aktiv.punkte[1] = punkt(e); else aktiv.punkte.push(punkt(e));
+      if (aktiv.art === "pfeil") aktiv.punkte[1] = punkt(e); else aktiv.punkte.push(punkt(e)); // „pfeil“ nur noch in alten Zeichnungen
       malen();
     });
     const los = (e) => {
@@ -380,10 +400,10 @@ export function zeichnen(blob) {
 
     el.addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
-      if (b.dataset.farbe) farbeWaehlen(b.dataset.farbe);
       if (b.dataset.werkzeug) {
         werkzeug = b.dataset.werkzeug; el.querySelectorAll("[data-werkzeug]").forEach((x) => x.setAttribute("aria-pressed", x === b));
-        if (werkzeug !== "text") { textAuswahl(null); malen(); }
+        if (werkzeug !== "text") textAuswahl(null);
+        reglerZeigen(); malen();
       }
       if (gewaehlt && ("groesser" in b.dataset || "kleiner" in b.dataset)) {
         const f = "groesser" in b.dataset ? 1.25 : 0.8;

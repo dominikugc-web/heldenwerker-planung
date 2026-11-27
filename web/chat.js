@@ -298,11 +298,11 @@ export async function chatAnsicht(el, id) {
     if (a.uebersprungen) teile.push(`<span class="muted">übersprungen</span>`);
     else if (a.wert) teile.push(esc(mitEinheit(f, a.wert)));
     const bilder = (a.dateien || []).filter((d) => d.art === "bild"), andere = (a.dateien || []).filter((d) => d.art !== "bild");
-    if (bilder.length) teile.push(`<span class="daumen">${bilder.map((d) => `<img src="${esc(bildSrc(d))}" alt="" loading="lazy">`).join("")}</span>`);
+    if (bilder.length) teile.push(`<span class="album${bilder.length === 1 ? " einzeln" : ""}">${bilder.map((d) => `<img src="${esc(bildSrc(d))}" alt="" loading="lazy">`).join("")}</span>`);
     for (const d of andere) teile.push(d.art === "audio" ? `<span class="klein">🎙 ${esc(d.text || "Sprachnotiz")}</span>` : `<span class="klein">${d.art === "video" ? "🎬" : "📄"} ${esc(d.name)}</span>`);
     if (a.notiz) teile.push(`<span class="klein">✎ ${esc(a.notiz)}</span>`);
     if (a.quelle) teile.push(`<span class="quelle">📄 aus ${esc(a.quelle)}, bitte prüfen</span>`);
-    return `<button class="blase planer antwortblase" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
+    return `<button class="blase planer antwortblase${bilder.length ? " mitalbum" : ""}" data-bearbeite="${f.id}" aria-label="${esc(f.frage)} ändern">${teile.join("") || "<span class='muted'>leer</span>"}</button>`;
   }
   verlauf.addEventListener("click", (e) => { const b = e.target.closest("[data-bearbeite]"); if (b) { bearbeite = b.dataset.bearbeite; zeichne(); } });
 
@@ -463,6 +463,10 @@ export async function chatAnsicht(el, id) {
     const f = aktuelleFrage(), files = [...e.target.files];
     e.target.value = "";
     if (!f || !files.length) return;
+    if (eingang === "#kamera" && files.length === 1 && files[0].type.startsWith("image/")) {
+      const bemalt = await zeichnen(files[0]).catch(() => null);
+      if (bemalt) files[0] = new File([bemalt], (files[0].name || "Foto").replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+    }
     try { await hochladenUndAnhaengen(f, files); } catch (err) { bericht("hochladen", err); fehlerMelden(err); }
   });
 

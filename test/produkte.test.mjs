@@ -13,7 +13,7 @@ test("Produkte: Liste nach Bereich, nur mit vorhandenem Bild, Bild als PNG, Frem
     fs.mkdirSync(ordner, { recursive: true });
     fs.writeFileSync(path.join(ordner, "bosch-wp-aussen.png"), "PNGDATEN");
     const liste = await (await fetch(s.url + "/api/produkte")).json();
-    assert.deepEqual(liste, [{ id: "bosch-wp-aussen", name: "Bosch Außengerät", bereich: "Wärmepumpe", boden: true }]);
+    assert.deepEqual(liste, [{ id: "bosch-wp-aussen", name: "Bosch Außengerät", bereich: "Wärmepumpe", boden: true, text: "Compress CS6800i AW Außeneinheit, 1350 x 1100 x 540 mm" }]);
     const r = await fetch(s.url + "/api/produkte/bosch-wp-aussen");
     assert.equal(r.headers.get("content-type"), "image/png");
     assert.equal(await r.text(), "PNGDATEN");
