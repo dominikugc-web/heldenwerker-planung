@@ -81,12 +81,12 @@ export function zeichnen(blob) {
     const amGriff = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - (s.y + s.h)) <= griffR();
     const amX = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - s.y) <= griffR();
     const wahl = el.querySelector(".produktwahl"), bilder = new Map(), modelle = new Map(); // modelle: id -> GLB-Adresse, sobald geladen
-    const mitModell = new Set(), amBoden = new Set();
+    const mitModell = new Map(), amBoden = new Set(); // mitModell: id -> Änderungsstempel der GLB
     if (!zustand.demo) api("/api/produkte").then((liste) => {
       if (!liste.length) return;
       const gruppen = [...new Set(liste.map((x) => x.bereich))];
       wahl.innerHTML = `<option value="">Produkt …</option>` + gruppen.map((g) => `<optgroup label="${g}">${liste.filter((x) => x.bereich === g).map((x) => `<option value="${x.id}">${x.name}${x.modell ? " (3D)" : ""}</option>`).join("")}</optgroup>`).join("");
-      liste.filter((x) => x.modell).forEach((x) => mitModell.add(x.id));
+      liste.filter((x) => x.modell).forEach((x) => mitModell.set(x.id, x.modell));
       liste.filter((x) => x.boden).forEach((x) => amBoden.add(x.id));
       wahl.disabled = false;
     }).catch(() => { /* ohne Netz keine Produkte, alles andere geht */ });
@@ -156,7 +156,7 @@ export function zeichnen(blob) {
       try {
         await import(MODEL_VIEWER);
         if (!modelle.has(id)) {
-          const r = await fetch(serverUrl("/api/produkte/" + encodeURIComponent(id) + "/3d"));
+          const r = await fetch(serverUrl("/api/produkte/" + encodeURIComponent(id) + "/3d?v=" + mitModell.get(id)));
           if (!r.ok) throw new Error("3D-Modell nicht geladen");
           modelle.set(id, URL.createObjectURL(await r.blob()));
         }
