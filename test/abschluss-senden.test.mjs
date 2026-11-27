@@ -101,3 +101,18 @@ test("Wallbox montiert oder nicht im Lieferschein: keine Aufgabe", async () => {
   await abschluss.abschliessen(p.id);
   assert.equal(log.aufgaben.length, 0);
 });
+
+test("Einweisung in App/System nicht erfolgt: HERO-Aufgabe für Maik Regehr, nur einmal", async () => {
+  const { p, planungen, log, abschluss } = aufbau();
+  log.aufgaben = [];
+  const pl = planungen.laden(p.id);
+  pl.antworten.ab_ac_einweisung = a("nein", [], { notiz: "Kunde hatte keine Zeit" });
+  pl.antworten.ab_kunde = a("Erika Muster"); pl.antworten.ab_projektnr = a("PV-1");
+  planungen.speichern(pl);
+  await abschluss.abschliessen(p.id);
+  await abschluss.abschliessen(p.id);
+  assert.equal(log.aufgaben.length, 1);
+  assert.equal(log.aufgaben[0].userId, 210669);
+  assert.match(log.aufgaben[0].titel, /^App-Einweisung terminieren: Erika Muster \(PV-1\)$/);
+  assert.match(log.aufgaben[0].text, /Kunde hatte keine Zeit/);
+});

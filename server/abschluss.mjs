@@ -35,8 +35,16 @@ const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).filter(([frag
 // Abschlussbericht in HERO: PDF als „Abnahmeprotokoll“ (Ordner Baustellenberichte), Fotos in der HERO-Bildkategorie des Berichts
 // (Namen wie in upload_image_categories, mit Leerzeichen am Ende). Logbuch nennt Bericht und Monteure.
 export const DOKUMENTTYP_ABNAHME = 380908;
-// HERO-Benutzer, der offene Wallbox-Montagen terminiert: Sebastian Regehr (User 212973, Partner 61478; aus HERO-Aufgaben, 27.11.).
-export const WALLBOX_TERMIN_USER = 212973;
+// Nachfass-Aufgaben beim Senden eines Abschlussberichts (Dominik, 27.11.). userId = HERO-User (nicht Partner), aus HERO-Aufgaben:
+// Sebastian Regehr 212973 terminiert Wallbox-Montagen, Maik Regehr 210669 die App-Einweisung.
+export const AUFGABEN = [
+  { id: "wallbox", userId: 212973, titel: "Wallbox-Montage terminieren",
+    wenn: (b, a) => b === "ac" && a.ab_ls_wallbox?.wert === "ja" && a.ab_ac_wallbox_da?.wert === "nein",
+    text: (a) => [`Laut Lieferschein: ${a.ab_ac_wallbox?.wert || "Wallbox"}, beim Abschluss nicht montiert.`, a.ab_ac_wallbox_da?.notiz && `Notiz: ${a.ab_ac_wallbox_da.notiz}`] },
+  { id: "einweisung", userId: 210669, titel: "App-Einweisung terminieren",
+    wenn: (b, a) => b === "ac" && a.ab_ac_einweisung?.wert === "nein",
+    text: (a) => ["Einweisung in App/System beim Abschluss nicht erfolgt.", a.ab_ac_einweisung?.notiz && `Notiz: ${a.ab_ac_einweisung.notiz}`] },
+];
 export const BILDKATEGORIE = { dc: "Dachbelegung ", ac: "AC Montage", wp: "wärmepumpe ", klima: "aussengerät" };
 export const logbuchTextAbschluss = (antworten) => `Baustelle abgeschlossen: ${BERICHTE[berichtVon(antworten)]}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
 
@@ -154,17 +162,17 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       pl.gesendet.logbuchIn.push(z.id);
       planungen.speichern(pl);
     }
-    // Wallbox laut Lieferschein, aber nicht montiert (Dominik, 27.11.): Sebastian Regehr bekommt in HERO die Aufgabe, die Montage
-    // zu terminieren. Einmal je Bericht (gesendet.aufgabe). Im Testmodus (umgeleitet) ohne Zuweisung, damit niemand benachrichtigt wird.
+    // Nachfass-Aufgaben in HERO (Dominik, 27.11.), je Regel einmal (gesendet.aufgaben). Im Testmodus (umgeleitet) ohne Zuweisung.
     const a = pl.antworten;
-    if (bericht === "ac" && a.ab_ls_wallbox?.wert === "ja" && a.ab_ac_wallbox_da?.wert === "nein" && !pl.gesendet.aufgabe && dateien.aufgabe && pl.gesendet.logbuchIn.length) {
-      const tag = new Date(Date.now() + 2 * 864e5);
-      pl.gesendet.aufgabe = await dateien.aufgabe(ziel.id, {
-        titel: `${ziel.umgeleitet ? "TEST " : ""}Wallbox-Montage terminieren: ${a.ab_kunde?.wert || "Kunde"} (${a.ab_projektnr?.wert || ziel.nummer || "ohne Nr."})`,
-        text: [`Laut Lieferschein: ${a.ab_ac_wallbox?.wert || "Wallbox"}.`, `Beim Abschluss Elektrik AC am ${a.ab_datum?.wert || ""} nicht montiert.`,
-          a.ab_monteure?.wert && `Monteure: ${a.ab_monteure.wert}.`, a.ab_ac_wallbox_da?.notiz && `Notiz: ${a.ab_ac_wallbox_da.notiz}`].filter(Boolean).join("\n"),
-        userId: ziel.umgeleitet ? null : WALLBOX_TERMIN_USER,
-        faellig: tag.toISOString().slice(0, 10) + "T16:00:00+01:00",
+    pl.gesendet.aufgaben ||= pl.gesendet.aufgabe ? { wallbox: pl.gesendet.aufgabe } : {};
+    if (bericht && dateien.aufgabe && pl.gesendet.logbuchIn.length) for (const regel of AUFGABEN) {
+      if (pl.gesendet.aufgaben[regel.id] || !regel.wenn(bericht, a)) continue;
+      const kunde = `${a.ab_kunde?.wert || "Kunde"} (${a.ab_projektnr?.wert || ziel.nummer || "ohne Nr."})`;
+      pl.gesendet.aufgaben[regel.id] = await dateien.aufgabe(ziel.id, {
+        titel: `${ziel.umgeleitet ? "TEST " : ""}${regel.titel}: ${kunde}`,
+        text: [...regel.text(a), `Abschlussbericht ${BERICHTE[bericht]} vom ${a.ab_datum?.wert || ""}.`, a.ab_monteure?.wert && `Monteure: ${a.ab_monteure.wert}.`].filter(Boolean).join("\n"),
+        userId: ziel.umgeleitet ? null : regel.userId,
+        faellig: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T16:00:00+01:00",
       });
       planungen.speichern(pl);
     }
