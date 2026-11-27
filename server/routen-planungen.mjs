@@ -9,7 +9,7 @@ import { antwortenAusLieferscheinen, abschlussAusLieferscheinen } from "./liefer
 import { BERICHTE } from "./abschluss-fragen.mjs";
 import { istMonteur, erlaubteProjekte } from "./monteur.mjs";
 import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
-import { TYPEN, istAbschluss, abschlussGesperrt } from "./fragen.mjs";
+import { TYPEN, istAbschluss, abschlussGesperrt, berichtVon } from "./fragen.mjs";
 
 const RICHTUNGEN = Object.values(TYPEN);
 // Ein Kunde kann je Richtung ein eigenes HERO-Projekt haben; besichtigt wird alles in einem Besuch.
@@ -55,9 +55,10 @@ route("POST", "/api/planungen", async (req, res, p, k) => {
 // Abschlussbericht (Abnahmeprotokoll) für ein Projekt. Ein Trupp teilt sich einen Bericht: Ist derselbe Bericht für dasselbe
 // Projekt schon begonnen und nicht gesendet, geht es dort weiter (200), sonst neu (201).
 async function abschlussAnlegen(b, res, k) {
-  if (!Object.hasOwn(BERICHTE, String(b.bericht))) throw fehler(400, "Unbekannter Bericht");
-  const name = BERICHTE[b.bericht], projektId = Number(b.projektId);
-  const offen = k.planungen.liste().find((x) => x.projektId === projektId && x.antworten?.bericht?.wert === name && x.status !== "gesendet");
+  const key = b.bericht === "dach" ? "dc" : String(b.bericht);
+  if (!Object.hasOwn(BERICHTE, key)) throw fehler(400, "Unbekannter Bericht");
+  const name = BERICHTE[key], projektId = Number(b.projektId);
+  const offen = k.planungen.liste().find((x) => x.projektId === projektId && berichtVon(x.antworten) === key && x.status !== "gesendet");
   if (offen) return json(res, 200, k.planungen.laden(offen.id));
   let vorbefuellt = {};
   try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }

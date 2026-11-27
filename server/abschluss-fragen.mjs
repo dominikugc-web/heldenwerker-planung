@@ -2,13 +2,15 @@
 // Gleiche Form wie der Besichtigungskatalog in fragen.mjs; zusätzlich bericht: "<key>" (fehlt = gilt für alle Berichte).
 // Ein Abschlussbericht ist eine Planung, deren Startfrage "bericht" beantwortet ist. IDs beginnen mit ab_.
 
-export const BERICHTE = { dach: "Dachmontage PV", dc: "Elektrik DC", ac: "Elektrik AC", wp: "Wärmepumpe", klima: "Klima" };
+export const BERICHTE = { dc: "Dachmontage DC", ac: "Elektrik AC", wp: "Wärmepumpe", klima: "Klima" };
+// Frühere Namen (bis 27.11. getrennt): begonnene Berichte damit laufen als „Dachmontage DC“ weiter.
+export const ALTE_BERICHTE = { "Dachmontage PV": "dc", "Elektrik DC": "dc" };
 
 export const ABSCHLUSS_BEREICHE = {
   ab_start: "Abschlussbericht",
   ab_kopf: "Baustelle",
-  ab_dach: "Dachmontage PV",
-  ab_dc: "Elektrik DC / Messprotokoll",
+  ab_dach: "Dachmontage",
+  ab_dc: "DC / Messprotokoll",
   ab_ac: "Elektrik AC",
   ab_wp: "Wärmepumpe",
   ab_klima: "Klima",
@@ -32,7 +34,7 @@ const strings = Array.from({ length: MAX_STRINGS }, (_, i) => i + 1).flatMap((n)
 
 // [bereich, id, frage, art, extra]
 const F = [
-  ["ab_start", "bericht", "Welcher Abschlussbericht?", "auswahl", { optionen: Object.values(BERICHTE), berichte: Object.keys(BERICHTE) }],
+  ["ab_start", "bericht", "Welcher Abschlussbericht?", "auswahl", { optionen: Object.values(BERICHTE), berichte: Object.keys(BERICHTE), alt: ALTE_BERICHTE }],
 
   ["ab_kopf", "ab_monteure", "Monteure", "text"],
   ["ab_kopf", "ab_datum", "Datum", "text"],
@@ -40,16 +42,16 @@ const F = [
   ["ab_kopf", "ab_projektnr", "Projekt-Nr.", "text"],
   ["ab_kopf", "ab_adresse", "Baustellenadresse", "text"],
 
-  ...nur("dach",
+  ...nur("dc",
     ["ab_dach", "ab_dach_module", "Module: Anzahl und Typ", "text"],
     ["ab_dach", "ab_dach_uk", "Fabrikat Unterkonstruktion", "text"],
     ["ab_dach", "ab_dach_optimierer", "Moduloptimierer: Anzahl und Typ", "text"],
     ["ab_dach", "ab_dach_belegung", "Belegung wie geplant?", "janein"],
     ["ab_dach", "ab_dach_pfannen", "Beschädigte Pfannen getauscht?", "auswahl", { optionen: ["Ja", "Nein", "Keine beschädigt"] }]),
-  foto("dach", "Belegte Dachflächen komplett"),
-  foto("dach", "Unterkonstruktion mit Dachhaken"),
-  foto("dach", "Kabeldurchführung Dach"),
-  foto("dach", "Typenschild Modul"),
+  foto("dach", "Belegte Dachflächen komplett", { bericht: "dc" }),
+  foto("dach", "Unterkonstruktion mit Dachhaken", { bericht: "dc" }),
+  foto("dach", "Kabeldurchführung Dach", { bericht: "dc" }),
+  foto("dach", "Typenschild Modul", { bericht: "dc" }),
 
   ["ab_dc", "ab_dc_strings", "Wie viele Strings?", "auswahl", { optionen: ab(1), bericht: "dc" }],
   ...strings,
@@ -126,7 +128,7 @@ export const ABSCHLUSS_KATALOG = F.map(([bereich, id, frage, art, extra = {}]) =
 // Gewerk eines HERO-Projekts → passende Berichte (Vorauswahl beim Starten).
 export function berichteAusGewerk(gewerk = "") {
   const g = gewerk.toLowerCase(), r = [];
-  if (/photovoltaik|pv/.test(g)) r.push("dach", "dc", "ac");
+  if (/photovoltaik|pv/.test(g)) r.push("dc", "ac");
   else if (/wallbox|speicher|elektro/.test(g)) r.push("ac");
   if (/wärmepumpe/.test(g)) r.push("wp");
   if (/klima/.test(g)) r.push("klima");

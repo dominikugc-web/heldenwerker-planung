@@ -5,7 +5,7 @@
 // art: janein | auswahl (wenige Knöpfe) | liste (lange Auswahlliste) | zahl (mit einheit) | text | foto
 // nur: "pv" | "wp" (Bereich gilt nur dafür), wenn: { frage, ist } (Folgefrage; ist auch als Liste), pflicht: true (Pflichtfoto)
 import { fehler } from "./router.mjs";
-import { ABSCHLUSS_KATALOG, ABSCHLUSS_BEREICHE, BERICHTE } from "./abschluss-fragen.mjs";
+import { ABSCHLUSS_KATALOG, ABSCHLUSS_BEREICHE, BERICHTE, ALTE_BERICHTE } from "./abschluss-fragen.mjs";
 
 export const BEREICHE = {
   start: "Besichtigung",
@@ -199,7 +199,7 @@ export const KATALOG = [...BESICHTIGUNG, ...ABSCHLUSS_KATALOG];
 Object.assign(BEREICHE, ABSCHLUSS_BEREICHE);
 const NACH_ID = Object.fromEntries(KATALOG.map((f) => [f.id, f]));
 // Abschlussbericht = Startfrage "bericht" beantwortet (statt "typ" bei der Besichtigung).
-export const berichtVon = (antworten = {}) => Object.keys(BERICHTE).find((k) => BERICHTE[k] === antworten.bericht?.wert) || null;
+export const berichtVon = (antworten = {}) => Object.keys(BERICHTE).find((k) => BERICHTE[k] === antworten.bericht?.wert) || ALTE_BERICHTE[antworten.bericht?.wert] || null;
 export const istAbschluss = (antworten = {}) => !!berichtVon(antworten);
 // Abschlussbericht ab dem ersten Senden gesperrt: sonst ginge ein PDF ohne oder mit veralteter Unterschrift raus. Korrektur = neuer Bericht.
 export const abschlussGesperrt = (pl) => istAbschluss(pl.antworten) && (pl.status === "gesendet" || !!pl.senden);

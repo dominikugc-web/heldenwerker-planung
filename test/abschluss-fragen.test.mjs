@@ -6,7 +6,7 @@ import { BERICHTE, ABSCHLUSS_KATALOG } from "../server/abschluss-fragen.mjs";
 const ids = (liste) => liste.map((f) => f.id);
 
 test("Abschluss DC: nur Abschlussfragen, Strings nach Anzahl, Unterschrift am Ende", () => {
-  const s = ids(sichtbar({ bericht: { wert: "Elektrik DC" }, ab_dc_strings: { wert: "2" } }));
+  const s = ids(sichtbar({ bericht: { wert: "Dachmontage DC" }, ab_dc_strings: { wert: "2" } }));
   assert.ok(s.includes("ab_dc_s2_spannung"));
   assert.ok(!s.includes("ab_dc_s3_spannung"));
   assert.ok(s.every((id) => id === "bericht" || id.startsWith("ab_")), "keine Besichtigungsfrage");
@@ -44,4 +44,12 @@ test("WP-Bericht: Typenschild Warmwasser- und Pufferspeicher nur, wenn verbaut",
   const mit = ids({ ab_wp_ww_da: { wert: "ja" }, ab_wp_puffer_da: { wert: "ja" } });
   assert.ok(mit.includes("ab_wp_foto_typenschild_warmwasserspeicher") && mit.includes("ab_wp_foto_typenschild_pufferspeicher"));
   assert.ok(frageNach("ab_wp_foto_typenschild_pufferspeicher").pflicht);
+});
+
+test("Dachmontage und DC sind ein Bericht; alte Namen zählen weiter", () => {
+  assert.deepEqual(Object.values(BERICHTE), ["Dachmontage DC", "Elektrik AC", "Wärmepumpe", "Klima"]);
+  const s = sichtbar({ bericht: { wert: "Dachmontage DC" }, ab_dc_strings: { wert: "1" } }).map((f) => f.id);
+  assert.ok(s.includes("ab_dach_module") && s.includes("ab_dach_foto_typenschild_modul") && s.includes("ab_dc_s1_spannung"));
+  assert.equal(berichtVon({ bericht: { wert: "Dachmontage PV" } }), "dc");
+  assert.equal(berichtVon({ bericht: { wert: "Elektrik DC" } }), "dc");
 });

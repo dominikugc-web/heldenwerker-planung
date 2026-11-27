@@ -3,6 +3,7 @@ import path from "node:path";
 import { fehler } from "./router.mjs";
 import { berichtPdf, pdfDateiname } from "./bericht.mjs";
 import { frageNach, richtungVon, berichtVon } from "./fragen.mjs";
+import { BERICHTE } from "./abschluss-fragen.mjs";
 import { audioMime } from "./transkribieren.mjs";
 
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
@@ -34,8 +35,8 @@ const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).filter(([frag
 // Abschlussbericht in HERO: PDF als „Abnahmeprotokoll“ (Ordner Baustellenberichte), Fotos in der HERO-Bildkategorie des Berichts
 // (Namen wie in upload_image_categories, mit Leerzeichen am Ende). Logbuch nennt Bericht und Monteure.
 export const DOKUMENTTYP_ABNAHME = 380908;
-export const BILDKATEGORIE = { dach: "Dachbelegung ", dc: "Messprotokoll Strings+Erdung", ac: "AC Montage", wp: "wärmepumpe ", klima: "aussengerät" };
-export const logbuchTextAbschluss = (antworten) => `Baustelle abgeschlossen: ${antworten.bericht.wert}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
+export const BILDKATEGORIE = { dc: "Dachbelegung ", ac: "AC Montage", wp: "wärmepumpe ", klima: "aussengerät" };
+export const logbuchTextAbschluss = (antworten) => `Baustelle abgeschlossen: ${BERICHTE[berichtVon(antworten)]}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.

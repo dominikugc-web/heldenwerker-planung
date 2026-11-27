@@ -145,9 +145,9 @@ export function abnahmeSheet() {
 
 // ---------- Baustelle abschließen ----------
 // Bericht wählen (Vorauswahl aus dem Gewerk), bei einem gebündelten Termin auch das Projekt. Monteure = Personen des Termins.
-const BERICHTE = [["dach", "Dachmontage PV"], ["dc", "Elektrik DC"], ["ac", "Elektrik AC"], ["wp", "Wärmepumpe"], ["klima", "Klima"]];
+const BERICHTE = [["dc", "Dachmontage DC"], ["ac", "Elektrik AC"], ["wp", "Wärmepumpe"], ["klima", "Klima"]];
 const berichteAus = (gewerk = "") => { const g = gewerk.toLowerCase(), r = [];
-  if (/photovoltaik|pv/.test(g)) r.push("dach", "dc", "ac"); else if (/wallbox|speicher|elektro/.test(g)) r.push("ac");
+  if (/photovoltaik|pv/.test(g)) r.push("dc", "ac"); else if (/wallbox|speicher|elektro/.test(g)) r.push("ac");
   if (/wärmepumpe/.test(g)) r.push("wp"); if (/klima/.test(g)) r.push("klima"); return r; };
 export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
   const projekte = [p, ...(await Promise.all(mit.filter((x) => x !== p.id).map((x) => api("/api/projekte/" + x).catch(() => null)))).filter(Boolean)];
@@ -212,7 +212,7 @@ const ladeKatalog = async () => (katalogCache ??= await api("/api/fragen"));
 // Gleiche Regeln wie auf dem Server (server/fragen.mjs): Typ blendet Bereiche aus, Folgefragen nur bei passender Antwort.
 // Abschlussbericht: Startfrage "bericht" beantwortet, dann nur dessen Fragen (abschluss: true, bericht passend oder für alle).
 const TYPEN = { pv: "PV", wp: "Wärmepumpe", klima: "Klimaanlage" };
-export const berichtKey = (fragen, antworten) => { const f = fragen.find((x) => x.id === "bericht"); const i = f ? f.optionen.indexOf(antworten.bericht?.wert) : -1; return i < 0 ? null : f.berichte[i]; };
+export const berichtKey = (fragen, antworten) => { const f = fragen.find((x) => x.id === "bericht"), w = antworten.bericht?.wert; const i = f ? f.optionen.indexOf(w) : -1; return i < 0 ? f?.alt?.[w] || null : f.berichte[i]; };
 export function sichtbar(fragen, antworten) {
   const passt = (f) => !f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert);
   const b = berichtKey(fragen, antworten);

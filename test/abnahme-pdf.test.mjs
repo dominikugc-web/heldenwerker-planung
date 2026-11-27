@@ -17,7 +17,7 @@ const a = (wert, mehr = {}) => ({ wert, uebersprungen: false, dateien: [], notiz
 const pl = {
   id: "p1", art: "abschluss", projektTitel: "UNB-1149, Muster", erstellt: "2026-11-27T09:00:00Z",
   antworten: {
-    bericht: a("Elektrik DC"), ab_kunde: a("Erika Muster"), ab_projektnr: a("UNB-1149"), ab_datum: a("27.11.2026"), ab_monteure: a("Max M."),
+    bericht: a("Dachmontage DC"), ab_kunde: a("Erika Muster"), ab_projektnr: a("UNB-1149"), ab_datum: a("27.11.2026"), ab_monteure: a("Max M."),
     ab_dc_strings: a("1"), ab_dc_s1_spannung: a("391"), ab_dc_foto_dc_kabelweg: a("", { uebersprungen: true, notiz: "Kabel unter Putz" }),
     ab_dc_foto_messgeraet_mit_werten: a("", { dateien: [{ id: "f1", art: "bild", name: "x.jpg" }] }),
     ab_unterschrift: a("Erika Muster", { dateien: [{ id: "u1", art: "bild", name: "Unterschrift.png" }] }),
@@ -34,7 +34,7 @@ const text = async (bytes) => {
 test("Abnahmeprotokoll-PDF: Titel, Messwert, Abnahmetext, Unterzeichner, Grund für fehlendes Foto", async () => {
   const pdf = await berichtPdf(pl, { bild: async (id) => (id === "u1" ? png() : JPEG) });
   const t = await text(pdf);
-  assert.match(t, /Abnahmeprotokoll Elektrik DC/);
+  assert.match(t, /Abnahmeprotokoll Dachmontage DC/);
   assert.match(t, /391 V/);
   assert.match(t, /gewährleisten wir gemäß BGB 5 Jahre/);
   assert.match(t, /Erika Muster, 27\.11\.2026/);
@@ -52,6 +52,6 @@ test("Abschnitte ohne Startfrage und ohne Unterschrift-Eintrag", () => {
 });
 
 test("Dateiname", () => {
-  assert.equal(pdfDateiname(pl, "27.11.2026"), "Abnahmeprotokoll Elektrik DC Erika Muster 27.11.2026.pdf");
+  assert.equal(pdfDateiname(pl, "27.11.2026"), "Abnahmeprotokoll Dachmontage DC Erika Muster 27.11.2026.pdf");
   assert.equal(pdfDateiname({ antworten: {} }, "27.11.2026"), "Besichtigungsprotokoll 27.11.2026.pdf");
 });
