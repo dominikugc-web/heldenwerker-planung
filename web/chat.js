@@ -105,6 +105,9 @@ export async function planungStarten(p, { mit = [], neustartId = null, vorTypen 
   zeichne();
 }
 
+// Team -> Bericht (Dominik, 27.11.): Dachteams bei Dachmontage DC, Elektroteams bei Elektrik AC, SHK bei Wärmepumpe, Klima noch keins.
+export const teamBericht = (t) => t.bericht || (/dach/i.test(t.name) ? "dc" : /elektro/i.test(t.name) ? "ac" : /shk|wärmepumpe/i.test(t.name) ? "wp" : /klima/i.test(t.name) ? "klima" : null);
+
 // ---------- Abnahmeprotokoll aus der Menüleiste ----------
 export function abnahmeSheet() {
   const monteur = zustand.ich?.rolle === "monteur";
@@ -195,13 +198,14 @@ export async function abschlussStarten(p, { mit = [], personen = [], neustartId 
     const teamVon = (n) => teams.find((t) => t.name === n);
     const teamAn = (t) => { teamsAn.add(t.name); t.mitglieder.forEach((m) => dabei.add(m)); };
     if (!vorbelegt) { vorbelegt = true; for (const n of [...personen, ich].filter(Boolean)) teamVon(n) ? teamAn(teamVon(n)) : dabei.add(n); }
+    const passende = teams.filter((t) => teamBericht(t) === bericht || teamsAn.has(t.name));
     const imTeam = new Set(teams.flatMap((t) => t.mitglieder));
     const einzeln = [...new Set([...heroNamen.filter((n) => !teamVon(n)), ...extra, ...[...dabei].filter((n) => !imTeam.has(n))])].sort((a, b) => a.localeCompare(b, "de"));
     const chip = (n, attr) => `<button class="wahl" ${attr}="${esc(n)}">${esc(n)}</button>`;
     $(".panel", d).innerHTML = `<div class="griff"></div><div class="sheetkopf"><button class="pill" data-zurueckb>Zurück</button><h2>Wer war dabei?</h2><span></span></div>
-      ${teams.length ? `<div class="label">Teams</div><div class="knoepfe">${teams.map((t) => chip(t.name, "data-team")).join("")}</div>` : ""}
+      ${passende.length ? `<div class="label">Teams ${esc(BERICHTE.find(([k]) => k === bericht)?.[1] || "")}</div><div class="knoepfe">${passende.map((t) => chip(t.name, "data-team")).join("")}</div>` : ""}
       ${teams.filter((t) => teamsAn.has(t.name)).map((t) => `<div class="label">${esc(t.name)}</div><div class="knoepfe">${t.mitglieder.map((m) => chip(m, "data-n")).join("") || `<span class="muted small">Noch niemand eingetragen (Einstellungen > Montage-Teams)</span>`}</div>`).join("")}
-      <div class="label">${teams.length ? "Weitere Personen" : "Personen"}</div>
+      <div class="label">${passende.length ? "Weitere Personen" : "Personen"}</div>
       <div class="knoepfe">${einzeln.map((n) => chip(n, "data-n")).join("")}${teams.filter((t) => !teamsAn.has(t.name)).flatMap((t) => t.mitglieder).filter((m) => !einzeln.includes(m)).map((m) => chip(m, "data-n")).join("")}</div>
       <div class="feldzeile" style="margin:10px 0"><input id="weitere" placeholder="Weitere Person (Name)" autocomplete="off" aria-label="Weitere Person"><button class="sendbtn" data-dazu aria-label="Hinzufügen">${IKON.plus}</button></div>
       <button class="gross" data-start>Bericht starten</button>`;

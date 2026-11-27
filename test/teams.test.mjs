@@ -26,3 +26,13 @@ test("Teams: doppelter Teamname oder leerer Name abgelehnt", async () => {
     assert.equal((await put([{ name: "  ", mitglieder: [] }])).status, 400);
   } finally { await s.stop(); }
 });
+
+test("Teams: Bericht-Zuordnung wird gespeichert, unbekannte abgelehnt", async () => {
+  const s = await testServer({ inhaber: "chef@x.de" });
+  try {
+    const put = (teams) => fetch(s.url + "/api/teams", { method: "PUT", headers: { ...J, ...wer("chef@x.de") }, body: JSON.stringify({ teams }) });
+    const r = await put([{ name: "Dachteam 1", mitglieder: [], bericht: "dc" }, { name: "Sonder", mitglieder: [] }]);
+    assert.deepEqual(await r.json(), [{ name: "Dachteam 1", mitglieder: [], bericht: "dc" }, { name: "Sonder", mitglieder: [] }]);
+    assert.equal((await put([{ name: "X", mitglieder: [], bericht: "sauna" }])).status, 400);
+  } finally { await s.stop(); }
+});

@@ -2,6 +2,7 @@ import path from "node:path";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { ladeJson, speichereJson } from "./speicher.mjs";
 import { istAdmin } from "./profile.mjs";
+import { BERICHTE } from "./abschluss-fragen.mjs";
 
 // Montage-Teams (Dominik, 27.11.): Name wie in HERO (z. B. „Dachteam 1“) und wer drin ist, egal ob er die App nutzt.
 // Beim Abschlussbericht („Wer war dabei?“) bringt ein gewähltes Team seine Mitglieder mit. Pflegen darf nur der Admin.
@@ -17,7 +18,9 @@ export function teamsPruefen(teams) {
     if (namen.has(name.toLowerCase())) throw fehler(400, `Team „${name}“ gibt es doppelt`);
     namen.add(name.toLowerCase());
     const mitglieder = [...new Set([].concat(t?.mitglieder || []).map(sauber).filter(Boolean))].slice(0, 60);
-    return { name, mitglieder };
+    // bericht: für welchen Abschlussbericht das Team bei „Wer war dabei?“ oben steht (dc, ac, wp, klima); leer = aus dem Namen erraten.
+    if (t?.bericht && !Object.hasOwn(BERICHTE, t.bericht)) throw fehler(400, `Team „${name}“: unbekannter Bericht`);
+    return { name, mitglieder, ...(t?.bericht && { bericht: t.bericht }) };
   });
 }
 

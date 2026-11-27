@@ -1,7 +1,7 @@
 // Gerüst: Router, Tab-Leiste, Home, Kalender, Projekte, Projektseite, Einstellungen, Feedback.
 import { api, verbinden, brauchtKlick, zustand, serverSetzen, speicher, serverUrl } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, sheet, zurueck, IKON, uhrzeit, datumKurz, tagName, tagSchluessel, relativ, istBesichtigung, euro } from "./ui.js";
-import { plusSheet, planungStarten, chatAnsicht, abschlussStarten, abnahmeSheet } from "./chat.js";
+import { plusSheet, planungStarten, chatAnsicht, abschlussStarten, abnahmeSheet, teamBericht } from "./chat.js";
 import { pruefAnsicht } from "./pruefung.js";
 
 const ansicht = $("#ansicht");
@@ -263,7 +263,7 @@ async function adminBereich(el, signal) {
     <div class="gruppe">${sichtbar.length ? sichtbar.map((f) => `<div class="zeile"><span aria-hidden="true">${ART[f.art]}</span><div class="haupt"><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(f.text)}</div><div class="neben">${esc(f.name || f.person)} · ${esc(relativ(f.zeit))}${f.bild ? ` · <a href="${serverUrl("/api/feedback/bild/" + f.bild)}" target="_blank" rel="noopener">Bild</a>` : ""}</div></div>
       <button class="pill" data-status="${f.id}" data-ziel="${status(f) === "neu" ? "erledigt" : "neu"}">${status(f) === "neu" ? "Erledigt" : "Zurück"}</button></div>`).join("") : `<div class="leer">${feedbackFilter === "neu" ? "Nichts Neues." : "Noch nichts erledigt."}</div>`}</div>
     <div class="label">Montage-Teams</div>
-    <div class="gruppe">${teams.map((t, i) => `<button class="zeile" data-teamnr="${i}"><div class="haupt"><div class="titel">${esc(t.name)}</div><div class="neben">${t.mitglieder.length ? esc(t.mitglieder.join(", ")) : "noch niemand eingetragen"}</div></div><span class="pfeil">${IKON.pfeil}</span></button>`).join("") || `<div class="leer">Noch keine Teams.</div>`}
+    <div class="gruppe">${teams.map((t, i) => `<button class="zeile" data-teamnr="${i}"><div class="haupt"><div class="titel">${esc(t.name)}</div><div class="neben">${esc(BERICHT_NAMEN[teamBericht(t)] || "keinem Bericht zugeordnet")} · ${t.mitglieder.length ? esc(t.mitglieder.join(", ")) : "noch niemand eingetragen"}</div></div><span class="pfeil">${IKON.pfeil}</span></button>`).join("") || `<div class="leer">Noch keine Teams.</div>`}
       <button class="zeile" data-teamneu><div class="haupt"><div class="titel" style="color:var(--accent)">Team hinzufügen</div></div></button>
       <button class="zeile" data-teamhero><div class="haupt"><div class="titel" style="color:var(--accent)">Teams aus HERO übernehmen</div><div class="neben">Legt Teams wie „Dachteam 1“ oder „SHK 1“ aus den HERO-Terminen an</div></div></button></div>
     <p class="hinweis">Wer im Team ist, wird beim Abschlussbericht unter „Wer war dabei?“ mit angezeigt.</p>
@@ -290,12 +290,14 @@ async function adminBereich(el, signal) {
   };
 }
 
-// Ein Team bearbeiten: Name, Mitglieder (Namen, auch ohne App), löschen. nr -1 = neues Team.
+const BERICHT_NAMEN = { dc: "Dachmontage DC", ac: "Elektrik AC", wp: "Wärmepumpe", klima: "Klima" };
+// Ein Team bearbeiten: Name, Bericht, Mitglieder (Namen, auch ohne App), löschen. nr -1 = neues Team.
 async function teamSheet(teams, nr, appNutzer, speichern) {
   const t = nr < 0 ? { name: "", mitglieder: [] } : { ...teams[nr], mitglieder: [...teams[nr].mitglieder] };
   const vorschlaege = [...new Set([...appNutzer.map((p) => p.name), ...(await api("/api/mitarbeiter").catch(() => []))])].filter((n) => !teams.some((x) => x.name === n)).sort((a, b) => a.localeCompare(b, "de"));
   const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>${nr < 0 ? "Neues Team" : "Team"}</h2><button class="pill akzent" data-ok>Speichern</button></div>
-    <div class="gruppe"><label class="feld"><span>Teamname (wie in HERO)</span><input id="tname" value="${esc(t.name)}" maxlength="80" autocomplete="off" placeholder="z. B. Dachteam 1"></label></div>
+    <div class="gruppe"><label class="feld"><span>Teamname (wie in HERO)</span><input id="tname" value="${esc(t.name)}" maxlength="80" autocomplete="off" placeholder="z. B. Dachteam 1"></label>
+      <label class="feld"><span>Steht oben bei Bericht</span><select id="tbericht"><option value="">Aus dem Namen (${esc(BERICHT_NAMEN[teamBericht({ name: t.name })] || "keiner")})</option>${Object.entries(BERICHT_NAMEN).map(([k, n]) => `<option value="${k}" ${t.bericht === k ? "selected" : ""}>${n}</option>`).join("")}</select></label></div>
     <div class="label">Mitglieder</div>
     <div class="knoepfe" id="mitglieder"></div>
     <div class="feldzeile" style="margin:10px 0"><input id="neuname" list="namensliste" placeholder="Name hinzufügen" autocomplete="off" aria-label="Name hinzufügen"><button class="sendbtn" data-dazu aria-label="Hinzufügen">${IKON.plus}</button></div>
@@ -309,6 +311,7 @@ async function teamSheet(teams, nr, appNutzer, speichern) {
   $("[data-zu]", d).onclick = () => d.close();
   $("[data-ok]", d).onclick = async () => {
     dazu(); t.name = $("#tname", d).value.trim();
+    const b = $("#tbericht", d).value; if (b) t.bericht = b; else delete t.bericht;
     const neu = [...teams]; if (nr < 0) neu.push(t); else neu[nr] = t;
     if (await speichern(neu)) d.close();
   };
