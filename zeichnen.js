@@ -81,12 +81,13 @@ export function zeichnen(blob) {
     const amGriff = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - (s.y + s.h)) <= griffR();
     const amX = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - s.y) <= griffR();
     const wahl = el.querySelector(".produktwahl"), bilder = new Map(), modelle = new Map(); // modelle: id -> GLB-Adresse, sobald geladen
-    const mitModell = new Set();
+    const mitModell = new Set(), amBoden = new Set();
     if (!zustand.demo) api("/api/produkte").then((liste) => {
       if (!liste.length) return;
       const gruppen = [...new Set(liste.map((x) => x.bereich))];
       wahl.innerHTML = `<option value="">Produkt …</option>` + gruppen.map((g) => `<optgroup label="${g}">${liste.filter((x) => x.bereich === g).map((x) => `<option value="${x.id}">${x.name}${x.modell ? " (3D)" : ""}</option>`).join("")}</optgroup>`).join("");
       liste.filter((x) => x.modell).forEach((x) => mitModell.add(x.id));
+      liste.filter((x) => x.boden).forEach((x) => amBoden.add(x.id));
       wahl.disabled = false;
     }).catch(() => { /* ohne Netz keine Produkte, alles andere geht */ });
     wahl.addEventListener("change", async () => {
@@ -166,7 +167,7 @@ export function zeichnen(blob) {
       for (const [k, v] of Object.entries({
         src: modelle.get(id), "interaction-prompt": "none", // ohne camera-controls: Gesten macht mvZeiger, Drehpunkt bleibt die Gerätemitte
         "camera-orbit": alt?.modell.orbit || "-30deg 75deg auto", "min-camera-orbit": "auto 0deg auto", "max-camera-orbit": "auto 180deg auto",
-        "shadow-intensity": /innen/.test(id) ? "0" : "1", // Wandgeräte werfen keinen Schatten auf den Boden
+        "shadow-intensity": amBoden.has(id) ? "1" : "0", // nur Bodengeräte werfen einen Bodenschatten
       })) mv.setAttribute(k, v);
       el.classList.add("im3d"); // zuerst: ohne Werkzeugleisten wird die Fläche größer und das Foto rutscht
       const fr = flaeche.getBoundingClientRect(), s = Math.min(fr.width, fr.height) * 0.5;
