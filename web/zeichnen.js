@@ -6,7 +6,8 @@
 // Produkt: freigestelltes Gerät aus der Liste einsetzen, verschieben, am Griff unten rechts größer/kleiner ziehen (25.11.).
 // 3D (27.11.): Geräte mit Modell liegen erst durchsichtig in einem Kasten über dem Foto. 1 Finger im Kasten dreht um die
 // Gerätemitte; daneben ziehen oder 2 Finger verschieben den Kasten frei übers Bild, 2 Finger zoomen ihn (Dominik, 27.11.).
-// "Einsetzen" macht ein Bild davon und setzt es genau an diese Stelle als normales Produkt.
+// "Einsetzen" macht ein Bild davon und setzt es genau an diese Stelle als normales Produkt. Ein eingesetztes 3D-Gerät
+// lässt sich über „3D drehen“ wieder in den Kasten holen; das X oben rechts am Produkt löscht es (Dominik, 27.11.).
 import { api, serverUrl, zustand } from "./api.js";
 // Halten = die letzten HALTEN_MS lag der Finger innerhalb von RUHE_PX Bildschirmpunkten. Ein echter Finger zittert
 // und wandert dabei ein paar Punkte; 8 Punkte ab dem ersten Ruhepunkt waren am Handy zu streng (25.11.).
@@ -31,7 +32,7 @@ export function zeichnen(blob) {
       <div class="werkzeuge">
         <div class="palette"></div>
         <div class="textleiste" hidden><button class="pill" data-kleiner aria-label="Text kleiner">A−</button><button class="pill" data-groesser aria-label="Text größer">A+</button><button class="pill" data-textweg>Text löschen</button></div>
-        <div class="produktleiste" hidden><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
+        <div class="produktleiste" hidden><button class="pill" data-drehen>3D drehen</button><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
         <div class="modellleiste"><span>Auf dem Gerät drehen, daneben ziehen oder 2 Finger zum Verschieben und Zoomen</span><button class="pill" data-modellweg>Abbrechen</button><button class="pill" data-modellein style="background:#fff;color:#000;font-weight:600">Einsetzen</button></div>
         <div class="reihe"><button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
         <select class="pill produktwahl" aria-label="Produkt einsetzen" disabled><option value="">Produkt …</option></select>
@@ -72,12 +73,13 @@ export function zeichnen(blob) {
     const trifft = (p) => striche.findLast((s) => { if (s.art !== "text") return false; const b = textBox(s), r = breite * 2; return p.x >= b.x - r && p.x <= b.x + b.w + r && p.y >= b.y - r && p.y <= b.y + b.h + r; });
     const textleiste = el.querySelector(".textleiste"), produktleiste = el.querySelector(".produktleiste");
     // Ausgewählt ist ein Text oder ein Produkt; die passende Leiste erscheint.
-    const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = s?.art !== "text"; produktleiste.hidden = s?.art !== "produkt"; };
+    const textAuswahl = (s) => { gewaehlt = s; textleiste.hidden = s?.art !== "text"; produktleiste.hidden = s?.art !== "produkt"; el.querySelector("[data-drehen]").hidden = !s?.modell; };
 
     // ---------- Produkte ----------
     const griffR = () => 26 * (c.width / c.getBoundingClientRect().width); // Griff etwa 26 Bildschirmpunkte, egal wie groß das Foto ist
     const trifftProdukt = (p) => striche.findLast((s) => s.art === "produkt" && p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h);
     const amGriff = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - (s.y + s.h)) <= griffR();
+    const amX = (s, p) => Math.hypot(p.x - (s.x + s.w), p.y - s.y) <= griffR();
     const wahl = el.querySelector(".produktwahl"), bilder = new Map(), modelle = new Map(); // modelle: id -> GLB-Adresse, sobald geladen
     const mitModell = new Set();
     if (!zustand.demo) api("/api/produkte").then((liste) => {
@@ -105,7 +107,7 @@ export function zeichnen(blob) {
       } catch (e) { alert(e.message || "Produkt konnte nicht geladen werden"); }
     });
 
-    let mv = null, kasten = null, mvFinger = new Map(), mvZug = null;
+    let mv = null, mvId = null, bearbeitet = null, kasten = null, mvFinger = new Map(), mvZug = null;
     // Kasten bleibt mindestens zur Hälfte auf der Fläche; ganz draußen zeichnet model-viewer nichts und es käme kein Bild heraus.
     const kastenSetzen = () => {
       const fr = flaeche.getBoundingClientRect(), h = kasten.s / 2;
@@ -144,7 +146,8 @@ export function zeichnen(blob) {
       if (!mvFinger.size) { mvZug = null; mv.setAttribute("camera-controls", ""); }
     }
     for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) flaeche.addEventListener(t, mvZeiger, true);
-    async function modellOeffnen(id) {
+    // alt: schon eingesetztes 3D-Gerät, das wieder gedreht wird; Kasten und Blickwinkel kommen von dort.
+    async function modellOeffnen(id, alt = null) {
       try {
         await import(MODEL_VIEWER);
         if (!modelle.has(id)) {
@@ -159,14 +162,24 @@ export function zeichnen(blob) {
       for (const [k, v] of Object.entries({
         src: modelle.get(id), "camera-controls": "", "interaction-prompt": "none", "touch-action": "none",
         "disable-pan": "", "disable-zoom": "", // verschieben und zoomen macht der Kasten, so bleibt der Drehpunkt in der Gerätemitte
-        "camera-orbit": "-30deg 75deg auto", "min-camera-orbit": "auto 0deg auto", "max-camera-orbit": "auto 180deg auto",
+        "camera-orbit": alt?.modell.orbit || "-30deg 75deg auto", "min-camera-orbit": "auto 0deg auto", "max-camera-orbit": "auto 180deg auto",
         "shadow-intensity": /innen/.test(id) ? "0" : "1", // Wandgeräte werfen keinen Schatten auf den Boden
       })) mv.setAttribute(k, v);
+      el.classList.add("im3d"); // zuerst: ohne Werkzeugleisten wird die Fläche größer und das Foto rutscht
       const fr = flaeche.getBoundingClientRect(), s = Math.min(fr.width, fr.height) * 0.5;
       kasten = { s, x: (fr.width - s) / 2, y: (fr.height - s) / 2 }; mvFinger.clear(); mvZug = null;
-      flaeche.append(mv); kastenSetzen(); el.classList.add("im3d");
+      mvId = id; bearbeitet = alt;
+      if (alt) { // Kasten liegt relativ zum Produkt; von Bildpunkten in Bildschirmpunkte der Fläche umrechnen
+        const cr = c.getBoundingClientRect(), f = cr.width / c.width, k = alt.modell.kasten;
+        kasten = { s: k.s * alt.w * f, x: cr.left - fr.left + (alt.x + k.x * alt.w) * f, y: cr.top - fr.top + (alt.y + k.y * alt.w) * f };
+        alt.versteckt = true; malen();
+      }
+      flaeche.append(mv); kastenSetzen();
     }
-    function modellSchliessen() { mv?.remove(); mv = null; el.classList.remove("im3d"); }
+    function modellSchliessen() {
+      if (bearbeitet) { delete bearbeitet.versteckt; bearbeitet = null; malen(); }
+      mv?.remove(); mv = null; el.classList.remove("im3d");
+    }
     async function modellEinsetzen() {
       const blob = await mv.toBlob({ idealAspect: false }), voll = await createImageBitmap(blob);
       const r = sichtbar(voll);
@@ -175,7 +188,12 @@ export function zeichnen(blob) {
       const a = punkt({ clientX: m.left + r.x * fx, clientY: m.top + r.y * fy });
       const b = punkt({ clientX: m.left + (r.x + r.w) * fx, clientY: m.top + (r.y + r.h) * fy });
       const neu = { art: "produkt", dreiD: true, bild: await createImageBitmap(voll, r.x, r.y, r.w, r.h), x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
-      modellSchliessen(); merken(); striche.push(neu); textAuswahl(neu); malen();
+      const k0 = punkt({ clientX: m.left, clientY: m.top }), k1 = punkt({ clientX: m.right, clientY: m.top });
+      neu.modell = { id: mvId, orbit: mv.getCameraOrbit().toString(), kasten: { x: (k0.x - neu.x) / neu.w, y: (k0.y - neu.y) / neu.w, s: (k1.x - k0.x) / neu.w } };
+      const alt = bearbeitet;
+      modellSchliessen(); merken();
+      if (alt && striche.includes(alt)) striche[striche.indexOf(alt)] = neu; else striche.push(neu);
+      textAuswahl(neu); malen();
     }
     // Rahmen um alle nicht durchsichtigen Punkte (Gerät samt Bodenschatten)
     function sichtbar(bmp) {
@@ -211,6 +229,7 @@ export function zeichnen(blob) {
     function malen() {
       ctx.drawImage(img, 0, 0);
       for (const s of striche) {
+        if (s.versteckt) continue; // wird gerade im 3D-Kasten gedreht
         ctx.strokeStyle = s.farbe; ctx.fillStyle = s.farbe; ctx.lineWidth = breite; ctx.lineCap = "round"; ctx.lineJoin = "round";
         ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = breite;
         ctx.beginPath();
@@ -221,6 +240,10 @@ export function zeichnen(blob) {
             ctx.strokeRect(s.x, s.y, s.w, s.h); ctx.setLineDash([]);
             ctx.beginPath(); ctx.arc(s.x + s.w, s.y + s.h, griffR() * 0.7, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
             ctx.lineWidth = Math.max(2, breite / 3); ctx.strokeStyle = "#000"; ctx.stroke();
+            const xr = griffR() * 0.7, xm = { x: s.x + s.w, y: s.y }, d = xr * 0.45; // X oben rechts zum Löschen
+            ctx.beginPath(); ctx.arc(xm.x, xm.y, xr, 0, Math.PI * 2); ctx.fillStyle = "#e8667e"; ctx.fill(); ctx.strokeStyle = "#fff"; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(xm.x - d, xm.y - d); ctx.lineTo(xm.x + d, xm.y + d); ctx.moveTo(xm.x + d, xm.y - d); ctx.lineTo(xm.x - d, xm.y + d);
+            ctx.lineWidth = Math.max(3, breite / 2.5); ctx.lineCap = "round"; ctx.stroke();
           }
         } else if (s.art === "text") {
           // Beschriftung: Farbe mit dunklem Rand, damit sie auf hellem und dunklem Untergrund lesbar bleibt.
@@ -305,6 +328,7 @@ export function zeichnen(blob) {
       if (finger.size > 2 || warten) return;
       const p = punkt(e);
       // Produkte lassen sich in jedem Werkzeug greifen: am Griff Größe ändern, sonst verschieben.
+      if (gewaehlt?.art === "produkt" && amX(gewaehlt, p)) { merken(); striche.splice(striche.indexOf(gewaehlt), 1); textAuswahl(null); malen(); return; }
       if (gewaehlt?.art === "produkt" && amGriff(gewaehlt, p)) { ziehen = { griff: true }; return; }
       const pr = trifftProdukt(p);
       if (pr) { textAuswahl(pr); ziehen = { dx: p.x - pr.x, dy: p.y - pr.y }; malen(); return; }
@@ -368,6 +392,7 @@ export function zeichnen(blob) {
       }
       if (gewaehlt && "textweg" in b.dataset) { merken(); striche.splice(striche.indexOf(gewaehlt), 1); textAuswahl(null); malen(); }
       if ("modellweg" in b.dataset) modellSchliessen();
+      if ("drehen" in b.dataset && gewaehlt?.modell) modellOeffnen(gewaehlt.modell.id, gewaehlt);
       if ("modellein" in b.dataset) modellEinsetzen().catch(() => { modellSchliessen(); alert("3D-Bild konnte nicht erzeugt werden"); });
       if ("rueck" in b.dataset) springen(zurueckListe, vorListe);
       if ("vor" in b.dataset) springen(vorListe, zurueckListe);
