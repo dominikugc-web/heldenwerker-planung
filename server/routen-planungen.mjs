@@ -7,6 +7,7 @@ import { kostenSchaetzen } from "./claude.mjs";
 import { berichtText, berichtPdf, fehltPflichtfotos, fehltZumSenden } from "./bericht.mjs";
 import { antwortenAusLieferscheinen, abschlussAusLieferscheinen } from "./lieferschein.mjs";
 import { BERICHTE } from "./abschluss-fragen.mjs";
+import { istMonteur, erlaubteProjekte } from "./monteur.mjs";
 import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
 import { TYPEN, istAbschluss } from "./fragen.mjs";
 
@@ -22,12 +23,17 @@ function projekteAus(b) {
 const sendenStand = (k, pl) => (pl.senden?.status === "laeuft" && !k.abschluss.laeuft(pl.id)
   ? { ...pl.senden, status: "fehler", meldung: "Unterbrochen, bitte erneut senden" } : pl.senden);
 const mitName = (k, pl) => ({ ...pl, personName: k.profile.nameVon(pl.person), senden: sendenStand(k, pl) });
-route("GET", "/api/planungen", (req, res, p, k) => json(res, 200, k.planungen.liste().map((pl) => mitName(k, pl))));
+route("GET", "/api/planungen", async (req, res, p, k) => {
+  let liste = k.planungen.liste();
+  if (istMonteur(k)) { const erlaubt = await erlaubteProjekte(k); liste = liste.filter((pl) => pl.art === "abschluss" && (pl.person === k.person || erlaubt.has(pl.projektId))); }
+  json(res, 200, liste.map((pl) => mitName(k, pl)));
+});
 route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k, k.planungen.laden(p.id))));
 
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
+  if (istMonteur(k) && (b.bericht === undefined || !(await erlaubteProjekte(k)).has(Number(b.projektId)))) throw fehler(403, "Für Monteure nicht freigegeben");
   if (b.bericht !== undefined) return abschlussAnlegen(b, res, k);
   // Was schon in Lieferscheinen und im Heizlastbericht steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
   // Lieferschein vor Heizlast: dort steht die echte Außeneinheit, die Heizlast ist nur der Richtwert.

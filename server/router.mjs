@@ -3,7 +3,7 @@ const routen = [];
 
 // muster wie "/api/projekte/:id"; handler(req, res, params, kontext)
 export function route(methode, muster, handler) {
-  routen.push({ methode, teile: muster.split("/"), handler });
+  routen.push({ methode, muster, teile: muster.split("/"), handler });
 }
 
 export function finde(methode, pfad) {

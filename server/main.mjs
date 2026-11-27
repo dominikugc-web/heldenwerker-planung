@@ -20,6 +20,7 @@ import "./routen-ablauf.mjs";
 import "./produkte.mjs";
 import "./feedback.mjs";
 import { erstelleProfile } from "./profile.mjs";
+import { istMonteur, monteurPruefen } from "./monteur.mjs";
 
 const TYPEN = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json", ".pdf": "application/pdf" };
@@ -88,7 +89,7 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     console.log("Setze Senden fort:", pl.id);
     abschluss.starten(pl.id);
   }
-  const kontext = { webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren, echt };
+  const kontext = { monteurCache: new Map(), webDir, datenDir, homeDir, lokal, hero, schreiber, claude, planungen, abschluss, inhaber, profile, transkribieren, echt };
   const server = http.createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://x").pathname;
     cors(req, res);
@@ -101,7 +102,9 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     const treffer = finde(req.method, pfad);
     if (!treffer) return json(res, 404, { fehler: "Unbekannte Adresse" });
     try {
-      await treffer.r.handler(req, res, treffer.params, { ...kontext, person: wer, profil: profile.fuer(wer, req.headers["tailscale-user-name"]), query: new URL(req.url, "http://x").searchParams });
+      const k = { ...kontext, person: wer, profil: profile.fuer(wer, req.headers["tailscale-user-name"]), query: new URL(req.url, "http://x").searchParams };
+      if (istMonteur(k)) await monteurPruefen(k, req.method, treffer.r.muster, treffer.params);
+      await treffer.r.handler(req, res, treffer.params, k);
     } catch (e) {
       if (!res.headersSent) json(res, e.eigen ? e.status : 500, { fehler: e.eigen ? e.message : "Interner Fehler" });
       else res.end();
