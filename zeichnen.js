@@ -145,6 +145,8 @@ export function zeichnen(blob) {
       if (e.type === "pointerdown") {
         try { flaeche.setPointerCapture(e.pointerId); } catch { /* Zeiger schon weg */ }
         mvFinger.set(e.pointerId, fp);
+        // Maus am PC (27.11.): rechte oder mittlere Taste bzw. Umschalt + ziehen verschiebt den Kasten, links dreht, Mausrad zoomt.
+        if (e.pointerType === "mouse" && (e.button === 1 || e.button === 2 || e.shiftKey)) { mvZug = { schieben: true, ab: fp, k: { ...kasten } }; return; }
         if (mvFinger.size === 1) { const o = mv.getCameraOrbit(); mvZug = { dreh: true, ab: fp, theta: o.theta, phi: o.phi }; }
         if (mvFinger.size === 2) {
           const [a, b] = [...mvFinger.values()];
@@ -155,7 +157,8 @@ export function zeichnen(blob) {
       if (!mvFinger.has(e.pointerId)) return;
       if (e.type === "pointermove") {
         mvFinger.set(e.pointerId, fp);
-        if (mvZug?.dreh) {
+        if (mvZug?.schieben) { kasten = { ...mvZug.k, x: mvZug.k.x + fp.x - mvZug.ab.x, y: mvZug.k.y + fp.y - mvZug.ab.y }; kastenSetzen(); }
+        else if (mvZug?.dreh) {
           const w = (2 * Math.PI) / fr.height, phi = Math.min(Math.PI - 0.01, Math.max(0.01, mvZug.phi - (fp.y - mvZug.ab.y) * w));
           mv.cameraOrbit = `${mvZug.theta - (fp.x - mvZug.ab.x) * w}rad ${phi}rad auto`;
         } else if (mvZug?.d && mvFinger.size >= 2) { // um die Fingermitte zoomen und mitziehen
@@ -171,6 +174,24 @@ export function zeichnen(blob) {
       if (!mvFinger.size) mvZug = null;
     }
     for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) flaeche.addEventListener(t, mvZeiger, true);
+    // Mausrad (und Zwei-Finger-Zoom am Touchpad, kommt als Rad mit Strg) zoomt den Kasten um den Mauszeiger.
+    let rad = null;
+    flaeche.addEventListener("wheel", (e) => {
+      if (!mv && gewaehlt?.art === "produkt") { // eingesetztes Produkt: Mausrad macht es um die Mitte größer/kleiner
+        e.preventDefault();
+        if (!rad) { merken(); rad = setTimeout(() => (rad = null), 400); } else { clearTimeout(rad); rad = setTimeout(() => (rad = null), 400); } // ein Drehen = ein Rückgängig-Schritt
+        const g = gewaehlt, w = Math.max(breite * 8, g.w * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))), h = g.h * w / g.w;
+        g.x += (g.w - w) / 2; g.y += (g.h - h) / 2; g.w = w; g.h = h; malen(); return;
+      }
+      if (!mv) return;
+      e.preventDefault();
+      const fr = flaeche.getBoundingClientRect(), m = { x: e.clientX - fr.left, y: e.clientY - fr.top }, k = kasten;
+      const s = Math.min(fr.width * 3, Math.max(60, k.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
+      kasten = { s, x: m.x - (m.x - k.x) * s / k.s, y: m.y - (m.y - k.y) * s / k.s };
+      kastenSetzen();
+    }, { passive: false });
+    // Hinweis je nach Gerät: mit Maus andere Bedienung als mit Fingern.
+    if (matchMedia("(pointer: fine)").matches) el.querySelector(".modellleiste span").textContent = "Linke Maustaste drehen, rechte Maustaste verschieben, Mausrad größer/kleiner";
     // alt: schon eingesetztes 3D-Gerät, das wieder gedreht wird; Kasten und Blickwinkel kommen von dort.
     async function modellOeffnen(id, alt = null) {
       try {
