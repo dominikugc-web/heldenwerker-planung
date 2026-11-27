@@ -65,3 +65,23 @@ test("Monteur: Termine nur eigene Montagen; Bericht anlegen, Kollege im selben P
     assert.equal((await max.get("/api/projekte/9")).status, 403);
   } finally { await s.stop(); }
 });
+
+test("Mitarbeiterliste für die Auswahl „Wer war dabei“: auch für Monteure, nur Namen", async () => {
+  const { s, max } = await aufbau();
+  try {
+    const r = await max.get("/api/mitarbeiter");
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), ["Lisa Kollegin", "Max Monteur"]);
+  } finally { await s.stop(); }
+});
+
+test("Gewählte Personen stehen im Bericht; beim Fortsetzen ersetzt die neue Auswahl die alte (ohne Unterschrift)", async () => {
+  const { s, max } = await aufbau();
+  try {
+    const p = await (await max.post("/api/planungen", { bericht: "ac", projektId: 8, monteure: ["Max Monteur", "Lisa Kollegin"] })).json();
+    assert.equal(p.antworten.ab_monteure.wert, "Max Monteur, Lisa Kollegin");
+    const q = await (await max.post("/api/planungen", { bericht: "ac", projektId: 8, monteure: ["Lisa Kollegin"] })).json();
+    assert.equal(q.id, p.id);
+    assert.equal(q.antworten.ab_monteure.wert, "Lisa Kollegin");
+  } finally { await s.stop(); }
+});

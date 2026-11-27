@@ -21,7 +21,7 @@ test("Abschlussbericht anlegen: Startfrage, Kopf und Monteure vorausgefüllt", a
     assert.equal(p.antworten.ab_projektnr.wert, "UNB-1149");
     assert.equal(p.antworten.ab_adresse.wert, "Weg 1, 12345 Dorf");
     assert.match(p.antworten.ab_datum.wert, /^\d\d\.\d\d\.\d{4}$/);
-    assert.equal(p.antworten.ab_monteure.wert, "Lokal, Max M.");
+    assert.equal(p.antworten.ab_monteure.wert, "Max M., Lokal");
     assert.equal(p.antworten.typ, undefined);
     assert.equal(p.antworten.kunde, undefined, "keine Besichtigungsfelder");
   } finally { await s.stop(); }

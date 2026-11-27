@@ -4,7 +4,7 @@ import { fehler } from "./router.mjs";
 // auf deren Montage-Termin er in HERO eingeteilt ist (60 Tage zurück bis 14 voraus). Alles andere ist gesperrt.
 export const MONTAGE = ["Umsetzung", "DC Montage", "WP Montage", "Zählertausch"];
 const ERLAUBT = new Set([
-  "GET /api/gesund", "GET /api/ich", "GET /api/fragen", "GET /api/termine", "GET /api/termin-kategorien",
+  "GET /api/gesund", "GET /api/ich", "GET /api/mitarbeiter", "GET /api/fragen", "GET /api/termine", "GET /api/termin-kategorien",
   "GET /api/produkte", "GET /api/produkte/:id", "GET /api/produkte/:id/3d", "GET /api/projekte/:id",
   "GET /api/planungen", "POST /api/planungen", "GET /api/planungen/:id", "PUT /api/planungen/:id/antworten/:frage",
   "PUT /api/planungen/:id/dateien/:dateiId", "GET /api/planungen/:id/dateien/:dateiId", "GET /api/planungen/:id/protokoll.pdf",

@@ -58,11 +58,21 @@ async function abschlussAnlegen(b, res, k) {
   const key = b.bericht === "dach" ? "dc" : String(b.bericht);
   if (!Object.hasOwn(BERICHTE, key)) throw fehler(400, "Unbekannter Bericht");
   const name = BERICHTE[key], projektId = Number(b.projektId);
+  // Wer war dabei: die Auswahl aus der App; ohne Auswahl der Anlegende selbst.
+  const gewaehlt = [...new Set([].concat(b.monteure || []).map((m) => String(m).trim().slice(0, 80)).filter(Boolean))];
   const offen = k.planungen.liste().find((x) => x.projektId === projektId && berichtVon(x.antworten) === key && x.status !== "gesendet");
-  if (offen) return json(res, 200, k.planungen.laden(offen.id));
+  if (offen) {
+    const pl = k.planungen.laden(offen.id);
+    // Neue Auswahl beim Fortsetzen übernehmen, solange nicht unterschrieben oder gesendet.
+    if (gewaehlt.length && !abschlussGesperrt(pl) && !pl.antworten.ab_unterschrift) {
+      pl.antworten.ab_monteure = { ...(pl.antworten.ab_monteure || { uebersprungen: false, dateien: [], notiz: "" }), wert: gewaehlt.join(", "), zeit: new Date().toISOString() };
+      k.planungen.speichern(pl);
+    }
+    return json(res, 200, pl);
+  }
   let vorbefuellt = {};
   try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
-  const monteure = [...new Set([k.profil?.name || k.person, ...[].concat(b.monteure || []).map((m) => String(m).trim().slice(0, 80))].filter(Boolean))];
+  const monteure = gewaehlt.length ? gewaehlt : [k.profil?.name || k.person];
   vorbefuellt.bericht = { wert: name };
   vorbefuellt.ab_monteure = { wert: monteure.join(", ") };
   const nummer = String(b.nummer || "").slice(0, 40);

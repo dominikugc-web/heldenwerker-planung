@@ -19,6 +19,8 @@ route("GET", "/api/termine", async (req, res, p, k) => {
   }))));
 });
 route("GET", "/api/termin-kategorien", async (req, res, p, k) => json(res, 200, await k.hero().terminKategorien()));
+// Namen für „Wer war mit auf der Baustelle?“ beim Abschlussbericht, für alle Rollen (nur Namen, keine E-Mail).
+route("GET", "/api/mitarbeiter", async (req, res, p, k) => json(res, 200, [...new Set((await k.hero().personen()).map((x) => x.name).filter(Boolean))]));
 route("GET", "/api/hero-personen", async (req, res, p, k) => {
   if (!istAdmin(k)) throw fehler(403, "Nur für Admins");
   json(res, 200, await k.hero().personen());
