@@ -257,7 +257,7 @@ export async function chatAnsicht(el, id) {
     if (f.art === "foto") eingabe = `<div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
         ${bilder.length ? `<button class="wahl gewaehlt" data-fertig>Weiter</button>` : ""}`;
     // Alle Fotos dieser Frage antippen zum Bemalen und Beschriften, egal welche Frage.
-    const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(bildSrc(d))}" alt=""><span class="art">Bemalen</span></button>`).join("")}</div>` : "";
+    const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<div class="anhangbox"><button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(bildSrc(d))}" alt=""><span class="art">Bemalen</span></button><button class="weg" data-fotoweg="${d.id}" aria-label="Foto löschen">✕</button></div>`).join("")}</div>` : "";
     steuerung.innerHTML = `${vorschau}${eingabe}
       <div class="zusatz">
         <button class="rundknopf" data-anhang aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}</button>
@@ -290,6 +290,7 @@ export async function chatAnsicht(el, id) {
     $("[data-galerie]", steuerung)?.addEventListener("click", () => $("#galerie", el).click());
     $("[data-fertig]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
     $$("[data-malen]", steuerung).forEach((b) => (b.onclick = () => malen(f, b.dataset.malen)));
+    $$("[data-fotoweg]", steuerung).forEach((b) => (b.onclick = () => fotoLoeschen(f, b.dataset.fotoweg)));
     $("[data-anhang]", steuerung).onclick = () => $("#galerie", el).click();
     $("[data-sprache]", steuerung).onclick = () => sprachnotiz(f);
     $("[data-notiz]", steuerung).onclick = () => notizSheet(f);
@@ -401,6 +402,15 @@ export async function chatAnsicht(el, id) {
       await dateiEinreihen(dateiId, name, "bild", await verkleinern(neu, 1600, 0.8), true, v);
       await speichern(f, { dateien: dateienVon(f) }, { [dateiId]: { v, groesse: neu.size } });
     } catch (e) { bericht("malen", e); fehlerMelden(e); }
+  }
+
+  // Falsches Foto aus der Antwort nehmen (27.11.). Es wird dann nicht mit gesendet; schon nach HERO/Drive Gesendetes bleibt dort.
+  async function fotoLoeschen(f, dateiId) {
+    if (!confirm("Foto löschen?")) return;
+    try {
+      await hinten; // sonst schreibt ein noch laufendes Hochladen die alte Liste samt Foto zurück
+      await speichern(f, { dateien: dateienVon(f).filter((d) => d.id !== dateiId) });
+    } catch (e) { bericht("foto-loeschen", e); fehlerMelden(e); }
   }
 
   function notizSheet(f) {
