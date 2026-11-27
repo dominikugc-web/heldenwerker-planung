@@ -319,6 +319,7 @@ export async function chatAnsicht(el, id) {
   el.innerHTML = `<div class="chatseite">
     <div class="chatkopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button>
       <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || antworten().ab_kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div><div class="sync" id="sync" role="status" hidden></div></div>
+      ${abschluss() ? `<button class="pill rund" data-neustartkopf aria-label="Bericht komplett neu starten" title="Bericht komplett neu starten"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>` : ""}
       <button class="pill" data-uebersicht>Übersicht</button></div>
     <div class="fortschritt" aria-hidden="true"><span id="balken"></span></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
@@ -330,6 +331,7 @@ export async function chatAnsicht(el, id) {
   const verlauf = $("#verlauf", el), steuerung = $("#steuerung", el);
   $("[data-zurueck]", el).onclick = () => zurueck("home");
   $("[data-uebersicht]", el).onclick = uebersicht;
+  $("[data-neustartkopf]", el)?.addEventListener("click", () => berichtNeuStarten(planung, fragen));
   // Tastatur geht auf (oder die Eingabe wächst): Verlauf wird kleiner, also um genau so viel mit nach oben schieben.
   let verlaufH = 0;
   // Nur wer unten war, wird mitgeschoben; weiter oben öffnet sich das Feld einfach darüber, ohne dass der Chat springt.
