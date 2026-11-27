@@ -1,31 +1,38 @@
 // Prüfansicht nach dem Zusammenfassen: Monteur-Text bearbeiten, Antworten kontrollieren, Protokoll ansehen, dann nach HERO.
 import { api, dateiUrl, serverUrl, zustand } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, zurueck, IKON } from "./ui.js";
+import { sichtbar, berichtKey } from "./chat.js";
+
+// Abschlussbericht: was vor dem Senden noch fehlt (wie fehltZumSenden auf dem Server).
+const hatBild = (a) => (a?.dateien || []).some((d) => d.art === "bild");
+const fehltAbschluss = (katalog, antworten) => [...sichtbar(katalog, antworten).filter((f) => f.pflicht && !hatBild(antworten[f.id]) && !(antworten[f.id]?.uebersprungen && antworten[f.id]?.notiz)).map((f) => f.titel),
+  ...(hatBild(antworten.ab_unterschrift) && antworten.ab_unterschrift.wert ? [] : ["Unterschrift des Kunden"])];
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
   ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
 
 export async function pruefAnsicht(el, id, signal) {
   const [planung, { katalog, bereiche }] = await Promise.all([api("/api/planungen/" + id, { signal }), api("/api/fragen", { signal })]);
-  if (!planung.ergebnis) { location.hash = "chat/" + id; return; }
-  const e = planung.ergebnis, antworten = planung.antworten || {};
-  const beantwortet = katalog.filter((f) => { const a = antworten[f.id]; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
+  const antworten = planung.antworten || {}, abschluss = !!berichtKey(katalog, antworten), gesperrt = abschluss && planung.status === "gesendet";
+  if (!planung.ergebnis && !abschluss) { location.hash = "chat/" + id; return; }
+  const e = abschluss ? { fehlt: gesperrt ? [] : fehltAbschluss(katalog, antworten), monteure: {} } : planung.ergebnis;
+  const beantwortet = katalog.filter((f) => { const a = antworten[f.id]; if (f.id === "bericht") return false; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
   const wert = (f, a) => [a.wert && (f.art === "janein" ? a.wert[0].toUpperCase() + a.wert.slice(1) : a.wert + (f.einheit ? " " + f.einheit : "")),
-    a.dateien?.length ? `${a.dateien.length} Datei${a.dateien.length > 1 ? "en" : ""}` : "", a.notiz ? "✎ Notiz" : ""].filter(Boolean).join(" · ");
+    a.dateien?.length ? `${a.dateien.length} Datei${a.dateien.length > 1 ? "en" : ""}` : "", f.abschluss && f.pflicht && a.uebersprungen && !a.dateien?.length ? "Nicht möglich: " + (a.notiz || "") : a.notiz ? "✎ Notiz" : ""].filter(Boolean).join(" · ");
   const bild = (f) => (antworten[f.id].dateien || []).filter((d) => d.art === "bild").slice(0, 3).map((d) => `<img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt="" loading="lazy">`).join("");
 
   el.innerHTML = `<div class="kopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button><h1>Prüfen</h1><span class="muted small" id="gespeichert"></span></div>
-    <p class="unter">${esc(antworten.kunde?.wert || planung.projektTitel)}<br>Aufgenommen von ${esc(planung.personName || planung.person)}</p>
+    <p class="unter">${abschluss ? esc("Abnahmeprotokoll " + antworten.bericht.wert) + "<br>" : ""}${esc(antworten.kunde?.wert || antworten.ab_kunde?.wert || planung.projektTitel)}<br>Aufgenommen von ${esc(planung.personName || planung.person)}</p>
     <div id="ergebnis"></div>
-    ${e.fehlt.length ? `<div class="karte fehlt"><b>Es fehlen noch Fotos</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p></div>` : ""}
-    <div class="label">Für die Monteure</div>
-    <div class="gruppe">${ABSCHNITTE.map(([k, t]) => `<div class="feld abschnitt"><div class="abschnittkopf"><span>${t}</span><button class="stiftknopf" data-bearbeiten="${k}" aria-label="${t} bearbeiten" aria-pressed="false">${IKON.stift}</button></div><textarea data-abschnitt="${k}" rows="1" readonly placeholder="Eine Zeile pro Punkt">${esc((e.monteure[k] || []).join("\n"))}</textarea></div>`).join("")}</div>
+    ${e.fehlt.length ? `<div class="karte fehlt"><b>${abschluss ? "Vor dem Senden fehlt noch" : "Es fehlen noch Fotos"}</b><p class="muted small" style="margin:6px 0 0">${e.fehlt.map(esc).join(", ")}</p></div>` : ""}
+    ${abschluss ? "" : `<div class="label">Für die Monteure</div>
+    <div class="gruppe">`}${abschluss ? "" : ABSCHNITTE.map(([k, t]) => `<div class="feld abschnitt"><div class="abschnittkopf"><span>${t}</span><button class="stiftknopf" data-bearbeiten="${k}" aria-label="${t} bearbeiten" aria-pressed="false">${IKON.stift}</button></div><textarea data-abschnitt="${k}" rows="1" readonly placeholder="Eine Zeile pro Punkt">${esc((e.monteure[k] || []).join("\n"))}</textarea></div>`).join("") + "</div>"}
     ${[...new Set(beantwortet.map((f) => f.bereich))].map((b) => `<div class="label">${esc(bereiche[b])}</div><div class="gruppe">${beantwortet.filter((f) => f.bereich === b).map((f) =>
-      `<a class="zeile" href="#chat/${esc(planung.id)}/${esc(f.id)}"><div class="haupt"><div class="titel">${esc(f.titel || f.frage)}</div><div class="neben">${esc(wert(f, antworten[f.id]))}</div></div><span class="daumen">${bild(f)}</span>${IKON.pfeil}</a>`).join("")}</div>`).join("")}
-    <div class="zwei"><a class="pill" href="${esc(serverUrl(`/api/planungen/${planung.id}/protokoll.pdf`))}" target="_blank" rel="noopener" data-pdf>Protokoll ansehen</a><button class="pill" data-chat>Zum Ablauf</button></div>
+      `<${gesperrt ? "div" : "a"} class="zeile" ${gesperrt ? "" : `href="#chat/${esc(planung.id)}/${esc(f.id)}"`}><div class="haupt"><div class="titel">${esc(f.titel || f.frage)}</div><div class="neben">${esc(wert(f, antworten[f.id]))}</div></div><span class="daumen">${bild(f)}</span>${gesperrt ? "" : IKON.pfeil}</${gesperrt ? "div" : "a"}>`).join("")}</div>`).join("")}
+    <div class="zwei"><a class="pill" href="${esc(serverUrl(`/api/planungen/${planung.id}/protokoll.pdf`))}" target="_blank" rel="noopener" data-pdf>Protokoll ansehen</a>${gesperrt ? "" : `<button class="pill" data-chat>Zum Ablauf</button>`}</div>
     <button class="pill" data-pdfsichern style="width:100%;margin-bottom:var(--gap)">PDF in Dateien sichern</button>
     <button class="pill" data-fotossichern style="width:100%;margin-bottom:var(--gap)">Alle Fotos aufs Handy</button>
-    <button class="gross ok" data-senden>${IKON.wolke}${planung.status === "gesendet" ? "Erneut senden" : "In HERO speichern"}</button>`;
+    <button class="gross ok" data-senden ${e.fehlt.length && abschluss ? "disabled" : ""}>${IKON.wolke}${planung.status === "gesendet" ? "Erneut senden" : "In HERO speichern"}</button>`;
 
   $$("[data-chat]", el).forEach((b) => (b.onclick = () => (location.hash = "chat/" + id)));
   $("[data-zurueck]", el).onclick = () => zurueck("home");
@@ -51,8 +58,9 @@ export async function pruefAnsicht(el, id, signal) {
   const status = (t) => { const s = $("#gespeichert", el); if (s) s.textContent = t; }; // weg, wenn die Seite schon gewechselt ist
   // Text sofort einsammeln: beim Seitenwechsel ist er danach nicht mehr da.
   // Ein Fehler bleibt beim Aufrufer (Senden bricht dann ab), hält aber die nächste Speicherung nicht auf.
-  const jetztSpeichern = (body = sammeln()) => (speichern = speichern.catch(() => {}).then(async () => {
-    if (zustand.demo) return;
+  const jetztSpeichern = (body) => (speichern = speichern.catch(() => {}).then(async () => {
+    if (zustand.demo || abschluss) return;
+    body ??= sammeln();
     try { await api(`/api/planungen/${id}/ergebnis`, { methode: "PUT", body }); status("gespeichert"); if (!signal.aborted) pdfNeu(); }
     catch (err) { fehlerMelden(err); throw err; }
   }));
@@ -61,7 +69,7 @@ export async function pruefAnsicht(el, id, signal) {
   signal.addEventListener("abort", () => { if (timer) { clearTimeout(timer); timer = null; jetztSpeichern().catch(() => {}); } });
   // PDF aufs Handy (Dateien-App), von dort lädt man es in HERO hoch. Die Datei wird vorab geladen, weil Safari
   // das Teilen nur direkt im Tipp erlaubt, nicht erst nach dem Warten auf den Server.
-  const pdfName = `Besichtigungsprotokoll ${String(antworten.kunde?.wert || planung.projektTitel || "").replace(/[\\/:*?"<>|]+/g, "-").trim().slice(0, 60)} ${new Date().toLocaleDateString("de-DE")}.pdf`;
+  const pdfName = `${abschluss ? "Abnahmeprotokoll " + antworten.bericht.wert : "Besichtigungsprotokoll"} ${String(antworten.kunde?.wert || antworten.ab_kunde?.wert || planung.projektTitel || "").replace(/[\\/:*?"<>|]+/g, "-").trim().slice(0, 60)} ${new Date().toLocaleDateString("de-DE")}.pdf`;
   let pdfDatei = null, pdfLaden = null;
   const pdfHolen = () => (pdfLaden ??= fetch(serverUrl(`/api/planungen/${id}/protokoll.pdf`), { signal })
     .then((r) => { if (!r.ok) throw new Error("PDF konnte nicht erstellt werden"); return r.blob(); })
@@ -131,9 +139,9 @@ export async function pruefAnsicht(el, id, signal) {
     const r = s.ergebnis;
     const zeilen = s.status === "laeuft" ? [["Wird im Hintergrund gesendet …", "⏳"], ["Du kannst die App schließen, es läuft auf dem Server weiter.", ""]] : [
       r && [r.ziel.umgeleitet ? "Gespeichert im Testprojekt UNB-1149 (Testmodus)" : r.ziele?.length > 1 ? "Gespeichert in " + r.ziele.length + " Projekten" : "Gespeichert im Projekt", r.ziel.umgeleitet ? "" : (r.ziele || []).map((z) => z.nummer).filter(Boolean).join(", ")],
-      r && ["Logbuch-Eintrag „Besichtigung durchgeführt“", "✓"],
+      r && [abschluss ? "Logbuch-Eintrag „Baustelle abgeschlossen“" : "Logbuch-Eintrag „Besichtigung durchgeführt“", "✓"],
       r?.hochgeladen && ["Protokoll und Fotos auf Google Drive", r.hochgeladen],
-      r?.inHero && ["Fotos und Protokoll im HERO-Projekt", r.inHero],
+      r?.inHero && [abschluss ? "Fotos und Abnahmeprotokoll im HERO-Projekt" : "Fotos und Protokoll im HERO-Projekt", r.inHero],
       r?.offen && ["Fotos und Protokoll folgen", r.offen + " offen"],
       s.status === "fehler" && ["Fehler", s.meldung || "Senden fehlgeschlagen"],
     ].filter(Boolean);

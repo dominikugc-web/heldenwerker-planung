@@ -1,7 +1,7 @@
 // Gerüst: Router, Tab-Leiste, Home, Kalender, Projekte, Projektseite, Einstellungen, Feedback.
 import { api, verbinden, brauchtKlick, zustand, serverSetzen, speicher, serverUrl } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, sheet, zurueck, IKON, uhrzeit, datumKurz, tagName, tagSchluessel, relativ, istBesichtigung, euro } from "./ui.js";
-import { plusSheet, planungStarten, chatAnsicht } from "./chat.js";
+import { plusSheet, planungStarten, chatAnsicht, abschlussStarten } from "./chat.js";
 import { pruefAnsicht } from "./pruefung.js";
 
 const ansicht = $("#ansicht");
@@ -14,6 +14,8 @@ async function zeigen() {
   const fn = ANSICHTEN[name] || home;
   abbruch?.abort();
   abbruch = new AbortController();
+  // Monteure: keine neue Besichtigung, keine Projektsuche (der Server sperrt beides ohnehin).
+  for (const t of ["plus", "projekte"]) $(`.tabs [data-tab="${t}"]`).style.display = istMonteur() ? "none" : "";
   const tab = ["home", "kalender", "projekte", "setup"].includes(name) ? name : name === "projekt" ? "projekte" : null;
   $$(".tabs button").forEach((b) => (b.dataset.tab === tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
   const vollbild = name === "chat";
@@ -48,6 +50,7 @@ document.addEventListener("click", async (e) => {
 
 // ---------- Home ----------
 async function home(el, _, signal) {
+  if (istMonteur()) return homeMonteur(el, signal);
   const vorname = (zustand.ich?.name || "").split(/[\s@]/)[0];
   el.innerHTML = `${banner()}<h1>Hallo${vorname && vorname !== "Lokal" ? " " + esc(vorname) : ""}</h1><p class="unter">${esc(new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }))}</p>
     <button class="gross" data-neu>${IKON.plus}Neue Besichtigung</button>
@@ -73,6 +76,26 @@ async function home(el, _, signal) {
     : bes.length ? bes.map((t) => terminZeile(t, !eigene)).join("") : `<div class="leer">Keine Besichtigungen eingetragen.</div>`;
 }
 
+// Monteur: Montagen der nächsten 7 Tage (der Server liefert nur eigene), offene und gesendete Abschlussberichte.
+async function homeMonteur(el, signal) {
+  const vorname = (zustand.ich?.name || "").split(/[\s@]/)[0];
+  el.innerHTML = `${banner()}<h1>Hallo ${esc(vorname)}</h1><p class="unter">${esc(new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }))}</p>
+    <div class="label">Meine Montagen</div><div class="gruppe" id="termine"><div class="leer">Lädt …</div></div>
+    <div class="label">Offene Abschlussberichte</div><div class="gruppe" id="offen"><div class="leer">Lädt …</div></div>
+    <div class="label">Zuletzt gesendet</div><div class="gruppe" id="gesendet"><div class="leer">Lädt …</div></div>`;
+  const heute = new Date(); heute.setHours(0, 0, 0, 0);
+  const [planungen, termine] = await Promise.all([
+    api("/api/planungen", { signal }).catch(() => []),
+    api(`/api/termine?von=${new Date(+heute - 2 * 864e5).toISOString()}&bis=${new Date(+heute + 7 * 864e5).toISOString()}`, { signal }).catch(() => null),
+  ]);
+  const zeile = (t) => `<a class="zeile" ${terminZiel(t)}><span class="zeit">${esc(datumKurz(t.start))}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(t.kategorie)}${esc(personenText(t))}</div></div><span class="pfeil">${IKON.pfeil}</span></a>`;
+  $("#termine", el).innerHTML = termine === null ? `<div class="leer">Termine nicht erreichbar.</div>`
+    : termine.length ? termine.sort((a, b) => a.start.localeCompare(b.start)).map(zeile).join("") : `<div class="leer">Keine Montagen eingetragen.</div>`;
+  const offen = planungen.filter((p) => p.status !== "gesendet"), gesendet = planungen.filter((p) => p.status === "gesendet").slice(0, 5);
+  $("#offen", el).innerHTML = offen.length ? offen.map(planungZeile).join("") : `<div class="leer">Keine offenen Berichte. Tipp auf eine Montage, dann „Baustelle abschließen“.</div>`;
+  $("#gesendet", el).innerHTML = gesendet.length ? gesendet.map(planungZeile).join("") : `<div class="leer">Noch nichts gesendet.</div>`;
+}
+
 const STATUS = { offen: ["Offen", "blau"], zusammengefasst: ["Zum Prüfen", "orange"], gesendet: ["In HERO", "gruen"] };
 // Sende-Stand geht vor: läuft gerade im Hintergrund, oder hat nicht geklappt (dann in der Prüfansicht erneut senden).
 const SENDEN = { laeuft: ["Wird gesendet …", "orange"], fehler: ["Senden fehlgeschlagen", "rot"] };
@@ -80,10 +103,12 @@ function planungZeile(p) {
   const [text, farbe] = SENDEN[p.senden?.status] || STATUS[p.status] || STATUS.offen;
   const ziel = p.status === "offen" ? "chat/" + p.id : "pruefung/" + p.id;
   const person = (p.personName || p.person || "").split(/[\s@]/)[0];
-  return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc(person)}</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
+  return `<a class="zeile" href="#${ziel}"><div class="haupt"><div class="titel">${p.antworten?.bericht?.wert ? esc("Abschluss " + p.antworten.bericht.wert + ": ") : ""}${esc(p.projektTitel)}</div><div class="neben">${esc(relativ(p.erstellt))} · von ${esc(person)}</div></div><span class="badge ${farbe}">${text}</span><span class="pfeil">${IKON.pfeil}</span></a>`;
 }
 // Gebündelter Termin (ein Kunde, mehrere Projekte): die anderen Projekte gehen mit auf die Projektseite.
-const terminZiel = (t) => (t.projektId ? `href="#projekt/${t.projektId}${t.projektIds?.length > 1 ? "?mit=" + t.projektIds.join(",") : ""}"` : "");
+const terminZiel = (t) => { if (!t.projektId) return ""; const q = new URLSearchParams(); if (t.projektIds?.length > 1) q.set("mit", t.projektIds.join(",")); if (t.personen?.length) q.set("wer", t.personen.join(","));
+  return `href="#projekt/${t.projektId}${q.size ? "?" + q.toString().replaceAll("%2C", ",") : ""}"`; };
+const istMonteur = () => zustand.ich?.rolle === "monteur";
 function terminZeile(t, mitPersonen = false) {
   const ziel = terminZiel(t);
   return `<a class="zeile" ${ziel}><span class="zeit">${t.ganztags ? "Ganz-<br>tags" : esc(uhrzeit(t.start))}</span><div class="haupt"><div class="titel">${esc(t.titel)}</div><div class="neben">${esc(tagSchluessel(t.start) === tagSchluessel(Date.now()) ? "Heute" : "Morgen")} · ${esc(t.kategorie)}${mitPersonen ? esc(personenText(t)) : ""}</div></div>${t.projektId ? `<span class="pfeil">${IKON.pfeil}</span>` : ""}</a>`;
@@ -159,7 +184,8 @@ const projektZeile = (p) => `<a class="zeile" href="#projekt/${p.id}"><div class
 async function projekt(el, roh, signal) {
   // #projekt/7?mit=7,9: aus einem gebündelten Termin, die anderen Projekte desselben Besuchs sind vorausgewählt.
   const [id, q = ""] = String(roh).split("?");
-  const mit = (new URLSearchParams(q).get("mit") || "").split(",").map(Number).filter(Boolean);
+  const such = new URLSearchParams(q), mit = (such.get("mit") || "").split(",").map(Number).filter(Boolean);
+  const personen = (such.get("wer") || "").split(",").map((s) => s.trim()).filter(Boolean), monteur = istMonteur();
   el.innerHTML = `<h1>Projekt</h1><div class="leer">Lädt …</div>`;
   const [p, planungen] = await Promise.all([api("/api/projekte/" + id, { signal }), api("/api/planungen", { signal }).catch(() => [])]);
   const eigene = planungen.filter((x) => x.projektId === p.id || x.projekte?.some((y) => y.id === p.id));
@@ -171,15 +197,17 @@ async function projekt(el, roh, signal) {
       ${p.kontakt?.telefon ? `<a class="zeile" href="tel:${esc(p.kontakt.telefon.replace(/[^\d+]/g, ""))}"><div class="haupt"><div class="neben">Telefon</div><div class="titel">${esc(p.kontakt.telefon)}</div></div></a>` : ""}
       ${p.kontakt?.email ? `<a class="zeile" href="mailto:${esc(p.kontakt.email)}"><div class="haupt"><div class="neben">E-Mail</div><div class="titel">${esc(p.kontakt.email)}</div></div></a>` : ""}
     </div>
-    <button class="gross" data-start>${IKON.plus}Besichtigung starten</button>
-    ${p.kundeId ? `<div class="label">Alle Projekte von ${esc(p.kunde || "diesem Kunden")}</div><div class="gruppe" id="kundenprojekte"><div class="leer">Lädt …</div></div>` : ""}
+    ${monteur ? "" : `<button class="gross" data-start>${IKON.plus}Besichtigung starten</button>`}
+    <button class="gross ${monteur ? "" : "zweit"}" data-abschluss>${IKON.haken}Baustelle abschließen</button>
+    ${p.kundeId && !monteur ? `<div class="label">Alle Projekte von ${esc(p.kunde || "diesem Kunden")}</div><div class="gruppe" id="kundenprojekte"><div class="leer">Lädt …</div></div>` : ""}
     <div class="label">Planungen</div><div class="gruppe">${eigene.length ? eigene.map(planungZeile).join("") : `<div class="leer">Noch keine Planung in der App.</div>`}</div>
     <div class="label">Logbuch in HERO</div><div class="gruppe">${p.logbuch.length ? p.logbuch.slice(0, 8).map((e) => `<div class="zeile"><div class="haupt"><div class="neben">${esc(datumKurz(e.datum))}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(e.text.length > 400 ? e.text.slice(0, 400) + " …" : e.text)}</div></div></div>`).join("") : `<div class="leer">Keine Einträge.</div>`}</div>
     <div class="label">Dateien in HERO</div><div class="gruppe">${p.dateien.length ? p.dateien.map((d) => `<a class="zeile" href="${esc(d.url)}" target="_blank" rel="noopener"><div class="haupt"><div class="titel">${esc(d.name)}</div></div><span class="pfeil">${IKON.pfeil}</span></a>`).join("") : `<div class="leer">Keine Dateien.</div>`}</div>`;
   $("[data-zurueck]", el).onclick = () => zurueck("projekte");
-  $("[data-start]", el).onclick = () => planungStarten(p, { mit });
+  $("[data-start]", el)?.addEventListener("click", () => planungStarten(p, { mit }));
+  $("[data-abschluss]", el).onclick = () => abschlussStarten(p, { mit, personen });
   // Alle Projekte desselben Kunden aus HERO; das offene Projekt ist markiert.
-  if (p.kundeId) api(`/api/kunden/${p.kundeId}/projekte`, { signal }).then((liste) => {
+  if (p.kundeId && !monteur) api(`/api/kunden/${p.kundeId}/projekte`, { signal }).then((liste) => {
     const box = $("#kundenprojekte", el);
     if (box) box.innerHTML = liste.map((x) => x.id === p.id
       ? `<div class="zeile"><div class="haupt"><div class="titel">${esc(x.nummer)}</div><div class="neben">${x.status ? esc(x.status) + " · " : ""}dieses Projekt</div></div></div>`
@@ -235,7 +263,7 @@ async function adminBereich(el, signal) {
     <div class="gruppe">${sichtbar.length ? sichtbar.map((f) => `<div class="zeile"><span aria-hidden="true">${ART[f.art]}</span><div class="haupt"><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(f.text)}</div><div class="neben">${esc(f.name || f.person)} · ${esc(relativ(f.zeit))}${f.bild ? ` · <a href="${serverUrl("/api/feedback/bild/" + f.bild)}" target="_blank" rel="noopener">Bild</a>` : ""}</div></div>
       <button class="pill" data-status="${f.id}" data-ziel="${status(f) === "neu" ? "erledigt" : "neu"}">${status(f) === "neu" ? "Erledigt" : "Zurück"}</button></div>`).join("") : `<div class="leer">${feedbackFilter === "neu" ? "Nichts Neues." : "Noch nichts erledigt."}</div>`}</div>
     <div class="label">Team</div>
-    <div class="gruppe">${team.map((p) => `<button class="zeile" data-login="${esc(p.login)}"><div class="haupt"><div class="titel">${esc(p.name)}</div><div class="neben">zuletzt ${esc(relativ(p.zuletzt))} · ${p.heroPerson ? "HERO: " + esc(p.heroPerson.name) : "keine HERO-Person"}</div></div><span class="badge ${p.rolle === "admin" ? "blau" : ""}">${p.rolle === "admin" ? "Admin" : "Planer"}</span><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>
+    <div class="gruppe">${team.map((p) => `<button class="zeile" data-login="${esc(p.login)}"><div class="haupt"><div class="titel">${esc(p.name)}</div><div class="neben">zuletzt ${esc(relativ(p.zuletzt))} · ${p.heroPerson ? "HERO: " + esc(p.heroPerson.name) : "keine HERO-Person"}</div></div><span class="badge ${p.rolle === "admin" ? "blau" : p.rolle === "monteur" ? "orange" : ""}">${{ admin: "Admin", monteur: "Monteur" }[p.rolle] || "Planer"}</span><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>
     <p class="hinweis">Jeder, der die App über Tailscale öffnet, erscheint hier automatisch.</p>`;
   $$("[data-fb]", el).forEach((b) => (b.onclick = () => { feedbackFilter = b.dataset.fb; adminBereich(el, signal); }));
   $$("[data-status]", el).forEach((b) => (b.onclick = async () => {
@@ -254,7 +282,7 @@ function profilSheet(p, fertig) {
       <div class="zeile"><div class="haupt"><div class="neben">Login</div><div>${esc(p.login)}</div></div></div>
       <label class="feld"><span>HERO-Person (für „Meine Termine“)</span><select id="pheld"><option value="">${p.heroPerson ? esc(p.heroPerson.name) : "Lädt …"}</option></select></label></div>
     <div class="label">Rolle</div>
-    <div class="segctl" role="group" aria-label="Rolle"><button data-rolle="planer" aria-pressed="${rolle === "planer"}">Planer</button><button data-rolle="admin" aria-pressed="${rolle === "admin"}">Admin</button></div>
+    <div class="segctl" role="group" aria-label="Rolle"><button data-rolle="monteur" aria-pressed="${rolle === "monteur"}">Monteur</button><button data-rolle="planer" aria-pressed="${rolle === "planer"}">Planer</button><button data-rolle="admin" aria-pressed="${rolle === "admin"}">Admin</button></div>
     <p class="hinweis">Admins sehen Feedback und Team. Weitere Rechte kommen später.</p>
     <button class="gross" data-speichern>Speichern</button>`);
   $("[data-zu]", d).onclick = () => d.close();

@@ -74,3 +74,11 @@ test("fehltZumSenden: Pflichtfotos und Unterschrift", async () => {
     assert.ok(!fehltZumSenden(await laden(s, p.id)).includes("Unterschrift"));
   } finally { await s.stop(); }
 });
+
+test("Bericht-Typ lässt sich nach dem Anlegen nicht mehr ändern", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/bericht`, { wert: "Klima" })).status, 400);
+  } finally { await s.stop(); }
+});

@@ -12,12 +12,17 @@ export const ABSCHLUSS_BEREICHE = {
   ab_ac: "Elektrik AC",
   ab_wp: "Wärmepumpe",
   ab_klima: "Klima",
-  ab_abnahme: "Abnahme",
+  ab_abnahme: "Abnahme mit dem Kunden",
 };
 
 const slug = (s) => s.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 const foto = (bericht, name, extra = {}) => [`ab_${bericht}`, `ab_${bericht}_foto_${slug(name)}`, `Foto: ${name}`, "foto", { pflicht: true, titel: name, bericht, ...extra }];
 const nur = (bericht, ...fragen) => fragen.map(([bereich, id, frage, art, extra = {}]) => [bereich, id, frage, art, { bericht, ...extra }]);
+
+// Fester Abnahmetext im PDF und über der Unterschrift in der App.
+export const ABNAHME_TEXT = ["Die aufgeführten Mängel werden schnellstmöglich aufgearbeitet.",
+  "Aufgrund sorgfältiger und fachgerechter Arbeit gewährleisten wir gemäß BGB 5 Jahre ab Abnahme der Leistung, dass diese frei von Sachmängeln sind.",
+  "Die Anlage gilt mit Unterschrift als mängelfrei abgenommen (ausgenommen der festgestellten Mängel)."];
 
 const MAX_STRINGS = 6;
 const ab = (n) => Array.from({ length: MAX_STRINGS - n + 1 }, (_, i) => String(n + i)); // „mindestens n Strings“
@@ -109,13 +114,8 @@ const F = [
   ["ab_abnahme", "ab_maengel", "Mängel", "auswahl", { optionen: ["Keine sichtbaren Mängel", "Folgende Mängel"] }],
   ["ab_abnahme", "ab_maengel_text", "Folgende Mängel wurden festgestellt", "text", { wenn: { frage: "ab_maengel", ist: "Folgende Mängel" } }],
   ["ab_abnahme", "ab_werbung", "Bilder dürfen für Werbezwecke (z. B. Instagram, Facebook) genutzt werden?", "janein"],
-  ["ab_abnahme", "ab_unterschrift", "Unterschrift des Kunden", "unterschrift"],
+  ["ab_abnahme", "ab_unterschrift", "Unterschrift des Kunden", "unterschrift", { hinweis: ABNAHME_TEXT.join(" ") }],
 ];
-
-// Fester Abnahmetext im PDF und über der Unterschrift.
-export const ABNAHME_TEXT = ["Die aufgeführten Mängel werden schnellstmöglich aufgearbeitet.",
-  "Aufgrund sorgfältiger und fachgerechter Arbeit gewährleisten wir gemäß BGB 5 Jahre ab Abnahme der Leistung, dass diese frei von Sachmängeln sind.",
-  "Die Anlage gilt mit Unterschrift als mängelfrei abgenommen (ausgenommen der festgestellten Mängel)."];
 
 export const ABSCHLUSS_KATALOG = F.map(([bereich, id, frage, art, extra = {}]) => ({ bereich, id, frage, art, abschluss: true, ...extra }));
 

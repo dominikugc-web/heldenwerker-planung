@@ -12,7 +12,7 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   // Ein Abschlussbericht bleibt nach dem Senden wie unterschrieben; Korrektur = neuer Bericht.
   if (abschluss && pl.status === "gesendet") throw fehler(409, "Bericht ist gesendet");
   // Besichtigung und Abschlussbericht nicht mischen. Startfrage "bericht" nur, solange keine Besichtigung begonnen ist.
-  if (f.id === "bericht" ? !!pl.antworten?.typ?.wert : !!f.abschluss !== abschluss) throw fehler(400, "Frage passt nicht zu dieser Planung");
+  if (f.id === "bericht" ? !!pl.antworten?.typ?.wert || abschluss : !!f.abschluss !== abschluss) throw fehler(400, "Frage passt nicht zu dieser Planung");
   const b = await leseJson(req);
   const alt = pl.antworten?.[f.id] || { wert: "", uebersprungen: false, dateien: [], notiz: "" };
   const neu = { ...alt, zeit: new Date().toISOString() };
