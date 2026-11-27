@@ -42,6 +42,8 @@ const innengeraete = Array.from({ length: MAX_STRINGS }, (_, i) => i + 1).map((n
 const innengeraetFotos = Array.from({ length: MAX_STRINGS }, (_, i) => i + 1).map((n) =>
   foto("klima", `Innengerät ${n}`, { wenn: { frage: "ab_klima_anzahl", ist: ab(n) } }));
 
+const IB = { frage: "ab_klima_inbetrieb", ist: "ja" }; // Klima: erst nach erfolgter Inbetriebnahme
+
 // [bereich, id, frage, art, extra]
 const F = [
   ["ab_start", "bericht", "Welcher Abschlussbericht?", "auswahl", { optionen: Object.values(BERICHTE), berichte: Object.keys(BERICHTE), alt: ALTE_BERICHTE }],
@@ -121,19 +123,19 @@ const F = [
     ...innengeraete,
     ["ab_klima", "ab_klima_leitung", "Kälteleitungen", "text"],
     ["ab_klima", "ab_klima_gateway", "WLAN-Gateway", "text"],
-    ["ab_klima", "ab_klima_druck", "Druckprobe", "zahl", { einheit: "bar" }],
-    ["ab_klima", "ab_klima_druck_dauer", "Dauer der Druckprobe", "zahl", { einheit: "min" }],
-    ["ab_klima", "ab_klima_vakuum", "Vakuum", "zahl", { einheit: "mbar" }],
-    ["ab_klima", "ab_klima_kaeltemittel", "Kältemittel nachgefüllt", "zahl", { einheit: "g" }],
     ["ab_klima", "ab_klima_inbetrieb", "Inbetriebnahme erfolgt?", "janein"],
+    ["ab_klima", "ab_klima_druck", "Druckprobe", "zahl", { einheit: "bar", wenn: IB }],
+    ["ab_klima", "ab_klima_druck_dauer", "Dauer der Druckprobe", "zahl", { einheit: "min", wenn: IB }],
+    ["ab_klima", "ab_klima_vakuum", "Vakuum", "zahl", { einheit: "mbar", wenn: IB }],
+    ["ab_klima", "ab_klima_kaeltemittel", "Kältemittel nachgefüllt", "zahl", { einheit: "g", wenn: IB }],
     ["ab_klima", "ab_klima_einweisung", "Einweisung Fernbedienung oder App erfolgt?", "janein"]),
   foto("klima", "Außengerät"),
   foto("klima", "Befestigung Außengerät"),
   ...innengeraetFotos,
   foto("klima", "Leitungsweg oder Kanal"),
   foto("klima", "Kondensatablauf"),
-  foto("klima", "Manometer bei der Druckprobe"),
-  foto("klima", "Vakuummeter"),
+  foto("klima", "Manometer bei der Druckprobe", { wenn: IB }),
+  foto("klima", "Vakuummeter", { wenn: IB }),
   foto("klima", "Typenschilder"),
 
   // Abnahme mit dem Kunden, Wortlaut wie im bisherigen HERO-Abnahmeprotokoll.

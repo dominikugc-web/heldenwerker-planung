@@ -111,3 +111,11 @@ test("Klima: Foto je Innengerät nach Anzahl, dazu Außengerät und Konsole", ()
   for (const x of ["Außengerät", "Befestigung Außengerät", "Innengerät 1", "Innengerät 2", "Innengerät 3"]) assert.ok(t.includes(x), x);
   assert.ok(!t.includes("Innengerät 4"));
 });
+
+test("Klima: Inbetriebnahme vor der Druckprobe; ohne Inbetriebnahme keine Druckprobe, kein Vakuum", () => {
+  const ids = (w) => sichtbar({ bericht: { wert: "Klima" }, ab_klima_inbetrieb: { wert: w } }).map((f) => f.id);
+  const ja = ids("ja");
+  assert.ok(ja.indexOf("ab_klima_inbetrieb") < ja.indexOf("ab_klima_druck"));
+  const nein = ids("nein");
+  for (const x of ["ab_klima_druck", "ab_klima_druck_dauer", "ab_klima_vakuum", "ab_klima_kaeltemittel", "ab_klima_foto_manometer_bei_der_druckprobe", "ab_klima_foto_vakuummeter"]) assert.ok(!nein.includes(x), x);
+});

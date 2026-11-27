@@ -116,3 +116,17 @@ test("Einweisung in App/System nicht erfolgt: HERO-Aufgabe für Maik Regehr, nur
   assert.match(log.aufgaben[0].titel, /^App-Einweisung terminieren: Erika Muster \(PV-1\)$/);
   assert.match(log.aufgaben[0].text, /Kunde hatte keine Zeit/);
 });
+
+test("Klima ohne Inbetriebnahme: HERO-Aufgabe für Sebastian Regehr", async () => {
+  const { p, planungen, log, abschluss } = aufbau();
+  log.aufgaben = [];
+  const pl = planungen.laden(p.id);
+  pl.antworten.bericht = a("Klima");
+  pl.antworten.ab_klima_inbetrieb = a("nein");
+  pl.antworten.ab_kunde = a("Erika Muster"); pl.antworten.ab_projektnr = a("KLA-1");
+  planungen.speichern(pl);
+  await abschluss.abschliessen(p.id);
+  assert.equal(log.aufgaben.length, 1);
+  assert.equal(log.aufgaben[0].userId, 212973);
+  assert.match(log.aufgaben[0].titel, /^Klima-Inbetriebnahme terminieren: Erika Muster \(KLA-1\)$/);
+});
