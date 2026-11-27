@@ -131,7 +131,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
         if (a.protokoll && ablage && !pl.gesendet.dateien.protokoll) break; // Protokoll erst, wenn es alle Drive-Links enthält
         try {
           if (a.protokoll && !fs.existsSync(a.pfad)) await protokollSchreiben();
-          const heroId = await dateien.inHero(z.id, a.pfad, a.name, a.mime, bericht ? (a.mime === MIME.pdf ? { dokumenttyp: DOKUMENTTYP_ABNAHME } : { bildkategorie: BILDKATEGORIE[bericht] }) : {});
+          const heroId = await dateien.inHero(z.id, a.pfad, a.name, a.mime, bericht ? (a.protokoll ? { dokumenttyp: DOKUMENTTYP_ABNAHME } : a.mime === MIME.bild ? { bildkategorie: BILDKATEGORIE[bericht] } : {}) : {});
           pl = planungen.laden(id);
           (pl.gesendet.inHero[z.id] ||= {})[a.schluessel] = heroId;
           planungen.speichern(pl);

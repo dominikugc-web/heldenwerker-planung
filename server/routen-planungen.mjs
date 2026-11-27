@@ -9,7 +9,7 @@ import { antwortenAusLieferscheinen, abschlussAusLieferscheinen } from "./liefer
 import { BERICHTE } from "./abschluss-fragen.mjs";
 import { istMonteur, erlaubteProjekte } from "./monteur.mjs";
 import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
-import { TYPEN, istAbschluss } from "./fragen.mjs";
+import { TYPEN, istAbschluss, abschlussGesperrt } from "./fragen.mjs";
 
 const RICHTUNGEN = Object.values(TYPEN);
 // Ein Kunde kann je Richtung ein eigenes HERO-Projekt haben; besichtigt wird alles in einem Besuch.
@@ -70,7 +70,13 @@ async function abschlussAnlegen(b, res, k) {
 }
 
 route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {
-  const q = k.query;
+  const q = k.query, vorher = k.planungen.laden(p.id);
+  // Abschlussbericht: nach Sendebeginn nichts mehr, die Unterschrift nie überschreiben; ein überschriebenes Foto braucht eine neue Unterschrift.
+  if (abschlussGesperrt(vorher)) throw fehler(409, "Bericht ist gesendet");
+  if (istAbschluss(vorher.antworten) && (vorher.antworten.ab_unterschrift?.dateien || []).some((d) => d.id === p.dateiId)) throw fehler(409, "Unterschrift kann nicht ersetzt werden");
+  if (istAbschluss(vorher.antworten) && vorher.antworten.ab_unterschrift && Object.values(vorher.antworten).some((a) => (a.dateien || []).some((d) => d.id === p.dateiId))) {
+    const pl = k.planungen.laden(p.id); delete pl.antworten.ab_unterschrift; k.planungen.speichern(pl);
+  }
   const d = await k.planungen.dateiEmpfangen(req, p.id, p.dateiId, { name: q.get("name"), art: q.get("art"), klein: q.get("klein") === "1" });
   json(res, 201, d);
 });
@@ -114,7 +120,7 @@ export const linksAus = (pl) => Object.fromEntries(Object.entries(pl.gesendet?.d
 // Abschlussbericht ohne Claude: nur senden, wenn Pflichtfotos (oder Grund) und Unterschrift da sind.
 route("POST", "/api/planungen/:id/abschliessen", (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
-  if (istAbschluss(pl.antworten) && pl.status !== "gesendet") {
+  if (istAbschluss(pl.antworten) && !abschlussGesperrt(pl)) {
     const fehlt = fehltZumSenden(pl);
     if (fehlt.length) throw fehler(409, "Es fehlt noch: " + fehlt.join(", "));
     pl.ergebnis = { fehlt: [], abschluss: true };

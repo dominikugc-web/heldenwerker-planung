@@ -1,5 +1,5 @@
 import { route, json, leseJson, fehler } from "./router.mjs";
-import { KATALOG, BEREICHE, frageNach, naechste, pruefeAntwort, istAbschluss } from "./fragen.mjs";
+import { KATALOG, BEREICHE, frageNach, naechste, pruefeAntwort, istAbschluss, abschlussGesperrt } from "./fragen.mjs";
 
 route("GET", "/api/fragen", (req, res) => json(res, 200, { bereiche: BEREICHE, katalog: KATALOG }));
 
@@ -10,7 +10,7 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
   const abschluss = istAbschluss(pl.antworten);
   // Ein Abschlussbericht bleibt nach dem Senden wie unterschrieben; Korrektur = neuer Bericht.
-  if (abschluss && pl.status === "gesendet") throw fehler(409, "Bericht ist gesendet");
+  if (abschlussGesperrt(pl)) throw fehler(409, "Bericht ist gesendet");
   // Besichtigung und Abschlussbericht nicht mischen. Startfrage "bericht" nur, solange keine Besichtigung begonnen ist.
   if (f.id === "bericht" ? !!pl.antworten?.typ?.wert || abschluss : !!f.abschluss !== abschluss) throw fehler(400, "Frage passt nicht zu dieser Planung");
   const b = await leseJson(req);
@@ -31,7 +31,7 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   }
   // Nach dem Warten auf Whisper frisch laden, damit parallele Antworten nicht verloren gehen.
   const frisch = k.planungen.laden(p.id);
-  if (abschluss && frisch.status === "gesendet") throw fehler(409, "Bericht ist gesendet");
+  if (abschlussGesperrt(frisch)) throw fehler(409, "Bericht ist gesendet");
   frisch.antworten = { ...(frisch.antworten || {}), [f.id]: neu };
   // Der Kunde hat unterschrieben, was er gesehen hat: jede spätere Änderung braucht eine neue Unterschrift.
   if (abschluss && f.id !== "ab_unterschrift") delete frisch.antworten.ab_unterschrift;

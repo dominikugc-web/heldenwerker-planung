@@ -59,3 +59,15 @@ test("Abschließen über die Route: ohne Unterschrift 409 mit Liste, Besichtigun
     assert.equal((await fetch(`${s.url}/api/planungen/${b.id}/abschliessen`, { method: "POST", headers: J, body: "{}" })).status, 409);
   } finally { await s.stop(); }
 });
+
+test("Angehängtes PDF bleibt Dokumenttyp Allgemein, nur das Protokoll ist Abnahmeprotokoll", async () => {
+  const { p, planungen, log, abschluss } = aufbau();
+  const pl = planungen.laden(p.id);
+  fs.writeFileSync(path.join(path.dirname(planungen.dateiPfad(p.id, "x")), "mess0001"), "%PDF-1.4");
+  pl.antworten.ab_ac_wr = a("X", [{ id: "mess0001", name: "Messung.pdf", art: "pdf" }]);
+  planungen.speichern(pl);
+  await abschluss.abschliessen(p.id);
+  const pdfs = log.hero.filter((x) => x.mime === "application/pdf");
+  assert.equal(pdfs.find((x) => x.name === "Messung.pdf").opt.dokumenttyp, undefined);
+  assert.equal(pdfs.find((x) => /^Abnahmeprotokoll/.test(x.name)).opt.dokumenttyp, 380908);
+});

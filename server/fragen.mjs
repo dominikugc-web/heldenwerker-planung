@@ -201,6 +201,8 @@ const NACH_ID = Object.fromEntries(KATALOG.map((f) => [f.id, f]));
 // Abschlussbericht = Startfrage "bericht" beantwortet (statt "typ" bei der Besichtigung).
 export const berichtVon = (antworten = {}) => Object.keys(BERICHTE).find((k) => BERICHTE[k] === antworten.bericht?.wert) || null;
 export const istAbschluss = (antworten = {}) => !!berichtVon(antworten);
+// Abschlussbericht ab dem ersten Senden gesperrt: sonst ginge ein PDF ohne oder mit veralteter Unterschrift raus. Korrektur = neuer Bericht.
+export const abschlussGesperrt = (pl) => istAbschluss(pl.antworten) && (pl.status === "gesendet" || !!pl.senden);
 export const frageNach = (id) => NACH_ID[id];
 // Zu welcher Richtung (PV, Wärmepumpe, Klimaanlage) eine Frage gehört; null für Allgemeines (Objekt, Abschluss).
 export const richtungVon = (id) => (NACH_ID[id]?.nur ? TYPEN[NACH_ID[id].nur] : null);

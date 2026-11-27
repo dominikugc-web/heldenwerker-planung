@@ -82,3 +82,28 @@ test("Bericht-Typ lässt sich nach dem Anlegen nicht mehr ändern", async () => 
     assert.equal((await put(s, `/api/planungen/${p.id}/antworten/bericht`, { wert: "Klima" })).status, 400);
   } finally { await s.stop(); }
 });
+
+test("Sobald gesendet wird, ist der Bericht gesperrt (Antworten und Dateien)", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    await unterschreiben(s, p.id);
+    const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei, "utf8")), senden: { status: "fehler", start: new Date().toISOString() } }));
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_ac_wr`, { wert: "X" })).status, 409);
+    assert.equal((await fetch(`${s.url}/api/planungen/${p.id}/dateien/neu00001?name=x.jpg&art=bild`, { method: "PUT", body: Buffer.from("x") })).status, 409);
+  } finally { await s.stop(); }
+});
+
+test("Unterschrift-Datei lässt sich nicht überschreiben, ein überschriebenes Foto löscht die Unterschrift", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    await fetch(`${s.url}/api/planungen/${p.id}/dateien/foto0001?name=a.jpg&art=bild`, { method: "PUT", body: Buffer.from("a") });
+    await put(s, `/api/planungen/${p.id}/antworten/ab_ac_foto_app_laeuft`, { dateien: [{ id: "foto0001" }] });
+    await unterschreiben(s, p.id);
+    assert.equal((await fetch(`${s.url}/api/planungen/${p.id}/dateien/unterschrift-1?name=U.png&art=bild`, { method: "PUT", body: Buffer.from("neu") })).status, 409);
+    assert.equal((await fetch(`${s.url}/api/planungen/${p.id}/dateien/foto0001?name=a.jpg&art=bild`, { method: "PUT", body: Buffer.from("b") })).status, 201);
+    assert.equal((await laden(s, p.id)).antworten.ab_unterschrift, undefined);
+  } finally { await s.stop(); }
+});
