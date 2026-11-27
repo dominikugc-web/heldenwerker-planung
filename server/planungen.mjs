@@ -18,19 +18,21 @@ export function erstellePlanungen({ datenDir }) {
   const dateiPfad = (id, dateiId, klein = false) => path.join(ordner(id), "dateien", dateiId + (klein ? ".klein" : ""));
 
   const api = {
-    neu({ projektId, projektTitel, person, kunde = "", adresse = "", nummer = "", vorbefuellt = {}, projekte = [{ id: Number(projektId), nummer, richtungen: [] }] }) {
+    // art "abschluss": Abschlussbericht, Kopffelder heißen dort ab_datum, ab_kunde usw.
+    neu({ projektId, projektTitel, person, kunde = "", adresse = "", nummer = "", vorbefuellt = {}, projekte = [{ id: Number(projektId), nummer, richtungen: [] }], art }) {
       // Kundendaten aus HERO und das heutige Datum sind schon beantwortet (änderbar wie jede Antwort).
       const jetzt = new Date();
       const heute = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
       const vor = (wert) => ({ wert: String(wert || "").trim(), uebersprungen: false, dateien: [], notiz: "", zeit: jetzt.toISOString() });
-      const antworten = { datum: vor(heute) };
-      if (kunde) antworten.kunde = vor(kunde);
-      if (nummer) antworten.projektnr = vor(nummer);
-      if (adresse) antworten.adresse = vor(adresse);
+      const v = art === "abschluss" ? "ab_" : "";
+      const antworten = { [v + "datum"]: vor(heute) };
+      if (kunde) antworten[v + "kunde"] = vor(kunde);
+      if (nummer) antworten[v + "projektnr"] = vor(nummer);
+      if (adresse) antworten[v + "adresse"] = vor(adresse);
       // Aus Lieferscheinen (quelle = Nummer); Kundendaten oben haben Vorrang.
       for (const [id, x] of Object.entries(vorbefuellt)) antworten[id] ??= { ...vor(x.wert), notiz: x.notiz || "", quelle: x.quelle };
       const p = { id: crypto.randomUUID(), projektId: Number(projektId), projekte, projektTitel: String(projektTitel || ""), person, erstellt: jetzt.toISOString(),
-        status: "offen", kostenCent: 0, verlauf: [], antworten, ergebnis: null, gesendet: { dateien: {}, logbuch: false, pdf: false } };
+        status: "offen", kostenCent: 0, verlauf: [], antworten, ergebnis: null, gesendet: { dateien: {}, logbuch: false, pdf: false }, ...(art && { art }) };
       speichereJson(path.join(ordner(p.id), "planung.json"), p);
       return p;
     },

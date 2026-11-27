@@ -5,7 +5,8 @@ import { audioMime } from "./transkribieren.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
 import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
-import { antwortenAusLieferscheinen } from "./lieferschein.mjs";
+import { antwortenAusLieferscheinen, abschlussAusLieferscheinen } from "./lieferschein.mjs";
+import { BERICHTE } from "./abschluss-fragen.mjs";
 import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
 import { TYPEN } from "./fragen.mjs";
 
@@ -27,6 +28,7 @@ route("GET", "/api/planungen/:id", (req, res, p, k) => json(res, 200, mitName(k,
 route("POST", "/api/planungen", async (req, res, p, k) => {
   const b = await leseJson(req);
   if (!Number(b.projektId)) throw fehler(400, "Projekt fehlt");
+  if (b.bericht !== undefined) return abschlussAnlegen(b, res, k);
   // Was schon in Lieferscheinen und im Heizlastbericht steht, muss der Planer nicht nochmal erfassen. Klappt das nicht, startet die Planung trotzdem.
   // Lieferschein vor Heizlast: dort steht die echte Außeneinheit, die Heizlast ist nur der Richtwert.
   const projekte = projekteAus(b);
@@ -43,6 +45,23 @@ route("POST", "/api/planungen", async (req, res, p, k) => {
   const nummer = projekte.map((p) => p.nummer).filter(Boolean).join(", ") || b.nummer;
   json(res, 201, k.planungen.neu({ projektId: projekte[0].id, projekte, projektTitel: b.projektTitel, person: k.person, kunde: b.kunde, adresse: b.adresse, nummer, vorbefuellt }));
 });
+
+// Abschlussbericht (Abnahmeprotokoll) für ein Projekt. Ein Trupp teilt sich einen Bericht: Ist derselbe Bericht für dasselbe
+// Projekt schon begonnen und nicht gesendet, geht es dort weiter (200), sonst neu (201).
+async function abschlussAnlegen(b, res, k) {
+  if (!Object.hasOwn(BERICHTE, String(b.bericht))) throw fehler(400, "Unbekannter Bericht");
+  const name = BERICHTE[b.bericht], projektId = Number(b.projektId);
+  const offen = k.planungen.liste().find((x) => x.projektId === projektId && x.antworten?.bericht?.wert === name && x.status !== "gesendet");
+  if (offen) return json(res, 200, k.planungen.laden(offen.id));
+  let vorbefuellt = {};
+  try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
+  const monteure = [...new Set([k.profil?.name || k.person, ...[].concat(b.monteure || []).map((m) => String(m).trim().slice(0, 80))].filter(Boolean))];
+  vorbefuellt.bericht = { wert: name };
+  vorbefuellt.ab_monteure = { wert: monteure.join(", ") };
+  const nummer = String(b.nummer || "").slice(0, 40);
+  json(res, 201, k.planungen.neu({ art: "abschluss", projektId, projekte: [{ id: projektId, nummer, richtungen: [] }], projektTitel: b.projektTitel, person: k.person,
+    kunde: b.kunde, adresse: b.adresse, nummer, vorbefuellt }));
+}
 
 route("PUT", "/api/planungen/:id/dateien/:dateiId", async (req, res, p, k) => {
   const q = k.query;

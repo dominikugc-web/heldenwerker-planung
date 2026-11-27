@@ -73,3 +73,31 @@ export function antwortenAusLieferscheinen(liste = []) {
   }
   return raus;
 }
+
+// Abschlussbericht (Abnahmeprotokoll): dieselben Lieferscheine, umgeschrieben auf die ab_-Fragen.
+// Klimageräte und Optimierer kennt die Besichtigung nicht; sie kommen direkt aus den Positionen (Stichprobe KLA-Lieferscheine 27.11.).
+const SONSTIGE = "Sonstige (Notiz)";
+const klar = (x) => x && (x.wert === SONSTIGE ? x.notiz?.replace(/^Laut Lieferschein:\s*/, "") : x.wert);
+const mitMenge = (p) => (p.menge > 1 ? `${p.menge} x ${p.name}` : p.name);
+export function abschlussAusLieferscheinen(liste = []) {
+  const b = antwortenAusLieferscheinen(liste), raus = {};
+  const setze = (id, wert, quelle) => { if (wert && !(id in raus)) raus[id] = { wert: String(wert), quelle }; };
+  const modul = klar(b.modul);
+  setze("ab_dach_module", modul && (b.anzahl_module ? `${b.anzahl_module.wert} x ${modul}` : modul), b.modul?.quelle);
+  setze("ab_ac_wr", klar(b.wechselrichter), b.wechselrichter?.quelle);
+  setze("ab_ac_speicher", b.speicher?.wert, b.speicher?.quelle);
+  if (b.wallbox?.wert) { setze("ab_ac_wallbox_da", "ja", b.wallbox.quelle); setze("ab_ac_wallbox", b.wallbox.wert, b.wallbox.quelle); }
+  setze("ab_wp_aussen", b.bosch_modell?.wert, b.bosch_modell?.quelle);
+  setze("ab_wp_innen", b.inneneinheit?.wert, b.inneneinheit?.quelle);
+  // Neuester Lieferschein gewinnt, wie oben.
+  for (const ls of [...liste].sort((x, y) => String(y.datum || "").localeCompare(String(x.datum || "")))) {
+    const p = ls.produkte || [];
+    const innen = p.filter((x) => /klima/i.test(x.name) && /inneneinheit/i.test(x.name));
+    const aussen = p.filter((x) => /klimagerät|split-klima/i.test(x.name) && !/inneneinheit|konsole/i.test(x.name));
+    const optimierer = p.filter((x) => /tigo|optimierer/i.test(x.name));
+    setze("ab_klima_aussen", aussen.map(mitMenge).join(", "), ls.nr);
+    setze("ab_klima_innen", innen.map(mitMenge).join(", "), ls.nr);
+    setze("ab_dach_optimierer", optimierer.map(mitMenge).join(", "), ls.nr);
+  }
+  return raus;
+}
