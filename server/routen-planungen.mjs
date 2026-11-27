@@ -87,17 +87,31 @@ async function abschlussAnlegen(b, res, k) {
 // Neu starten (Dominik, 27.11.), Abschlussbericht und Besichtigung: alle Antworten, Fotos, Unterschrift und Zusammenfassung weg,
 // wie frisch angelegt. Kopf (Kunde, Projekt, Adresse, Datum heute), Typ bzw. Bericht und Monteure bleiben, Lieferschein (und Heizlast)
 // werden neu gelesen. Schon gesendet (oder am Senden): nicht hier, die App legt dann eine neue Planung an.
+// Die App schickt dabei die neue Auswahl vom Anfang mit (Dominik, 27.11.): Bericht und Monteure bzw. Typen und Projekte.
 route("POST", "/api/planungen/:id/neustart", async (req, res, p, k) => {
+  const b = await leseJson(req);
   const pl = k.planungen.laden(p.id), abschluss = istAbschluss(pl.antworten);
   if (pl.status === "gesendet" || pl.senden) throw fehler(409, "Schon gesendet. Bitte neu anlegen.");
+  const key = b.bericht === undefined ? berichtVon(pl.antworten) : b.bericht === "dach" ? "dc" : String(b.bericht);
+  if (abschluss && !Object.hasOwn(BERICHTE, key)) throw fehler(400, "Unbekannter Bericht");
+  const monteure = [...new Set([].concat(b.monteure || []).map((m) => String(m).trim().slice(0, 80)).filter(Boolean))];
+  const projekte = !abschluss && b.projekte !== undefined ? projekteAus(b) : null;
+  const typen = RICHTUNGEN.filter((r) => [].concat(b.typen || []).includes(r));
   let vorbefuellt = {};
   if (abschluss) try { vorbefuellt = abschlussAusLieferscheinen(await k.hero().lieferscheine(pl.projektId)); } catch (e) { console.error("Lieferscheine:", String(e.message).slice(0, 200)); }
-  else vorbefuellt = await besichtigungVorbefuellt(k, pl.projekte?.length ? pl.projekte : [{ id: pl.projektId }]);
+  else vorbefuellt = await besichtigungVorbefuellt(k, projekte || (pl.projekte?.length ? pl.projekte : [{ id: pl.projektId }]));
   const jetzt = new Date(), heute = jetzt.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
   const vor = (wert) => ({ wert: String(wert || "").trim(), uebersprungen: false, dateien: [], notiz: "", zeit: jetzt.toISOString() });
   const frisch = k.planungen.laden(p.id), alt = frisch.antworten;
-  const antworten = abschluss ? { bericht: vor(BERICHTE[berichtVon(alt)]), ab_datum: vor(heute) } : { datum: vor(heute), ...(alt.typ?.wert && { typ: vor(alt.typ.wert) }) };
+  const typWert = typen.length ? typen.join(", ") : alt.typ?.wert;
+  const antworten = abschluss ? { bericht: vor(BERICHTE[key]), ab_datum: vor(heute) } : { datum: vor(heute), ...(typWert && { typ: vor(typWert) }) };
   for (const id of abschluss ? ["ab_kunde", "ab_projektnr", "ab_adresse", "ab_monteure"] : ["kunde", "projektnr", "adresse"]) if (alt[id]?.wert) antworten[id] = vor(alt[id].wert);
+  if (abschluss && monteure.length) antworten.ab_monteure = vor(monteure.join(", "));
+  if (projekte) {
+    Object.assign(frisch, { projekte, projektId: projekte[0].id, ...(b.projektTitel && { projektTitel: String(b.projektTitel) }) });
+    const nr = projekte.map((x) => x.nummer).filter(Boolean).join(", ");
+    if (nr) antworten.projektnr = vor(nr);
+  }
   for (const [id, x] of Object.entries(vorbefuellt)) antworten[id] ??= { ...vor(x.wert), notiz: x.notiz || "", quelle: x.quelle };
   Object.assign(frisch, { antworten, status: "offen", ergebnis: null, verlauf: [] });
   delete frisch.senden;

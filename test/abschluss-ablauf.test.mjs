@@ -154,3 +154,18 @@ test("Besichtigung neu starten: Antworten und Zusammenfassung weg, Kundendaten u
     assert.equal((await post(s, `/api/planungen/${p.id}/neustart`, {})).status, 409);
   } finally { await s.stop(); }
 });
+
+test("Neu starten mit neuer Auswahl: anderer Bericht und andere Monteure, bzw. andere Typen bei der Besichtigung", async () => {
+  const s = await testServer();
+  try {
+    const a = await (await post(s, "/api/planungen", { bericht: "ac", projektId: 11541539, projektTitel: "UNB-1149", kunde: "K", monteure: ["Max"] })).json();
+    const a2 = await (await post(s, `/api/planungen/${a.id}/neustart`, { bericht: "wp", monteure: ["Lisa", "Tom"] })).json();
+    assert.equal(a2.antworten.bericht.wert, "Wärmepumpe");
+    assert.equal(a2.antworten.ab_monteure.wert, "Lisa, Tom");
+    assert.equal((await post(s, `/api/planungen/${a.id}/neustart`, { bericht: "sauna" })).status, 400);
+    const b = await (await post(s, "/api/planungen", { projektId: 11541539, projektTitel: "UNB-1149", kunde: "K", typen: ["PV"] })).json();
+    const b2 = await (await post(s, `/api/planungen/${b.id}/neustart`, { typen: ["Wärmepumpe", "Klimaanlage"], projekte: [{ id: 11541539, nummer: "UNB-1149", richtungen: ["Wärmepumpe", "Klimaanlage"] }] })).json();
+    assert.equal(b2.antworten.typ.wert, "Wärmepumpe, Klimaanlage");
+    assert.deepEqual(b2.projekte[0].richtungen, ["Wärmepumpe", "Klimaanlage"]);
+  } finally { await s.stop(); }
+});

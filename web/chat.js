@@ -61,11 +61,11 @@ function projektWaehlenSheet() {
 // Ein Kunde ist ein Besuch: zuerst wählen, was besichtigt wird, und zu welchem seiner HERO-Projekte das jeweils gehört.
 // Vorausgewählt ist, was das geöffnete Projekt (und die Projekte aus demselben Termin, mit) laut Gewerk abdeckt.
 const RICHTUNGEN = ["PV", "Wärmepumpe", "Klimaanlage"];
-export async function planungStarten(p, { mit = [] } = {}) {
+export async function planungStarten(p, { mit = [], neustartId = null, vorTypen = [] } = {}) {
   const projekte = p.kundeId ? await api(`/api/kunden/${p.kundeId}/projekte`).catch(() => []) : [];
   if (!projekte.some((x) => x.id === p.id)) projekte.unshift(p);
   const dabei = (x) => x.id === p.id || mit.includes(x.id);
-  const an = new Set(projekte.filter(dabei).flatMap((x) => x.richtungen || []));
+  const an = new Set(vorTypen.length ? vorTypen : projekte.filter(dabei).flatMap((x) => x.richtungen || []));
   const passend = (r) => projekte.filter((x) => (x.richtungen || []).includes(r));
   const zu = Object.fromEntries(RICHTUNGEN.map((r) => [r, (passend(r).find(dabei) || passend(r)[0] || p).id]));
   const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Was wird besichtigt?</h2><span></span></div>
@@ -94,9 +94,12 @@ export async function planungStarten(p, { mit = [] } = {}) {
     knopf.disabled = true;
     try {
       const titel = [liste.map((x) => x.nummer).filter(Boolean).join(", "), p.kunde, p.adresse].filter(Boolean).join(", ");
-      const pl = await api("/api/planungen", { methode: "POST", body: { projektId: liste[0].id, projektTitel: titel, kunde: p.kunde, adresse: p.adresse, nummer: p.nummer, typen, projekte: liste } });
+      const pl = neustartId
+        ? await api(`/api/planungen/${neustartId}/neustart`, { methode: "POST", body: { typen, projekte: liste, projektTitel: titel } })
+        : await api("/api/planungen", { methode: "POST", body: { projektId: liste[0].id, projektTitel: titel, kunde: p.kunde, adresse: p.adresse, nummer: p.nummer, typen, projekte: liste } });
       d.close();
-      gehe("chat/" + pl.id);
+      if (neustartId) toast("Neu gestartet", "ok");
+      zumAblauf(pl.id);
     } catch (err) { fehlerMelden(err); knopf.disabled = false; }
   }
   zeichne();
@@ -153,15 +156,15 @@ export async function berichtNeuStarten(planung, fragen) {
   try {
     await abarbeiten(); // nichts Altes aus dem Ausgang über den neuen Stand legen
     const liste = (w) => String(w || "").split(",").map((s) => s.trim()).filter(Boolean);
-    const pl = !gesendet ? await api(`/api/planungen/${planung.id}/neustart`, { methode: "POST", body: {} })
-      : abschluss ? await api("/api/planungen", { methode: "POST", body: { bericht: berichtKey(fragen, a), projektId: planung.projektId, projektTitel: planung.projektTitel,
-          kunde: a.ab_kunde?.wert, adresse: a.ab_adresse?.wert, nummer: a.ab_projektnr?.wert, monteure: liste(a.ab_monteure?.wert) } })
-      : await api("/api/planungen", { methode: "POST", body: { projektId: planung.projektId, projekte: planung.projekte, typen: liste(a.typ?.wert), projektTitel: planung.projektTitel,
-          kunde: a.kunde?.wert, adresse: a.adresse?.wert, nummer: a.projektnr?.wert } });
-    toast(gesendet ? "Neu angelegt" : "Neu gestartet", "ok");
-    if (location.hash === "#chat/" + pl.id) dispatchEvent(new HashChangeEvent("hashchange")); else gehe("chat/" + pl.id);
+    const p = await api("/api/projekte/" + planung.projektId);
+    // Offen: dieselbe Planung wird mit der neuen Auswahl zurückgesetzt. Gesendet: die Auswahl legt eine neue an.
+    const neustartId = gesendet ? null : planung.id;
+    if (abschluss) await abschlussStarten(p, { personen: liste(a.ab_monteure?.wert), neustartId, vorBericht: berichtKey(fragen, a) });
+    else await planungStarten(p, { mit: (planung.projekte || []).map((x) => x.id), neustartId, vorTypen: liste(a.typ?.wert) });
   } catch (e) { fehlerMelden(e); }
 }
+// Nach dem Neustart in den Ablauf (gleiche Adresse: neu zeichnen lassen).
+const zumAblauf = (id) => (location.hash === "#chat/" + id ? dispatchEvent(new HashChangeEvent("hashchange")) : gehe("chat/" + id));
 
 // ---------- Baustelle abschließen ----------
 // Bericht wählen (Vorauswahl aus dem Gewerk), bei einem gebündelten Termin auch das Projekt. Monteure = Personen des Termins.
@@ -169,9 +172,9 @@ const BERICHTE = [["dc", "Dachmontage DC"], ["ac", "Elektrik AC"], ["wp", "Wärm
 const berichteAus = (gewerk = "") => { const g = gewerk.toLowerCase(), r = [];
   if (/photovoltaik|pv/.test(g)) r.push("dc", "ac"); else if (/wallbox|speicher|elektro/.test(g)) r.push("ac");
   if (/wärmepumpe/.test(g)) r.push("wp"); if (/klima/.test(g)) r.push("klima"); return r; };
-export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
+export async function abschlussStarten(p, { mit = [], personen = [], neustartId = null, vorBericht = null } = {}) {
   const projekte = [p, ...(await Promise.all(mit.filter((x) => x !== p.id).map((x) => api("/api/projekte/" + x).catch(() => null)))).filter(Boolean)];
-  let bericht = berichteAus(p.gewerk)[0] || null;
+  let bericht = vorBericht || berichteAus(p.gewerk)[0] || null;
   const passend = () => projekte.find((x) => berichteAus(x.gewerk).includes(bericht)) || p;
   let projektId = passend().id;
   const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Baustelle abschließen</h2><span></span></div>
@@ -213,7 +216,7 @@ export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
       if (t) { const team = teamVon(t.dataset.team); if (teamsAn.has(team.name)) { teamsAn.delete(team.name); team.mitglieder.forEach((m) => dabei.delete(m)); } else teamAn(team); werWarDabei(); }
     };
     $("[data-dazu]", d).onclick = () => { const n = $("#weitere", d).value.trim().slice(0, 80); if (!n) return; extra.add(n); dabei.add(n); werWarDabei(); };
-    $("[data-zurueckb]", d).onclick = (e) => { e.stopPropagation(); d.close(); abschlussStarten(p, { mit, personen: [...teamsAn, ...dabei] }); };
+    $("[data-zurueckb]", d).onclick = (e) => { e.stopPropagation(); d.close(); abschlussStarten(p, { mit, personen: [...teamsAn, ...dabei], neustartId, vorBericht: bericht }); };
     $("[data-start]", d).onclick = (e) => { e.stopPropagation(); starten(e); };
     markieren();
   }
@@ -233,9 +236,12 @@ export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
     knopf.disabled = true;
     try {
       const titel = [x.nummer, x.kunde || p.kunde, x.adresse].filter(Boolean).join(", ");
-      const pl = await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: await werListe() } });
+      const pl = neustartId
+        ? await api(`/api/planungen/${neustartId}/neustart`, { methode: "POST", body: { bericht, monteure: await werListe() } })
+        : await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: await werListe() } });
       d.close();
-      gehe("chat/" + pl.id);
+      if (neustartId) toast("Neu gestartet", "ok");
+      zumAblauf(pl.id);
     } catch (err) { fehlerMelden(err); knopf.disabled = false; }
   };
   zeichne();
