@@ -253,7 +253,7 @@ async function setup(el, _, signal) {
 // ---------- Nur für Admins: Feedback-Postfach und Team ----------
 let feedbackFilter = "neu";
 async function adminBereich(el, signal) {
-  const [liste, team] = await Promise.all([api("/api/feedback", { signal }).catch(() => []), api("/api/team", { signal }).catch(() => [])]);
+  const [liste, team, teams] = await Promise.all([api("/api/feedback", { signal }).catch(() => []), api("/api/team", { signal }).catch(() => []), api("/api/teams", { signal }).catch(() => [])]);
   const ART = { idee: "💡", fehler: "🐞", frage: "❓" };
   const status = (f) => f.status || "neu";
   const neu = liste.filter((f) => status(f) === "neu").length;
@@ -262,7 +262,12 @@ async function adminBereich(el, signal) {
     <div class="segctl" role="group" aria-label="Feedback filtern"><button data-fb="neu" aria-pressed="${feedbackFilter === "neu"}">Neu</button><button data-fb="erledigt" aria-pressed="${feedbackFilter === "erledigt"}">Erledigt</button></div>
     <div class="gruppe">${sichtbar.length ? sichtbar.map((f) => `<div class="zeile"><span aria-hidden="true">${ART[f.art]}</span><div class="haupt"><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(f.text)}</div><div class="neben">${esc(f.name || f.person)} · ${esc(relativ(f.zeit))}${f.bild ? ` · <a href="${serverUrl("/api/feedback/bild/" + f.bild)}" target="_blank" rel="noopener">Bild</a>` : ""}</div></div>
       <button class="pill" data-status="${f.id}" data-ziel="${status(f) === "neu" ? "erledigt" : "neu"}">${status(f) === "neu" ? "Erledigt" : "Zurück"}</button></div>`).join("") : `<div class="leer">${feedbackFilter === "neu" ? "Nichts Neues." : "Noch nichts erledigt."}</div>`}</div>
-    <div class="label">Team</div>
+    <div class="label">Montage-Teams</div>
+    <div class="gruppe">${teams.map((t, i) => `<button class="zeile" data-teamnr="${i}"><div class="haupt"><div class="titel">${esc(t.name)}</div><div class="neben">${t.mitglieder.length ? esc(t.mitglieder.join(", ")) : "noch niemand eingetragen"}</div></div><span class="pfeil">${IKON.pfeil}</span></button>`).join("") || `<div class="leer">Noch keine Teams.</div>`}
+      <button class="zeile" data-teamneu><div class="haupt"><div class="titel" style="color:var(--accent)">Team hinzufügen</div></div></button>
+      <button class="zeile" data-teamhero><div class="haupt"><div class="titel" style="color:var(--accent)">Teams aus HERO übernehmen</div><div class="neben">Legt Teams wie „Dachteam 1“ oder „SHK 1“ aus den HERO-Terminen an</div></div></button></div>
+    <p class="hinweis">Wer im Team ist, wird beim Abschlussbericht unter „Wer war dabei?“ mit angezeigt.</p>
+    <div class="label">App-Nutzer</div>
     <div class="gruppe">${team.map((p) => `<button class="zeile" data-login="${esc(p.login)}"><div class="haupt"><div class="titel">${esc(p.name)}</div><div class="neben">zuletzt ${esc(relativ(p.zuletzt))} · ${p.heroPerson ? "HERO: " + esc(p.heroPerson.name) : "keine HERO-Person"}</div></div><span class="badge ${p.rolle === "admin" ? "blau" : p.rolle === "monteur" ? "orange" : ""}">${{ admin: "Admin", monteur: "Monteur" }[p.rolle] || "Planer"}</span><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>
     <p class="hinweis">Jeder, der die App über Tailscale öffnet, erscheint hier automatisch.</p>`;
   $$("[data-fb]", el).forEach((b) => (b.onclick = () => { feedbackFilter = b.dataset.fb; adminBereich(el, signal); }));
@@ -273,6 +278,42 @@ async function adminBereich(el, signal) {
     } catch (e) { fehlerMelden(e); }
   }));
   $$("[data-login]", el).forEach((b) => (b.onclick = () => profilSheet(team.find((p) => p.login === b.dataset.login), () => adminBereich(el, signal))));
+  const neuZeigen = () => adminBereich(el, signal);
+  const speichern = async (neu) => { try { await api("/api/teams", { methode: "PUT", body: { teams: neu } }); neuZeigen(); return true; } catch (e) { fehlerMelden(e); return false; } };
+  $$("[data-teamnr]", el).forEach((b) => (b.onclick = () => teamSheet(teams, Number(b.dataset.teamnr), team, speichern)));
+  $("[data-teamneu]", el).onclick = () => teamSheet(teams, -1, team, speichern);
+  $("[data-teamhero]", el).onclick = async () => {
+    const namen = await api("/api/mitarbeiter").catch(() => []);
+    const neu = namen.filter((n) => /team|^shk\b|^elektro|^dach/i.test(n) && !teams.some((t) => t.name.toLowerCase() === n.toLowerCase()));
+    if (!neu.length) return toast("Keine neuen Teams in HERO gefunden", "ok");
+    if (await speichern([...teams, ...neu.map((name) => ({ name, mitglieder: [] }))])) toast(`${neu.length} Teams übernommen: ${neu.join(", ")}`, "ok");
+  };
+}
+
+// Ein Team bearbeiten: Name, Mitglieder (Namen, auch ohne App), löschen. nr -1 = neues Team.
+async function teamSheet(teams, nr, appNutzer, speichern) {
+  const t = nr < 0 ? { name: "", mitglieder: [] } : { ...teams[nr], mitglieder: [...teams[nr].mitglieder] };
+  const vorschlaege = [...new Set([...appNutzer.map((p) => p.name), ...(await api("/api/mitarbeiter").catch(() => []))])].filter((n) => !teams.some((x) => x.name === n)).sort((a, b) => a.localeCompare(b, "de"));
+  const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>${nr < 0 ? "Neues Team" : "Team"}</h2><button class="pill akzent" data-ok>Speichern</button></div>
+    <div class="gruppe"><label class="feld"><span>Teamname (wie in HERO)</span><input id="tname" value="${esc(t.name)}" maxlength="80" autocomplete="off" placeholder="z. B. Dachteam 1"></label></div>
+    <div class="label">Mitglieder</div>
+    <div class="knoepfe" id="mitglieder"></div>
+    <div class="feldzeile" style="margin:10px 0"><input id="neuname" list="namensliste" placeholder="Name hinzufügen" autocomplete="off" aria-label="Name hinzufügen"><button class="sendbtn" data-dazu aria-label="Hinzufügen">${IKON.plus}</button></div>
+    <datalist id="namensliste">${vorschlaege.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+    ${nr < 0 ? "" : `<button class="pill" data-weg style="width:100%;color:var(--err)">Team löschen</button>`}`);
+  const zeigen = () => { $("#mitglieder", d).innerHTML = t.mitglieder.map((n, i) => `<button class="wahl gewaehlt" data-raus="${i}" aria-label="${esc(n)} entfernen">${esc(n)} ✕</button>`).join("") || `<span class="muted small">Noch niemand. Unten Namen eintragen.</span>`; };
+  const dazu = () => { const n = $("#neuname", d).value.trim().slice(0, 80); if (n && !t.mitglieder.includes(n)) t.mitglieder.push(n); $("#neuname", d).value = ""; zeigen(); };
+  $("#mitglieder", d).onclick = (e) => { const b = e.target.closest("[data-raus]"); if (b) { t.mitglieder.splice(Number(b.dataset.raus), 1); zeigen(); } };
+  $("[data-dazu]", d).onclick = dazu;
+  $("#neuname", d).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); dazu(); } });
+  $("[data-zu]", d).onclick = () => d.close();
+  $("[data-ok]", d).onclick = async () => {
+    dazu(); t.name = $("#tname", d).value.trim();
+    const neu = [...teams]; if (nr < 0) neu.push(t); else neu[nr] = t;
+    if (await speichern(neu)) d.close();
+  };
+  $("[data-weg]", d)?.addEventListener("click", async () => { if (confirm(`Team „${t.name}“ löschen?`) && await speichern(teams.filter((_, i) => i !== nr))) d.close(); });
+  zeigen();
 }
 
 function profilSheet(p, fertig) {
