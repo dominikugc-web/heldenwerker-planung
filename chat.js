@@ -283,12 +283,12 @@ const ladeKatalog = async () => (katalogCache ??= await api("/api/fragen"));
 const TYPEN = { pv: "PV", wp: "Wärmepumpe", klima: "Klimaanlage" };
 export const berichtKey = (fragen, antworten) => { const f = fragen.find((x) => x.id === "bericht"), w = antworten.bericht?.wert; const i = f ? f.optionen.indexOf(w) : -1; return i < 0 ? f?.alt?.[w] || null : f.berichte[i]; };
 export function sichtbar(fragen, antworten) {
-  const passt = (f) => !f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert);
+  const passt = (f) => [].concat(f.wenn || []).every((w) => [].concat(w.ist).includes(antworten[w.frage]?.wert));
   const b = berichtKey(fragen, antworten);
   if (b) {
     const liste = fragen.filter((f) => f.abschluss && (!f.bericht || f.bericht === b) && passt(f));
     const da = new Set(liste.map((f) => f.id));
-    return liste.filter((f) => !f.versteckt && (!f.wenn || da.has(f.wenn.frage)));
+    return liste.filter((f) => !f.versteckt && [].concat(f.wenn || []).every((w) => da.has(w.frage)));
   }
   const w = antworten.typ?.wert || "", gewaehlt = w === "Beides" ? ["PV", "Wärmepumpe"] : w.split(",").map((t) => t.trim()).filter(Boolean);
   if (!gewaehlt.length) return [fragen[0]];

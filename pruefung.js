@@ -11,6 +11,8 @@ export async function pruefAnsicht(el, id, signal) {
   const antworten = planung.antworten || {}, abschluss = !!berichtKey(katalog, antworten), gesperrt = abschluss && (planung.status === "gesendet" || !!planung.senden);
   if (!planung.ergebnis && !abschluss) { location.hash = "chat/" + id; return; }
   // Was fehlt, rechnet die Seite selbst aus dem aktuellen Stand (nach dem Nachholen ist die Liste sofort kürzer).
+  // Klima ohne Inbetriebnahme gesendet: später nachtragen (Dominik, 27.11.), danach neue Unterschrift und erneut senden.
+  const nachtragen = planung.status === "gesendet" && berichtKey(katalog, antworten) === "klima" && antworten.ab_klima_inbetrieb?.wert === "nein";
   const fehlt = gesperrt ? [] : fehltFragen(katalog, antworten).map((f) => f.titel || f.frage);
   const e = { ...(abschluss ? { monteure: {} } : planung.ergebnis), fehlt };
   const beantwortet = (abschluss ? sichtbar(katalog, antworten) : katalog).filter((f) => { const a = antworten[f.id]; if (f.id === "bericht") return false; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
@@ -28,6 +30,7 @@ export async function pruefAnsicht(el, id, signal) {
       `<${gesperrt ? "div" : "a"} class="zeile" ${gesperrt ? "" : `href="#chat/${esc(planung.id)}/${esc(f.id)}"`}><div class="haupt"><div class="titel">${esc(f.titel || f.frage)}</div><div class="neben">${esc(wert(f, antworten[f.id]))}</div></div><span class="daumen">${bild(f)}</span>${gesperrt ? "" : IKON.pfeil}</${gesperrt ? "div" : "a"}>`).join("")}</div>`).join("")}
     <div class="zwei"><a class="pill" href="${esc(serverUrl(`/api/planungen/${planung.id}/protokoll.pdf`))}" target="_blank" rel="noopener" data-pdf>Protokoll ansehen</a>${gesperrt ? "" : `<button class="pill" data-chat>Zum Ablauf</button>`}</div>
     <button class="pill" data-pdfsichern style="width:100%;margin-bottom:var(--gap)">PDF in Dateien sichern</button>
+    ${nachtragen ? `<button class="gross" data-nachtrag style="margin-bottom:var(--gap)">Inbetriebnahme nachtragen</button>` : ""}
     <button class="pill" data-neustart style="width:100%;margin-bottom:var(--gap);color:var(--err)">Neu starten</button>
     <button class="pill" data-fotossichern style="width:100%;margin-bottom:var(--gap)">Alle Fotos aufs Handy</button>
     <button class="gross ok" data-senden ${e.fehlt.length && abschluss ? "disabled" : ""}>${IKON.wolke}${planung.status === "gesendet" ? "Erneut senden" : "In HERO speichern"}</button>`;
@@ -76,6 +79,11 @@ export async function pruefAnsicht(el, id, signal) {
   function pdfNeu() { pdfDatei = null; pdfLaden = null; if (!zustand.demo) pdfHolen().catch(() => {}); }
   pdfNeu();
   $("[data-neustart]", el)?.addEventListener("click", () => berichtNeuStarten(planung, katalog));
+  $("[data-nachtrag]", el)?.addEventListener("click", async (ev) => {
+    ev.currentTarget.disabled = true;
+    try { await api(`/api/planungen/${id}/nachtrag`, { methode: "POST", body: {} }); location.hash = `chat/${id}/ab_klima_inbetrieb`; }
+    catch (err) { ev.currentTarget.disabled = false; fehlerMelden(err); }
+  });
   $("[data-pdfsichern]", el).addEventListener("click", async () => {
     if (zustand.demo) return toast("Demo, nicht verbunden. Kein PDF.", "fehler");
     if (timer) { clearTimeout(timer); timer = null; await jetztSpeichern().catch(() => {}); } // ungespeicherte Änderungen zuerst
