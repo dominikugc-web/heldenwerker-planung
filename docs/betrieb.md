@@ -28,3 +28,12 @@ Legt `web/` auf den Branch `gh-pages`. Live unter https://dominikugc-web.github.
 
 - Chrome am PC fragt beim ersten Verbinden von der GitHub-Seite nach „Lokales Netzwerk“. Erlauben. Safari am iPhone fragt nicht.
 - Echtbetrieb seit 24.11.2026: Der Server schreibt Fotos, Protokoll und Logbuch direkt in die gewählten Kundenprojekte. send_mail und Löschen bleiben gesperrt. Mit `PLANUNG_TESTMODUS=1` (so läuft die Vorschau mit daten-test) geht alles nur nach UNB-1149 und in Projekte, die die App mit „TEST“ angelegt hat. Neue Projekte aus der App heißen im Echtbetrieb wie eingegeben, im Testmodus mit „TEST“ davor.
+
+## Monteure einrichten (Baustellenabschluss, seit 27.11.2026)
+
+1. Monteur bekommt wie ein Planer Zugang über einen Tailscale-Share von pc-dominik (Handy: Tailscale + Chrome, Server-Adresse im Banner „Einrichten“).
+2. Er öffnet die App einmal, dann steht er in Einstellungen > Team (zuerst als Planer).
+3. Admin stellt dort die Rolle auf **Monteur** und ordnet die **HERO-Person** zu.
+4. Danach sieht er nur seine Montage-Termine (Umsetzung, DC Montage, WP Montage, Zählertausch mit Projekt) und kann dort „Baustelle abschließen“.
+
+Abschlussberichte landen in HERO als Dokumenttyp „Abnahmeprotokoll“ (Ordner Baustellenberichte), Fotos in der Bildkategorie des Berichts, dazu ein Logbuch-Eintrag „Baustelle abgeschlossen“.
