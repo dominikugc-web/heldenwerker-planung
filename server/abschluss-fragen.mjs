@@ -84,7 +84,6 @@ const F = [
   foto("ac", "Zählerschrank offen nach Umbau"),
   foto("ac", "Zählerschrank geschlossen"),
   foto("ac", "Wallbox", { wenn: { frage: "ab_ac_wallbox_da", ist: "ja" } }),
-  foto("ac", "App läuft"),
 
   ...nur("wp",
     ["ab_wp", "ab_wp_aussen", "Außeneinheit", "text"],

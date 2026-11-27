@@ -18,7 +18,7 @@ function aufbau() {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "foto0001"), JPEG);
   fs.writeFileSync(path.join(dir, "unter001"), JPEG);
-  p.antworten.ab_ac_foto_app_laeuft = a("", [{ id: "foto0001", name: "IMG.jpg", art: "bild" }]);
+  p.antworten.ab_ac_foto_zaehlerschrank_geschlossen = a("", [{ id: "foto0001", name: "IMG.jpg", art: "bild" }]);
   p.antworten.ab_unterschrift = a("Erika Muster", [{ id: "unter001", name: "Unterschrift.png", art: "bild" }]);
   p.ergebnis = { fehlt: [], abschluss: true };
   planungen.speichern(p);

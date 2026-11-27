@@ -45,10 +45,10 @@ test("Pflichtfoto überspringen nur mit Grund", async () => {
   const s = await testServer();
   try {
     const p = await bericht(s);
-    const f = "ab_ac_foto_app_laeuft";
+    const f = "ab_ac_foto_zaehlerschrank_geschlossen";
     assert.equal((await put(s, `/api/planungen/${p.id}/antworten/${f}`, { uebersprungen: true })).status, 400);
     assert.equal((await put(s, `/api/planungen/${p.id}/antworten/${f}`, { uebersprungen: true, notiz: "Kunde hat kein Handy" })).status, 200);
-    assert.ok(!fehltZumSenden(await laden(s, p.id)).includes("App läuft"));
+    assert.ok(!fehltZumSenden(await laden(s, p.id)).includes("Zählerschrank geschlossen"));
   } finally { await s.stop(); }
 });
 
@@ -112,7 +112,7 @@ test("Unterschrift-Datei lässt sich nicht überschreiben, ein überschriebenes 
   try {
     const p = await bericht(s);
     await fetch(`${s.url}/api/planungen/${p.id}/dateien/foto0001?name=a.jpg&art=bild`, { method: "PUT", body: Buffer.from("a") });
-    await put(s, `/api/planungen/${p.id}/antworten/ab_ac_foto_app_laeuft`, { dateien: [{ id: "foto0001" }] });
+    await put(s, `/api/planungen/${p.id}/antworten/ab_ac_foto_zaehlerschrank_geschlossen`, { dateien: [{ id: "foto0001" }] });
     await unterschreiben(s, p.id);
     assert.equal((await fetch(`${s.url}/api/planungen/${p.id}/dateien/unterschrift-1?name=U.png&art=bild`, { method: "PUT", body: Buffer.from("neu") })).status, 409);
     assert.equal((await fetch(`${s.url}/api/planungen/${p.id}/dateien/foto0001?name=a.jpg&art=bild`, { method: "PUT", body: Buffer.from("b") })).status, 201);
