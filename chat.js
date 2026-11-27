@@ -129,11 +129,16 @@ let katalogCache = null;
 const ladeKatalog = async () => (katalogCache ??= await api("/api/fragen"));
 
 // Gleiche Regeln wie auf dem Server (server/fragen.mjs): Typ blendet Bereiche aus, Folgefragen nur bei passender Antwort.
+// Abschlussbericht: Startfrage "bericht" beantwortet, dann nur dessen Fragen (abschluss: true, bericht passend oder für alle).
 const TYPEN = { pv: "PV", wp: "Wärmepumpe", klima: "Klimaanlage" };
-function sichtbar(fragen, antworten) {
+export const berichtKey = (fragen, antworten) => { const f = fragen.find((x) => x.id === "bericht"); const i = f ? f.optionen.indexOf(antworten.bericht?.wert) : -1; return i < 0 ? null : f.berichte[i]; };
+export function sichtbar(fragen, antworten) {
+  const passt = (f) => !f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert);
+  const b = berichtKey(fragen, antworten);
+  if (b) return fragen.filter((f) => f.abschluss && (!f.bericht || f.bericht === b) && passt(f));
   const w = antworten.typ?.wert || "", gewaehlt = w === "Beides" ? ["PV", "Wärmepumpe"] : w.split(",").map((t) => t.trim()).filter(Boolean);
   if (!gewaehlt.length) return [fragen[0]];
-  return fragen.filter((f) => (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && (!f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert)));
+  return fragen.filter((f) => !f.abschluss && (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && passt(f));
 }
 const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);
 const mitEinheit = (f, w) => (f.einheit && w ? (f.einheit.startsWith("°") ? w + f.einheit : `${w} ${f.einheit}`) : w);
