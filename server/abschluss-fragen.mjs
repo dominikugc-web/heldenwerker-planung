@@ -100,6 +100,8 @@ const F = [
   foto("wp", "Fundament und Kondensatablauf"),
   foto("wp", "Wanddurchführung gedämmt"),
   foto("wp", "Inneneinheit mit Hydraulik"),
+  foto("wp", "Warmwasserspeicher", { wenn: { frage: "ab_wp_ww_da", ist: "ja" } }),
+  foto("wp", "Pufferspeicher", { wenn: { frage: "ab_wp_puffer_da", ist: "ja" } }),
   foto("wp", "Typenschilder innen und außen"),
   foto("wp", "Typenschild Warmwasserspeicher", { wenn: { frage: "ab_wp_ww_da", ist: "ja" } }),
   foto("wp", "Typenschild Pufferspeicher", { wenn: { frage: "ab_wp_puffer_da", ist: "ja" } }),

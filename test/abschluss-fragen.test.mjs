@@ -98,3 +98,10 @@ test("AC: zwei Pflichtfotos für die Typenschilder (Wechselrichter und Speicher)
 test("AC: kein Foto „App läuft“ mehr", () => {
   assert.equal(frageNach("ab_ac_foto_app_laeuft"), undefined);
 });
+
+test("WP: Fotos von Außeneinheit, Inneneinheit und den verbauten Speichern", () => {
+  const titel = (a) => sichtbar({ bericht: { wert: "Wärmepumpe" }, ...a }).filter((f) => f.pflicht).map((f) => f.titel);
+  const mit = titel({ ab_wp_ww_da: { wert: "ja" }, ab_wp_puffer_da: { wert: "ja" } });
+  for (const t of ["Außeneinheit gesamt mit Abständen", "Inneneinheit mit Hydraulik", "Warmwasserspeicher", "Pufferspeicher"]) assert.ok(mit.includes(t), t);
+  assert.ok(!titel({}).includes("Pufferspeicher"));
+});
