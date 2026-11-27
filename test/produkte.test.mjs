@@ -28,3 +28,22 @@ test("Produkte: alle Bereiche abgedeckt, IDs eindeutig, keine Gedankenstriche", 
   for (const b of ["Wärmepumpe", "Klimaanlage", "Wechselrichter", "Speicher", "Wallbox"]) assert.ok(PRODUKTE.some((p) => p.bereich === b), b);
   assert.ok(PRODUKTE.every((p) => !/[–—]/.test(p.name)));
 });
+
+test("Produkte: 3D-Modell als GLB, in der Liste markiert, ohne Datei 404", async () => {
+  const s = await testServer();
+  try {
+    const ordner = path.join(s.datenDir, "produkte");
+    fs.mkdirSync(ordner, { recursive: true });
+    fs.writeFileSync(path.join(ordner, "bosch-klima-aussen.png"), "PNG");
+    fs.writeFileSync(path.join(ordner, "bosch-klima-innen.png"), "PNG");
+    assert.equal((await fetch(s.url + "/api/produkte/bosch-klima-aussen/3d")).status, 404, "ohne GLB");
+    fs.writeFileSync(path.join(ordner, "bosch-klima-aussen.glb"), "GLBDATEN");
+    const liste = await (await fetch(s.url + "/api/produkte")).json();
+    assert.equal(liste.find((x) => x.id === "bosch-klima-aussen").modell, true);
+    assert.equal(liste.find((x) => x.id === "bosch-klima-innen").modell, undefined);
+    const r = await fetch(s.url + "/api/produkte/bosch-klima-aussen/3d");
+    assert.equal(r.headers.get("content-type"), "model/gltf-binary");
+    assert.equal(await r.text(), "GLBDATEN");
+    assert.equal((await fetch(s.url + "/api/produkte/gibtsnicht/3d")).status, 404);
+  } finally { await s.stop(); }
+});

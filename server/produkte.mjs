@@ -26,9 +26,16 @@ export const PRODUKTE = [
   ["ecoflow-powerpulse-2", "EcoFlow PowerPulse 2", "Wallbox"],
 ].map(([id, name, bereich]) => ({ id, name, bereich }));
 
-const datei = (k, id) => path.join(k.datenDir, "produkte", id + ".png");
+// Optional daten/produkte/<id>.glb: 3D-Modell, das man beim Bemalen über dem Foto dreht (27.11.).
+const datei = (k, id, endung = ".png") => path.join(k.datenDir, "produkte", id + endung);
 
-route("GET", "/api/produkte", (req, res, p, k) => json(res, 200, PRODUKTE.filter((x) => fs.existsSync(datei(k, x.id)))));
+route("GET", "/api/produkte", (req, res, p, k) => json(res, 200, PRODUKTE.filter((x) => fs.existsSync(datei(k, x.id)))
+  .map((x) => (fs.existsSync(datei(k, x.id, ".glb")) ? { ...x, modell: true } : x))));
+route("GET", "/api/produkte/:id/3d", (req, res, p, k) => {
+  if (!PRODUKTE.some((x) => x.id === p.id) || !fs.existsSync(datei(k, p.id, ".glb"))) throw fehler(404, "3D-Modell nicht gefunden");
+  res.writeHead(200, { "Content-Type": "model/gltf-binary", "Cache-Control": "private, max-age=86400" });
+  fs.createReadStream(datei(k, p.id, ".glb")).pipe(res);
+});
 route("GET", "/api/produkte/:id", (req, res, p, k) => {
   // Nur bekannte IDs, damit niemand über den Pfad an andere Dateien kommt.
   if (!PRODUKTE.some((x) => x.id === p.id) || !fs.existsSync(datei(k, p.id))) throw fehler(404, "Produkt nicht gefunden");
