@@ -14,6 +14,11 @@ export function erstelleDateien({ schreiber, hero }) {
       }
       return (await schreiber.heroSchreiben(`mutation($u:String!,$id:Int!,$k:String){ upload_image(target:project_match, target_id:$id, file_upload_uuid:$u, image_category:$k){ id } }`, { u, id, k: bildkategorie }, projektId)).upload_image.id;
     },
+    // Aufgabe im Projekt (update_task ohne id legt an; im Testprojekt geprüft 27.11.). userId null = niemand zugewiesen.
+    async aufgabe(projektId, { titel, text, userId, faellig }) {
+      const t = { title: titel, comment: text, target_project_match_id: Number(projektId), due_date: faellig, ...(userId && { target_user_id: userId }) };
+      return (await schreiber.heroSchreiben(`mutation($t:TaskInput){ update_task(task:$t){ id } }`, { t }, projektId)).update_task.id;
+    },
     async logbuchEintrag(projektId, text) {
       const e = { target: "project_match", target_id: Number(projektId), custom_text: text };
       return (await schreiber.heroSchreiben(`mutation($e:LogbookEntryInput){ add_logbook_entry(logbook_entry:$e){ id } }`, { e }, projektId)).add_logbook_entry;

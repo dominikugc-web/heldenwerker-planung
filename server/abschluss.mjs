@@ -35,6 +35,8 @@ const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).filter(([frag
 // Abschlussbericht in HERO: PDF als „Abnahmeprotokoll“ (Ordner Baustellenberichte), Fotos in der HERO-Bildkategorie des Berichts
 // (Namen wie in upload_image_categories, mit Leerzeichen am Ende). Logbuch nennt Bericht und Monteure.
 export const DOKUMENTTYP_ABNAHME = 380908;
+// HERO-Benutzer, der offene Wallbox-Montagen terminiert: Sebastian Regehr (User 212973, Partner 61478; aus HERO-Aufgaben, 27.11.).
+export const WALLBOX_TERMIN_USER = 212973;
 export const BILDKATEGORIE = { dc: "Dachbelegung ", ac: "AC Montage", wp: "wärmepumpe ", klima: "aussengerät" };
 export const logbuchTextAbschluss = (antworten) => `Baustelle abgeschlossen: ${BERICHTE[berichtVon(antworten)]}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
 
@@ -150,6 +152,20 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       if (pl.gesendet.logbuchIn.includes(z.id) || !(fertig || !ablage) || !fuerHero.every((a) => !gehoertZu(a, z) || istInHero(z, a))) continue;
       await dateien.logbuchEintrag(z.id, bericht ? logbuchTextAbschluss(pl.antworten) : logbuchText(aufgenommen));
       pl.gesendet.logbuchIn.push(z.id);
+      planungen.speichern(pl);
+    }
+    // Wallbox laut Lieferschein, aber nicht montiert (Dominik, 27.11.): Sebastian Regehr bekommt in HERO die Aufgabe, die Montage
+    // zu terminieren. Einmal je Bericht (gesendet.aufgabe). Im Testmodus (umgeleitet) ohne Zuweisung, damit niemand benachrichtigt wird.
+    const a = pl.antworten;
+    if (bericht === "ac" && a.ab_ls_wallbox?.wert === "ja" && a.ab_ac_wallbox_da?.wert === "nein" && !pl.gesendet.aufgabe && dateien.aufgabe && pl.gesendet.logbuchIn.length) {
+      const tag = new Date(Date.now() + 2 * 864e5);
+      pl.gesendet.aufgabe = await dateien.aufgabe(ziel.id, {
+        titel: `${ziel.umgeleitet ? "TEST " : ""}Wallbox-Montage terminieren: ${a.ab_kunde?.wert || "Kunde"} (${a.ab_projektnr?.wert || ziel.nummer || "ohne Nr."})`,
+        text: [`Laut Lieferschein: ${a.ab_ac_wallbox?.wert || "Wallbox"}.`, `Beim Abschluss Elektrik AC am ${a.ab_datum?.wert || ""} nicht montiert.`,
+          a.ab_monteure?.wert && `Monteure: ${a.ab_monteure.wert}.`, a.ab_ac_wallbox_da?.notiz && `Notiz: ${a.ab_ac_wallbox_da.notiz}`].filter(Boolean).join("\n"),
+        userId: ziel.umgeleitet ? null : WALLBOX_TERMIN_USER,
+        faellig: tag.toISOString().slice(0, 10) + "T16:00:00+01:00",
+      });
       planungen.speichern(pl);
     }
     pl.gesendet.logbuch = ziele.every((z) => pl.gesendet.logbuchIn.includes(z.id));

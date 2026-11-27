@@ -26,6 +26,7 @@ function aufbau() {
   const dateien = {
     async inHero(id, pfad, name, mime, opt) { log.hero.push({ id, name, mime, opt }); return log.hero.length; },
     async logbuchEintrag(id, text) { log.logbuch.push({ id, text }); return { id: 1 }; },
+    async aufgabe(id, opt) { (log.aufgaben ||= []).push({ id, ...opt }); return 99; },
   };
   const ablage = { async hochladen(pfad, name) { log.ablage.push(name); return "https://drive/" + name; } };
   const schreiber = { zielProjekt: (id) => ({ id: Number(id), umgeleitet: false }) };
@@ -70,4 +71,33 @@ test("Angehängtes PDF bleibt Dokumenttyp Allgemein, nur das Protokoll ist Abnah
   const pdfs = log.hero.filter((x) => x.mime === "application/pdf");
   assert.equal(pdfs.find((x) => x.name === "Messung.pdf").opt.dokumenttyp, undefined);
   assert.equal(pdfs.find((x) => /^Abnahmeprotokoll/.test(x.name)).opt.dokumenttyp, 380908);
+});
+
+test("Wallbox im Lieferschein, aber nicht montiert: HERO-Aufgabe für Sebastian Regehr, nur einmal", async () => {
+  const { p, planungen, log, abschluss } = aufbau();
+  const aufgaben = [];
+  const pl = planungen.laden(p.id);
+  pl.antworten.ab_ls_wallbox = a("ja");
+  pl.antworten.ab_ac_wallbox_da = a("nein");
+  pl.antworten.ab_ac_wallbox = a("Wallbox Sungrow AC22E");
+  pl.antworten.ab_kunde = a("Erika Muster");
+  pl.antworten.ab_projektnr = a("PV-1");
+  planungen.speichern(pl);
+  log.aufgaben = aufgaben;
+  await abschluss.abschliessen(p.id);
+  await abschluss.abschliessen(p.id);
+  assert.equal(log.aufgaben.length, 1);
+  assert.equal(log.aufgaben[0].userId, 212973);
+  assert.match(log.aufgaben[0].titel, /^Wallbox-Montage terminieren: Erika Muster \(PV-1\)$/);
+  assert.match(log.aufgaben[0].text, /Wallbox Sungrow AC22E/);
+});
+
+test("Wallbox montiert oder nicht im Lieferschein: keine Aufgabe", async () => {
+  const { p, planungen, log, abschluss } = aufbau();
+  log.aufgaben = [];
+  const pl = planungen.laden(p.id);
+  pl.antworten.ab_ls_wallbox = a("ja"); pl.antworten.ab_ac_wallbox_da = a("ja");
+  planungen.speichern(pl);
+  await abschluss.abschliessen(p.id);
+  assert.equal(log.aufgaben.length, 0);
 });
