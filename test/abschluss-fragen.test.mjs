@@ -78,3 +78,8 @@ test("Mängel: als Frage an den Kunden, bei Ja folgt der Text (auch alte Antwort
   assert.ok(vis("Folgende Mängel").includes("ab_maengel_text"));
   assert.ok(!vis("Nein, keine Mängel").includes("ab_maengel_text"));
 });
+
+test("AC: zwei Pflichtfotos für die Typenschilder (Wechselrichter und Speicher)", () => {
+  const s = sichtbar({ bericht: { wert: "Elektrik AC" } }).filter((f) => f.pflicht).map((f) => f.titel);
+  assert.ok(s.includes("Typenschild Wechselrichter mit Seriennummer") && s.includes("Typenschild Speicher mit Seriennummer"));
+});

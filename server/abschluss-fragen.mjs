@@ -78,7 +78,9 @@ const F = [
     ["ab_ac", "ab_ac_inbetrieb", "Inbetriebnahme erfolgt?", "janein"],
     ["ab_ac", "ab_ac_einweisung", "Einweisung in App/System erfolgt?", "janein"]),
   foto("ac", "Wechselrichter und Speicher gesamt"),
-  foto("ac", "Typenschilder mit Seriennummern"),
+  // Zwei Typenschilder, zwei Pflichtfotos (Dominik, 27.11.).
+  foto("ac", "Typenschild Wechselrichter mit Seriennummer"),
+  foto("ac", "Typenschild Speicher mit Seriennummer"),
   foto("ac", "Zählerschrank offen nach Umbau"),
   foto("ac", "Zählerschrank geschlossen"),
   foto("ac", "Wallbox", { wenn: { frage: "ab_ac_wallbox_da", ist: "ja" } }),
