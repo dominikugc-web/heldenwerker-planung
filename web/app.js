@@ -1,7 +1,7 @@
 // Gerüst: Router, Tab-Leiste, Home, Kalender, Projekte, Projektseite, Einstellungen, Feedback.
 import { api, verbinden, brauchtKlick, zustand, serverSetzen, speicher, serverUrl } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, sheet, zurueck, IKON, uhrzeit, datumKurz, tagName, tagSchluessel, relativ, istBesichtigung, euro } from "./ui.js";
-import { plusSheet, planungStarten, chatAnsicht, abschlussStarten } from "./chat.js";
+import { plusSheet, planungStarten, chatAnsicht, abschlussStarten, abnahmeSheet } from "./chat.js";
 import { pruefAnsicht } from "./pruefung.js";
 
 const ansicht = $("#ansicht");
@@ -15,7 +15,7 @@ async function zeigen() {
   abbruch?.abort();
   abbruch = new AbortController();
   // Monteure: keine neue Besichtigung, keine Projektsuche (der Server sperrt beides ohnehin).
-  for (const t of ["plus", "projekte"]) $(`.tabs [data-tab="${t}"]`).style.display = istMonteur() ? "none" : "";
+  $(`.tabs [data-tab="projekte"]`).style.display = istMonteur() ? "none" : "";
   const tab = ["home", "kalender", "projekte", "setup"].includes(name) ? name : name === "projekt" ? "projekte" : null;
   $$(".tabs button").forEach((b) => (b.dataset.tab === tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
   const vollbild = name === "chat";
@@ -30,7 +30,7 @@ const MENUE = ["home", "kalender", "projekte", "setup"];
 const seitenBild = {};
 export const gehe = (ziel) => { if (location.hash === "#" + ziel) zeigen(); else location.hash = ziel; };
 
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => (b.dataset.tab === "plus" ? plusSheet() : gehe(b.dataset.tab))));
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => (b.dataset.tab === "abnahme" ? abnahmeSheet() : gehe(b.dataset.tab))));
 $("#fbbtn").addEventListener("click", feedbackSheet);
 addEventListener("hashchange", zeigen);
 
