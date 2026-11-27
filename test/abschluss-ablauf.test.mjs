@@ -107,3 +107,11 @@ test("Unterschrift-Datei lässt sich nicht überschreiben, ein überschriebenes 
     assert.equal((await laden(s, p.id)).antworten.ab_unterschrift, undefined);
   } finally { await s.stop(); }
 });
+
+test("Unterschrift lässt sich nicht überspringen", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_unterschrift`, { uebersprungen: true })).status, 400);
+  } finally { await s.stop(); }
+});

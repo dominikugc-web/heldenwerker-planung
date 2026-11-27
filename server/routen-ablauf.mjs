@@ -21,6 +21,8 @@ route("PUT", "/api/planungen/:id/antworten/:frage", async (req, res, p, k) => {
   if ("wert" in b || "uebersprungen" in b) delete neu.quelle; // selbst beantwortet, nicht mehr "aus Lieferschein"
   if ("notiz" in b) neu.notiz = String(b.notiz || "").trim().slice(0, 4000);
   if (abschluss && f.pflicht && neu.uebersprungen && !neu.notiz) throw fehler(400, "Bitte einen Grund angeben, warum das Foto fehlt");
+  // Ohne Unterschrift kein Abschluss (Dominik, 27.11.): sie lässt sich nicht überspringen.
+  if (f.art === "unterschrift" && neu.uebersprungen) throw fehler(400, "Die Unterschrift des Kunden ist Pflicht");
   if ("dateien" in b) {
     neu.dateien = k.planungen.dateienPruefen(pl, (b.dateien || []).map((d) => ({ id: d.id })));
     // Sprachnotizen einmal mit Whisper umwandeln; der Text bleibt an der Datei.
