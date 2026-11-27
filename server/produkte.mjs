@@ -25,6 +25,7 @@ const TEXTE = {
   "fronius-wattpilot-flex": "Wattpilot Flex Home 11/22 kW, 195 x 325 x 105 mm",
   "goodwe-hca-g2": "HCA G2 Wallbox 7/11/22 kW, 208 x 450 x 170 mm",
   "ecoflow-powerpulse-2": "PowerPulse 2 Wallbox 11/22 kW, 226 x 333 x 145 mm",
+  "zaehlerschrank": "Aufputz, Zählerfeld und Verteilerfeld, ca. 550 x 1100 x 205 mm",
 };
 
 export const PRODUKTE = [
@@ -46,6 +47,7 @@ export const PRODUKTE = [
   ["fronius-wattpilot-flex", "Fronius Wattpilot Flex", "Wallbox"],
   ["goodwe-hca-g2", "GoodWe HCA G2", "Wallbox"],
   ["ecoflow-powerpulse-2", "EcoFlow PowerPulse 2", "Wallbox"],
+  ["zaehlerschrank", "Zählerschrank 2-feldrig", "Zählerschrank"],
 // "boden": steht auf dem Boden, das 3D-Modell bekommt beim Bemalen einen Bodenschatten (27.11.).
 ].map(([id, name, bereich, boden]) => ({ id, name, bereich, ...(boden && { boden: true }), text: TEXTE[id] || "" }));
 
