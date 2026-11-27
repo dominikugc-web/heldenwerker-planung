@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { PDFDocument, StandardFonts, rgb, PDFName, PDFString } from "pdf-lib";
-import { BEREICHE, KATALOG, sichtbar, typen } from "./fragen.mjs";
+import { BEREICHE, KATALOG, sichtbar, typen, istAbschluss } from "./fragen.mjs";
 
 // Bericht der Besichtigung aus den Antworten des festen Ablaufs: als Abschnitte, als Text und als PDF
 // im Stil des „DC Abnahmeprotokolls“ (Logo, Titelband, Abschnittsbalken, Frage | Antwort, Fotos darunter).
@@ -39,10 +39,14 @@ export function berichtText(pl) {
   }).join("\n")).join("\n\n");
 }
 
+const hatBild = (a) => (a?.dateien || []).some((d) => d.art === "bild");
+// Im Abschlussbericht zählt ein mit Grund übersprungenes Pflichtfoto als erledigt (der Grund steht im PDF).
 export function fehltPflichtfotos(pl) {
-  const antworten = pl.antworten || {};
-  return sichtbar(antworten).filter((f) => f.pflicht && !(antworten[f.id]?.dateien || []).some((d) => d.art === "bild")).map((f) => f.titel);
+  const antworten = pl.antworten || {}, abschluss = istAbschluss(antworten);
+  return sichtbar(antworten).filter((f) => f.pflicht && !hatBild(antworten[f.id]) && !(abschluss && antworten[f.id]?.uebersprungen && antworten[f.id]?.notiz)).map((f) => f.titel);
 }
+// Was einem Abschlussbericht vor dem Senden noch fehlt: Pflichtfotos und die Unterschrift des Kunden.
+export const fehltZumSenden = (pl) => [...fehltPflichtfotos(pl), ...(hatBild(pl.antworten?.ab_unterschrift) && pl.antworten.ab_unterschrift.wert ? [] : ["Unterschrift"])];
 
 // ---------- PDF ----------
 const STREIFEN = rgb(0.935, 0.94, 0.945); // leichtes Grau für jede zweite Zeile

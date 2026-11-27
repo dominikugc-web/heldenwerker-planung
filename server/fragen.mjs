@@ -221,6 +221,7 @@ export const naechste = (antworten = {}) => sichtbar(antworten).find((f) => !erl
 // Prüft und vereinheitlicht eine Antwort. Leerer Wert ist erlaubt (nur Foto oder Notiz).
 export function pruefeAntwort(f, eingabe) {
   const w = String(eingabe ?? "").trim();
+  if (f.art === "unterschrift") { if (!w) throw fehler(400, "Bitte den Namen des Unterzeichners eintragen"); return w.slice(0, 120); }
   if (!w) return "";
   if (f.art === "janein") {
     const j = w.toLowerCase();

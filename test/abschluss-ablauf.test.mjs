@@ -1,0 +1,76 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { testServer } from "./hilfe.mjs";
+import { fehltZumSenden } from "../server/bericht.mjs";
+
+const J = { "Content-Type": "application/json" };
+const post = (s, pfad, body) => fetch(s.url + pfad, { method: "POST", headers: J, body: JSON.stringify(body) });
+const put = (s, pfad, body) => fetch(s.url + pfad, { method: "PUT", headers: J, body: JSON.stringify(body) });
+
+// Abschlussbericht AC über die Startfrage; Unterschrift als hochgeladenes PNG.
+async function bericht(s) {
+  const p = await (await post(s, "/api/planungen", { projektId: 11541539, projektTitel: "UNB-1149, Muster", kunde: "Erika Muster", nummer: "UNB-1149" })).json();
+  assert.equal((await put(s, `/api/planungen/${p.id}/antworten/bericht`, { wert: "Elektrik AC" })).status, 200);
+  return p;
+}
+async function unterschreiben(s, id, dateiId = "unterschrift-1") {
+  await fetch(`${s.url}/api/planungen/${id}/dateien/${dateiId}?name=Unterschrift.png&art=bild`, { method: "PUT", body: Buffer.from("png") });
+  return put(s, `/api/planungen/${id}/antworten/ab_unterschrift`, { wert: "Erika Muster", dateien: [{ id: dateiId }] });
+}
+const laden = async (s, id) => (await fetch(`${s.url}/api/planungen/${id}`)).json();
+
+test("Änderung nach der Unterschrift löscht die Unterschrift, Änderung der Unterschrift selbst nicht", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    assert.equal((await unterschreiben(s, p.id)).status, 200);
+    assert.equal((await unterschreiben(s, p.id, "unterschrift-2")).status, 200);
+    assert.equal((await laden(s, p.id)).antworten.ab_unterschrift.dateien[0].id, "unterschrift-2");
+    const r = await (await put(s, `/api/planungen/${p.id}/antworten/ab_ac_wr`, { wert: "Sungrow 10 kW" })).json();
+    assert.equal(r.antworten.ab_unterschrift, undefined);
+  } finally { await s.stop(); }
+});
+
+test("Unterschrift braucht einen Namen", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_unterschrift`, { wert: "   " })).status, 400);
+  } finally { await s.stop(); }
+});
+
+test("Pflichtfoto überspringen nur mit Grund", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    const f = "ab_ac_foto_app_laeuft";
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/${f}`, { uebersprungen: true })).status, 400);
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/${f}`, { uebersprungen: true, notiz: "Kunde hat kein Handy" })).status, 200);
+    assert.ok(!fehltZumSenden(await laden(s, p.id)).includes("App läuft"));
+  } finally { await s.stop(); }
+});
+
+test("Gesendeter Bericht ist gesperrt", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei, "utf8")), status: "gesendet" }));
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_ac_wr`, { wert: "X" })).status, 409);
+  } finally { await s.stop(); }
+});
+
+test("fehltZumSenden: Pflichtfotos und Unterschrift", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    const fehlt = fehltZumSenden(await laden(s, p.id));
+    assert.ok(fehlt.includes("Unterschrift"));
+    assert.ok(fehlt.includes("Zählerschrank geschlossen"));
+    assert.ok(!fehlt.includes("Wallbox"), "Wallbox-Foto nur wenn Wallbox montiert");
+    await unterschreiben(s, p.id);
+    assert.ok(!fehltZumSenden(await laden(s, p.id)).includes("Unterschrift"));
+  } finally { await s.stop(); }
+});
