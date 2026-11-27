@@ -1,19 +1,19 @@
 // Prüfansicht nach dem Zusammenfassen: Monteur-Text bearbeiten, Antworten kontrollieren, Protokoll ansehen, dann nach HERO.
 import { api, dateiUrl, serverUrl, zustand } from "./api.js";
 import { $, $$, esc, toast, fehlerMelden, zurueck, IKON } from "./ui.js";
-import { berichtKey, fehltFragen } from "./chat.js";
+import { berichtKey, fehltFragen, sichtbar } from "./chat.js";
 
 const ABSCHNITTE = [["wasWirdGemacht", "Was wird gemacht"], ["woKommtWasHin", "Wo kommt was hin"], ["achtung", "Achtung auf der Baustelle"],
   ["material", "Material und Besonderheiten"], ["offen", "Offene Punkte"]];
 
 export async function pruefAnsicht(el, id, signal) {
   const [planung, { katalog, bereiche }] = await Promise.all([api("/api/planungen/" + id, { signal }), api("/api/fragen", { signal })]);
-  const antworten = planung.antworten || {}, abschluss = !!berichtKey(katalog, antworten), gesperrt = abschluss && planung.status === "gesendet";
+  const antworten = planung.antworten || {}, abschluss = !!berichtKey(katalog, antworten), gesperrt = abschluss && (planung.status === "gesendet" || !!planung.senden);
   if (!planung.ergebnis && !abschluss) { location.hash = "chat/" + id; return; }
   // Was fehlt, rechnet die Seite selbst aus dem aktuellen Stand (nach dem Nachholen ist die Liste sofort kürzer).
   const fehlt = gesperrt ? [] : fehltFragen(katalog, antworten).map((f) => f.titel || f.frage);
   const e = { ...(abschluss ? { monteure: {} } : planung.ergebnis), fehlt };
-  const beantwortet = katalog.filter((f) => { const a = antworten[f.id]; if (f.id === "bericht") return false; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
+  const beantwortet = (abschluss ? sichtbar(katalog, antworten) : katalog).filter((f) => { const a = antworten[f.id]; if (f.id === "bericht") return false; return a && ((a.wert ?? "") !== "" || a.dateien?.length || a.notiz); });
   const wert = (f, a) => [a.wert && (f.art === "janein" ? a.wert[0].toUpperCase() + a.wert.slice(1) : a.wert + (f.einheit ? " " + f.einheit : "")),
     a.dateien?.length ? `${a.dateien.length} Datei${a.dateien.length > 1 ? "en" : ""}` : "", f.abschluss && f.pflicht && a.uebersprungen && !a.dateien?.length ? "Nicht möglich: " + (a.notiz || "") : a.notiz ? "✎ Notiz" : ""].filter(Boolean).join(" · ");
   const bild = (f) => (antworten[f.id].dateien || []).filter((d) => d.art === "bild").slice(0, 3).map((d) => `<img src="${esc(dateiUrl(planung.id, d.id, true, d.v))}" alt="" loading="lazy">`).join("");
@@ -92,7 +92,7 @@ export async function pruefAnsicht(el, id, signal) {
   // Alle Fotos (bemalte Fassung, volle Größe) übers Teilen-Menü aufs Handy, z. B. „Bilder sichern“, um sie selbst in HERO hochzuladen.
   // Erster Tipp lädt (das dauert, Safari erlaubt das Teilen danach nicht mehr im selben Tipp), zweiter Tipp teilt.
   const fotoKnopf = $("[data-fotossichern]", el);
-  const fotos = katalog.flatMap((f) => { let n = 0; return (antworten[f.id]?.dateien || []).filter((d) => d.art === "bild")
+  const fotos = katalog.filter((f) => f.art !== "unterschrift").flatMap((f) => { let n = 0; return (antworten[f.id]?.dateien || []).filter((d) => d.art === "bild")
     .map((d) => ({ d, name: `${String(f.titel || f.frage).replace(/[\\/:*?"<>|]+/g, "-").trim().slice(0, 50)} ${++n}.jpg` })); });
   let fotoDateien = null;
   if (!fotos.length) fotoKnopf.hidden = true;

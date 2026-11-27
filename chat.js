@@ -212,6 +212,8 @@ export async function chatAnsicht(el, id) {
   if (bearbeite) history.replaceState(null, "", "#chat/" + id); // Neu laden soll nicht wieder zur Frage springen
   const antworten = () => planung.antworten || {};
   const abschluss = () => !!berichtKey(fragen, antworten());
+  // Gesendeter (oder gerade sendender) Abschlussbericht: nur noch in der Prüfansicht ansehen.
+  if (abschluss() && (planung.status === "gesendet" || planung.senden)) { location.hash = "pruefung/" + id; return; }
   // Aus der Prüfansicht „Es fehlt noch“ (#chat/<id>/fehlt): der Reihe nach zu jedem fehlenden Punkt, danach zurück zum Prüfen.
   let nachholen = bearbeite === "fehlt";
   if (nachholen) bearbeite = fehltFragen(fragen, antworten())[0]?.id || null;
@@ -506,10 +508,10 @@ export async function chatAnsicht(el, id) {
     $("[data-unterschriftweg]", steuerung).onclick = () => { g.clearRect(0, 0, c.width, c.height); leer = true; };
     $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
     $("[data-unterschriftok]", steuerung).onclick = async (e) => {
-      const name = $("#wert", steuerung).value.trim();
+      const knopf = e.currentTarget, name = $("#wert", steuerung).value.trim();
       if (!name) return toast("Bitte den Namen des Unterzeichners eintragen", "fehler");
       if (leer) return toast("Bitte unterschreiben lassen", "fehler");
-      e.currentTarget.disabled = true;
+      knopf.disabled = true;
       try {
         const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
         const id = neueId(), v = Date.now(), dname = "Unterschrift.png";
@@ -517,7 +519,7 @@ export async function chatAnsicht(el, id) {
         await hinten;
         await dateiEinreihen(id, dname, "bild", blob, false, v);
         await speichern(f, { wert: name, dateien: [{ id }] }, { [id]: { id, name: dname, art: "bild", groesse: blob.size, v } });
-      } catch (err) { bericht("unterschrift", err); fehlerMelden(err); e.currentTarget.disabled = false; }
+      } catch (err) { bericht("unterschrift", err); fehlerMelden(err); knopf.disabled = false; }
     };
   }
 
