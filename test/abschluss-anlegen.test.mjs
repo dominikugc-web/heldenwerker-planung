@@ -63,7 +63,10 @@ test("Lieferschein füllt die Abschlussfelder", () => {
   assert.match(a.ab_ac_wallbox.wert, /Wallbox/);
   assert.equal(a.ab_dach_optimierer.wert, "2 x Tigo TS4-A-O Optimierer");
   assert.equal(a.ab_klima_aussen.wert, "Bosch Klimagerät Multisplit 5,3kW CL5000M53/2E");
-  assert.equal(a.ab_klima_innen.wert, "2 x Bosch Klimagerät Inneneinheit 2,6kW CL3200iUW26E Schlafzimmer");
+  assert.equal(a.ab_klima_anzahl.wert, "2");
+  assert.equal(a.ab_klima_ig1.wert, "Bosch Inneneinheit 2,6kW CL3200iUW26E Schlafzimmer");
+  assert.equal(a.ab_klima_ig2.wert, "Bosch Inneneinheit 2,6kW CL3200iUW26E Schlafzimmer");
+  assert.equal(a.ab_klima_konsole.wert, "Wandkonsole f.Split-Außeneinheit WKS-WP");
 });
 
 test("Lieferschein: Warmwasser- und Pufferspeicher als verbaut vorbelegt", () => {
@@ -111,4 +114,32 @@ test("Wärmepumpe in Kaskade: Anzahl der Außeneinheiten steht davor", () => {
   const a = abschlussAusLieferscheinen([{ nr: "LS-885", datum: "2026-11-20", produkte: [
     { name: "22 KW Bosch Luft-Wasser-Wärmepumpe 2 x AW 11 KW schwarz kaskadiert", beschreibung: "Bosch CS8800i AW inkl. Inneneinheit", menge: 1 }] }]);
   assert.equal(a.ab_wp_aussen.wert, "2 x Bosch CS8800i AW, 11 kW (kaskadiert)");
+});
+
+test("Klima: jedes Innengerät einzeln mit Raum, Konsole, Leitungen und Gateway aus dem Lieferschein", () => {
+  const a = abschlussAusLieferscheinen([{ nr: "LS-860", datum: "2026-11-20", produkte: [
+    { name: "Bosch Klimagerät Multisplit 5,3kW CL5000M53/2E", menge: 1 },
+    { name: "Bosch Klimagerät Inneneinheit 2,6kW CL3200iUW26E Schlafzimmer DG", menge: 1 },
+    { name: "Bosch Klimagerät Inneneinheit 3,5kW CL3200iUW35E  Wohnzimmer", menge: 1 },
+    { name: "Montage Klimaanlage", menge: 2 },
+    { name: "Bodenkonsole f.Split-Außeneinheit WKS-WP", menge: 1 },
+    { name: "Bosch IP-Gateway f.Split-Klimagerät G10-4", menge: 2 },
+    { name: "Kälteleitung 1/4Zoll,3/8Zoll,L=5m 8750501319", menge: 2 },
+  ] }]);
+  assert.equal(a.ab_klima_aussen.wert, "Bosch Klimagerät Multisplit 5,3kW CL5000M53/2E");
+  assert.equal(a.ab_klima_anzahl.wert, "2");
+  assert.equal(a.ab_klima_ig1.wert, "Bosch Inneneinheit 2,6kW CL3200iUW26E Schlafzimmer DG");
+  assert.equal(a.ab_klima_ig2.wert, "Bosch Inneneinheit 3,5kW CL3200iUW35E Wohnzimmer");
+  assert.equal(a.ab_klima_konsole.wert, "Bodenkonsole f.Split-Außeneinheit WKS-WP");
+  assert.equal(a.ab_klima_gateway.wert, "2 x Bosch IP-Gateway f.Split-Klimagerät G10-4");
+  assert.equal(a.ab_klima_leitung.wert, "2 x Kälteleitung 1/4Zoll,3/8Zoll,L=5m 8750501319");
+});
+
+test("Klima: Pauschalen zählen nicht als Gerät, Set ist Außen- und Innengerät", () => {
+  const a = abschlussAusLieferscheinen([{ nr: "LS-828", datum: "2026-11-20", produkte: [
+    { name: "BOSCH Split-Klimagerät CL3200i-Set 35 WE Außen- und Inneneinheit", menge: 1 },
+    { name: "Inbetriebnahmepauschale Klimaanlage je Inneneinheit", menge: 1 },
+  ] }]);
+  assert.equal(a.ab_klima_aussen.wert, "BOSCH Split-Klimagerät CL3200i-Set 35 WE Außen- und Inneneinheit");
+  assert.equal(a.ab_klima_anzahl.wert, "1");
 });

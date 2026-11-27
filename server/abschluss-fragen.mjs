@@ -36,6 +36,12 @@ const STRING_WERTE = [["module", "Anzahl Module", "Stück"], ["spannung", "Spann
 const strings = Array.from({ length: MAX_STRINGS }, (_, i) => i + 1).flatMap((n) => STRING_WERTE.map(([k, name, einheit]) =>
   ["ab_dc", `ab_dc_s${n}_${k}`, `String ${n}: ${name}`, "zahl", { einheit, bericht: "dc", string: n, wenn: { frage: "ab_dc_strings", ist: ab(n) } }]));
 
+// Klima: je Innengerät eine Frage (Modell, Raum) und ein Pflichtfoto, sichtbar nach der Anzahl (wie die Strings bei DC).
+const innengeraete = Array.from({ length: MAX_STRINGS }, (_, i) => i + 1).map((n) =>
+  ["ab_klima", `ab_klima_ig${n}`, `Innengerät ${n}: Modell und Raum`, "text", { bericht: "klima", wenn: { frage: "ab_klima_anzahl", ist: ab(n) } }]);
+const innengeraetFotos = Array.from({ length: MAX_STRINGS }, (_, i) => i + 1).map((n) =>
+  foto("klima", `Innengerät ${n}`, { wenn: { frage: "ab_klima_anzahl", ist: ab(n) } }));
+
 // [bereich, id, frage, art, extra]
 const F = [
   ["ab_start", "bericht", "Welcher Abschlussbericht?", "auswahl", { optionen: Object.values(BERICHTE), berichte: Object.keys(BERICHTE), alt: ALTE_BERICHTE }],
@@ -110,7 +116,11 @@ const F = [
 
   ...nur("klima",
     ["ab_klima", "ab_klima_aussen", "Außengerät", "text"],
-    ["ab_klima", "ab_klima_innen", "Innengeräte: Anzahl und Modell", "text"],
+    ["ab_klima", "ab_klima_konsole", "Befestigung Außengerät (Konsole)", "text"],
+    ["ab_klima", "ab_klima_anzahl", "Wie viele Innengeräte?", "auswahl", { optionen: ab(1) }],
+    ...innengeraete,
+    ["ab_klima", "ab_klima_leitung", "Kälteleitungen", "text"],
+    ["ab_klima", "ab_klima_gateway", "WLAN-Gateway", "text"],
     ["ab_klima", "ab_klima_druck", "Druckprobe", "zahl", { einheit: "bar" }],
     ["ab_klima", "ab_klima_druck_dauer", "Dauer der Druckprobe", "zahl", { einheit: "min" }],
     ["ab_klima", "ab_klima_vakuum", "Vakuum", "zahl", { einheit: "mbar" }],
@@ -118,7 +128,8 @@ const F = [
     ["ab_klima", "ab_klima_inbetrieb", "Inbetriebnahme erfolgt?", "janein"],
     ["ab_klima", "ab_klima_einweisung", "Einweisung Fernbedienung oder App erfolgt?", "janein"]),
   foto("klima", "Außengerät"),
-  foto("klima", "Innengeräte (jedes)"),
+  foto("klima", "Befestigung Außengerät"),
+  ...innengeraetFotos,
   foto("klima", "Leitungsweg oder Kanal"),
   foto("klima", "Kondensatablauf"),
   foto("klima", "Manometer bei der Druckprobe"),

@@ -105,3 +105,9 @@ test("WP: Fotos von Außeneinheit, Inneneinheit und den verbauten Speichern", ()
   for (const t of ["Außeneinheit gesamt mit Abständen", "Inneneinheit mit Hydraulik", "Warmwasserspeicher", "Pufferspeicher"]) assert.ok(mit.includes(t), t);
   assert.ok(!titel({}).includes("Pufferspeicher"));
 });
+
+test("Klima: Foto je Innengerät nach Anzahl, dazu Außengerät und Konsole", () => {
+  const t = sichtbar({ bericht: { wert: "Klima" }, ab_klima_anzahl: { wert: "3" } }).filter((f) => f.pflicht).map((f) => f.titel);
+  for (const x of ["Außengerät", "Befestigung Außengerät", "Innengerät 1", "Innengerät 2", "Innengerät 3"]) assert.ok(t.includes(x), x);
+  assert.ok(!t.includes("Innengerät 4"));
+});

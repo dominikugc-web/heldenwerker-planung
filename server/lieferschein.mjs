@@ -97,14 +97,21 @@ export function abschlussAusLieferscheinen(liste = []) {
   // Neuester Lieferschein gewinnt, wie oben.
   for (const ls of [...liste].sort((x, y) => String(y.datum || "").localeCompare(String(x.datum || "")))) {
     const p = ls.produkte || [];
-    const innen = p.filter((x) => /klima/i.test(x.name) && /inneneinheit/i.test(x.name));
-    const aussen = p.filter((x) => /klimagerät|split-klima/i.test(x.name) && !/inneneinheit|konsole/i.test(x.name));
+    const geraet = (x) => /klimagerät|split-klima/i.test(x.name) && !/pauschale|konsole|gateway|montage/i.test(x.name);
+    const set = (x) => /außen-\s*und\s*inneneinheit/i.test(x.name);
+    const innen = p.filter((x) => geraet(x) && /inneneinheit/i.test(x.name));
+    const aussen = p.filter((x) => geraet(x) && (!/inneneinheit/i.test(x.name) || set(x)));
     const optimierer = p.filter((x) => /tigo|optimierer/i.test(x.name));
     const ww = p.filter((x) => /warmwasserspeicher/i.test(x.name)), puffer = p.filter((x) => /pufferspeicher|puffertower/i.test(x.name));
     if (ww.length) { setze("ab_wp_ww_da", "ja", ls.nr); setze("ab_wp_ww", ww.map(mitMenge).join(", "), ls.nr); }
     if (puffer.length) { setze("ab_wp_puffer_da", "ja", ls.nr); setze("ab_wp_puffer", puffer.map(mitMenge).join(", "), ls.nr); }
     setze("ab_klima_aussen", aussen.map(mitMenge).join(", "), ls.nr);
-    setze("ab_klima_innen", innen.map(mitMenge).join(", "), ls.nr);
+    // Jedes Innengerät einzeln (Menge aufgelöst), Text ohne „Klimagerät“ und doppelte Leerzeichen; höchstens 6.
+    const geraete = innen.flatMap((x) => Array.from({ length: Math.max(1, Math.round(x.menge)) }, () => x.name.replace(/^Bosch Klimagerät\s+/i, "Bosch ").replace(/\s+/g, " ").trim())).slice(0, 6);
+    if (geraete.length && !("ab_klima_anzahl" in raus)) { setze("ab_klima_anzahl", geraete.length, ls.nr); geraete.forEach((g, i) => setze(`ab_klima_ig${i + 1}`, g, ls.nr)); }
+    setze("ab_klima_konsole", p.filter((x) => /konsole/i.test(x.name)).map(mitMenge).join(", "), ls.nr);
+    setze("ab_klima_gateway", p.filter((x) => /gateway/i.test(x.name)).map(mitMenge).join(", "), ls.nr);
+    setze("ab_klima_leitung", p.filter((x) => /kälteleitung/i.test(x.name)).map(mitMenge).join(", "), ls.nr);
     setze("ab_dach_optimierer", optimierer.map(mitMenge).join(", "), ls.nr);
   }
   return raus;
