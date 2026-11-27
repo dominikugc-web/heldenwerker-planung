@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fehler } from "./router.mjs";
-import { berichtPdf } from "./bericht.mjs";
-import { frageNach, richtungVon } from "./fragen.mjs";
+import { berichtPdf, pdfDateiname } from "./bericht.mjs";
+import { frageNach, richtungVon, berichtVon } from "./fragen.mjs";
 import { audioMime } from "./transkribieren.mjs";
 
 const MIME = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
@@ -27,8 +27,15 @@ export function dateiNamen(pl) {
   }
   return namen;
 }
-const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).flatMap(([frageId, a]) => (a.dateien || []).map((d) => ({ ...d, richtung: richtungVon(frageId) }))),
+// Die Unterschrift steht nur im Protokoll, nicht als eigenes Foto in Drive oder HERO.
+const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).filter(([frageId]) => frageId !== "ab_unterschrift").flatMap(([frageId, a]) => (a.dateien || []).map((d) => ({ ...d, richtung: richtungVon(frageId) }))),
   ...(pl.verlauf || []).flatMap((n) => n.dateien || [])];
+
+// Abschlussbericht in HERO: PDF als „Abnahmeprotokoll“ (Ordner Baustellenberichte), Fotos in der HERO-Bildkategorie des Berichts
+// (Namen wie in upload_image_categories, mit Leerzeichen am Ende). Logbuch nennt Bericht und Monteure.
+export const DOKUMENTTYP_ABNAHME = 380908;
+export const BILDKATEGORIE = { dach: "Dachbelegung ", dc: "Messprotokoll Strings+Erdung", ac: "AC Montage", wp: "wärmepumpe ", klima: "aussengerät" };
+export const logbuchTextAbschluss = (antworten) => `Baustelle abgeschlossen: ${antworten.bericht.wert}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
@@ -84,7 +91,9 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     // Was hochgeladen werden muss: alle Fotos, Videos, Sprachnotizen und PDFs, zuletzt das Protokoll (es braucht deren Links).
     const auftraege = alle.map((d) => ({ schluessel: d.id, richtung: d.richtung, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), art: ART_ORDNER[d.art], mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
     const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
-    auftraege.push({ schluessel: "protokoll", name: `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
+    const bericht = berichtVon(pl.antworten);
+    const tag = new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
+    auftraege.push({ schluessel: "protokoll", name: bericht ? pdfDateiname(pl, tag) : `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
 
     const protokollSchreiben = async () => fs.writeFileSync(protokollPfad, await berichtPdf(pl, { links: Object.fromEntries(Object.entries(pl.gesendet.dateien).map(([k, v]) => [k, v.link])), bild: (d) => planungen.bildFuerPdf(id, d) }));
     // Drive-Ordner: Kunde / Projektnummer(n) / Dateiart (Dominik, 26.11.). Titel ist „Nummer, Kunde, Adresse“.
@@ -122,7 +131,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
         if (a.protokoll && ablage && !pl.gesendet.dateien.protokoll) break; // Protokoll erst, wenn es alle Drive-Links enthält
         try {
           if (a.protokoll && !fs.existsSync(a.pfad)) await protokollSchreiben();
-          const heroId = await dateien.inHero(z.id, a.pfad, a.name, a.mime);
+          const heroId = await dateien.inHero(z.id, a.pfad, a.name, a.mime, bericht ? (a.mime === MIME.pdf ? { dokumenttyp: DOKUMENTTYP_ABNAHME } : { bildkategorie: BILDKATEGORIE[bericht] }) : {});
           pl = planungen.laden(id);
           (pl.gesendet.inHero[z.id] ||= {})[a.schluessel] = heroId;
           planungen.speichern(pl);
@@ -138,7 +147,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     // Je Projekt ein kurzer Logbuch-Eintrag, sobald alles abgelegt und dort in HERO ist (ohne Ablage nur HERO).
     for (const z of ziele) {
       if (pl.gesendet.logbuchIn.includes(z.id) || !(fertig || !ablage) || !fuerHero.every((a) => !gehoertZu(a, z) || istInHero(z, a))) continue;
-      await dateien.logbuchEintrag(z.id, logbuchText(aufgenommen));
+      await dateien.logbuchEintrag(z.id, bericht ? logbuchTextAbschluss(pl.antworten) : logbuchText(aufgenommen));
       pl.gesendet.logbuchIn.push(z.id);
       planungen.speichern(pl);
     }

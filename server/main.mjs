@@ -77,7 +77,7 @@ export function starteServer({ port = 8790, host = "127.0.0.1", webDir, datenDir
     dateien: {
       logbuchEintrag: (id, text) => erstelleDateien({ schreiber: schreiber() }).logbuchEintrag(id, text),
       // Eine Sekunde Abstand zwischen Dateien, damit HERO nicht drosselt (429 bei drei Projekten am Stück, 24.11.).
-      inHero: async (id, pfad, name, mime) => { await new Promise((ok) => setTimeout(ok, 1000)); return erstelleDateien({ schreiber: schreiber(), hero: hero() }).inHero(id, pfad, name, mime); },
+      inHero: async (id, pfad, name, mime, opt) => { await new Promise((ok) => setTimeout(ok, 1000)); return erstelleDateien({ schreiber: schreiber(), hero: hero() }).inHero(id, pfad, name, mime, opt); },
     },
     ablage: () => ladeDrive(homeDir),
   });

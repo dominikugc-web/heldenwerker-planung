@@ -4,11 +4,11 @@ import { feedbackNeu } from "./feedback.mjs";
 import { audioMime } from "./transkribieren.mjs";
 import { route, json, leseJson, fehler } from "./router.mjs";
 import { kostenSchaetzen } from "./claude.mjs";
-import { berichtText, berichtPdf, fehltPflichtfotos } from "./bericht.mjs";
+import { berichtText, berichtPdf, fehltPflichtfotos, fehltZumSenden } from "./bericht.mjs";
 import { antwortenAusLieferscheinen, abschlussAusLieferscheinen } from "./lieferschein.mjs";
 import { BERICHTE } from "./abschluss-fragen.mjs";
 import { heizlastAusPdf, antwortenAusHeizlast } from "./heizlast.mjs";
-import { TYPEN } from "./fragen.mjs";
+import { TYPEN, istAbschluss } from "./fragen.mjs";
 
 const RICHTUNGEN = Object.values(TYPEN);
 // Ein Kunde kann je Richtung ein eigenes HERO-Projekt haben; besichtigt wird alles in einem Besuch.
@@ -105,7 +105,18 @@ route("GET", "/api/planungen/:id/protokoll.pdf", async (req, res, p, k) => {
 });
 export const linksAus = (pl) => Object.fromEntries(Object.entries(pl.gesendet?.dateien || {}).map(([id, d]) => [id, d.link]));
 
-route("POST", "/api/planungen/:id/abschliessen", (req, res, p, k) => json(res, 202, k.abschluss.starten(p.id)));
+// Abschlussbericht ohne Claude: nur senden, wenn Pflichtfotos (oder Grund) und Unterschrift da sind.
+route("POST", "/api/planungen/:id/abschliessen", (req, res, p, k) => {
+  const pl = k.planungen.laden(p.id);
+  if (istAbschluss(pl.antworten) && pl.status !== "gesendet") {
+    const fehlt = fehltZumSenden(pl);
+    if (fehlt.length) throw fehler(409, "Es fehlt noch: " + fehlt.join(", "));
+    pl.ergebnis = { fehlt: [], abschluss: true };
+    if (pl.status === "offen") pl.status = "zusammengefasst";
+    k.planungen.speichern(pl);
+  }
+  json(res, 202, k.abschluss.starten(p.id));
+});
 
 const TYP = { bild: "image/jpeg", pdf: "application/pdf", video: "video/mp4" };
 // Für Vorschaubilder im Chat: klein=1 liefert die verkleinerte Fassung, wenn es sie gibt.
