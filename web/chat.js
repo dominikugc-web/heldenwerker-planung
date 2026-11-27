@@ -180,6 +180,17 @@ export function sichtbar(fragen, antworten) {
   return fragen.filter((f) => !f.abschluss && (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && passt(f));
 }
 const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);
+// Was vor dem Senden fehlt: Pflichtfotos ohne Foto (im Abschlussbericht zählt Überspringen mit Grund) und die Unterschrift.
+// Gleiche Regeln wie fehltPflichtfotos/fehltZumSenden in server/bericht.mjs. Liefert die Fragen in Ablauf-Reihenfolge.
+const hatBild = (a) => (a?.dateien || []).some((d) => d.art === "bild");
+export function fehltFragen(fragen, antworten) {
+  const abschluss = !!berichtKey(fragen, antworten);
+  return sichtbar(fragen, antworten).filter((f) => {
+    const a = antworten[f.id];
+    if (f.art === "unterschrift") return !(hatBild(a) && a.wert);
+    return f.pflicht && !hatBild(a) && !(abschluss && a?.uebersprungen && a?.notiz);
+  });
+}
 const mitEinheit = (f, w) => (f.einheit && w ? (f.einheit.startsWith("°") ? w + f.einheit : `${w} ${f.einheit}`) : w);
 
 export async function chatAnsicht(el, id) {
@@ -201,6 +212,9 @@ export async function chatAnsicht(el, id) {
   if (bearbeite) history.replaceState(null, "", "#chat/" + id); // Neu laden soll nicht wieder zur Frage springen
   const antworten = () => planung.antworten || {};
   const abschluss = () => !!berichtKey(fragen, antworten());
+  // Aus der Prüfansicht „Es fehlt noch“ (#chat/<id>/fehlt): der Reihe nach zu jedem fehlenden Punkt, danach zurück zum Prüfen.
+  let nachholen = bearbeite === "fehlt";
+  if (nachholen) bearbeite = fehltFragen(fragen, antworten())[0]?.id || null;
 
   el.innerHTML = `<div class="chatseite">
     <div class="chatkopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button>
@@ -356,7 +370,7 @@ export async function chatAnsicht(el, id) {
     $("[data-sprache]", steuerung).onclick = () => sprachnotiz(f);
     $("[data-notiz]", steuerung).onclick = () => notizSheet(f);
     $("[data-ueberspringen]", steuerung).onclick = () => (f.abschluss && f.pflicht ? grundSheet(f) : speichern(f, { uebersprungen: true }));
-    $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
+    $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; nachholen = false; zeichne(); });
   }
 
   // Antwort sofort auf dem Gerät eintragen und in den Ausgang legen; hochgeladen wird, sobald Netz da ist.
@@ -377,7 +391,8 @@ export async function chatAnsicht(el, id) {
     }
     // Nach einer Antwort geht es zur nächsten Frage; nach Datei oder Notiz bleibt die Frage offen (weitere Fotos, Antwort fehlt noch).
     bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
-    zeichne();
+    if (nachholen) { bearbeite = fehltFragen(fragen, antworten())[0]?.id || null; if (!bearbeite) nachgeholt(); }
+    zeichne(false, nachholen);
     if (tastatur) { const neu = $("input#wert, textarea#wert", steuerung); neu ? neu.focus({ preventScroll: true }) : halter.blur(); }
     if (nurAnzeigen) return;
     try {
@@ -517,6 +532,15 @@ export async function chatAnsicht(el, id) {
       await speichern(f, { uebersprungen: true, notiz: grund }); d.close();
     };
     setTimeout(() => $("textarea", d).focus(), 200);
+  }
+
+  // Alles nachgeholt: warten, bis alles oben ist, dann zurück zur Prüfansicht.
+  async function nachgeholt() {
+    nachholen = false;
+    toast("Alles nachgeholt", "ok");
+    // Erst einen Takt warten: ein gerade gewähltes Foto hängt sich erst danach hinten an.
+    try { await new Promise((ok) => setTimeout(ok)); await hinten; await abarbeiten(); } catch { /* bleibt im Ausgang, die Prüfansicht zeigt den Stand vom Server */ }
+    if (el.isConnected) gehe("pruefung/" + planung.id);
   }
 
   // Abschlussbericht: kein Claude, erst alles hochladen, dann zur Prüfansicht.
