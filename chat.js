@@ -98,7 +98,7 @@ export async function planungStarten(p, { mit = [] } = {}) {
       d.close();
       gehe("chat/" + pl.id);
     } catch (err) { fehlerMelden(err); knopf.disabled = false; }
-  };
+  }
   zeichne();
 }
 
@@ -160,7 +160,25 @@ export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
     <div class="knoepfe">${BERICHTE.map(([k, t]) => `<button class="wahl" data-b="${k}">${t}</button>`).join("")}</div>
     <div class="gruppe" id="projektwahl" ${projekte.length < 2 ? "hidden" : ""}><label class="feld"><span>Gehört zu Projekt</span><select>${projekte.map((x) =>
       `<option value="${x.id}">${esc(x.nummer || String(x.id))}${x.gewerk ? " · " + esc(x.gewerk) : ""}</option>`).join("")}</select></label></div>
-    <button class="gross" data-los>Bericht starten</button>`);
+    <button class="gross" data-los>Weiter</button>`);
+  // Schritt 2 (Dominik, 27.11.): wer war mit auf der Baustelle? Namen aus HERO, vorausgewählt die Personen des Termins und ich selbst.
+  const namenLaden = api("/api/mitarbeiter").catch(() => []);
+  const ich = zustand.ich?.heroPerson?.name || zustand.ich?.name || "";
+  const dabei = new Set([...personen, ich].filter(Boolean));
+  async function werWarDabei() {
+    const namen = [...new Set([...(await namenLaden), ...dabei])].sort((a, b) => a.localeCompare(b, "de"));
+    $(".panel", d).innerHTML = `<div class="griff"></div><div class="sheetkopf"><button class="pill" data-zurueckb>Zurück</button><h2>Wer war dabei?</h2><span></span></div>
+      <p class="unter">Alle antippen, die mit auf der Baustelle waren.</p>
+      <div class="knoepfe" id="leute">${namen.map((n) => `<button class="wahl" data-n="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+      <div class="feldzeile" style="margin:10px 0"><input id="weitere" placeholder="Weitere Person (Name)" autocomplete="off" aria-label="Weitere Person"><button class="sendbtn" data-dazu aria-label="Hinzufügen">${IKON.plus}</button></div>
+      <button class="gross" data-start>Bericht starten</button>`;
+    const markieren = () => { for (const b of $$("[data-n]", d)) { const an = dabei.has(b.dataset.n); b.classList.toggle("gewaehlt", an); b.setAttribute("aria-pressed", an); } $("[data-start]", d).disabled = !dabei.size; };
+    $("#leute", d).onclick = (e) => { const b = e.target.closest("[data-n]"); if (!b) return; dabei.has(b.dataset.n) ? dabei.delete(b.dataset.n) : dabei.add(b.dataset.n); markieren(); };
+    $("[data-dazu]", d).onclick = () => { const n = $("#weitere", d).value.trim().slice(0, 80); if (!n) return; dabei.add(n); werWarDabei(); };
+    $("[data-zurueckb]", d).onclick = () => { d.close(); abschlussStarten(p, { mit, personen: [...dabei] }); };
+    $("[data-start]", d).onclick = starten;
+    markieren();
+  }
   const zeichne = () => {
     for (const b of $$("[data-b]", d)) { b.classList.toggle("gewaehlt", b.dataset.b === bericht); b.setAttribute("aria-pressed", b.dataset.b === bericht); }
     $("select", d).value = String(projektId);
@@ -169,12 +187,13 @@ export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
   $("[data-zu]", d).onclick = () => d.close();
   for (const b of $$("[data-b]", d)) b.onclick = () => { bericht = b.dataset.b; projektId = passend().id; zeichne(); };
   $("select", d).onchange = (e) => (projektId = Number(e.target.value));
-  $("[data-los]", d).onclick = async (e) => {
+  $("[data-los]", d).onclick = werWarDabei;
+  async function starten(e) {
     const knopf = e.currentTarget, x = projekte.find((y) => y.id === projektId) || p;
     knopf.disabled = true;
     try {
       const titel = [x.nummer, x.kunde || p.kunde, x.adresse].filter(Boolean).join(", ");
-      const pl = await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: personen } });
+      const pl = await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: [...dabei] } });
       d.close();
       gehe("chat/" + pl.id);
     } catch (err) { fehlerMelden(err); knopf.disabled = false; }
