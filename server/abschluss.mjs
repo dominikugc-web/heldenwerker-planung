@@ -36,7 +36,7 @@ const alleDateien = (pl) => [...Object.entries(pl.antworten || {}).filter(([frag
 // (Namen wie in upload_image_categories, mit Leerzeichen am Ende). Logbuch nennt Bericht und Monteure.
 export const DOKUMENTTYP_ABNAHME = 380908;
 // Nachfass-Aufgaben beim Senden eines Abschlussberichts (Dominik, 27.11.). userId = HERO-User (nicht Partner), aus HERO-Aufgaben:
-// Sebastian Regehr 212973 terminiert Wallbox-Montagen und Klima-Inbetriebnahmen, Maik Regehr 210669 die App-Einweisung.
+// Sebastian Regehr 212973 terminiert Wallbox-Montagen, Klima-Inbetriebnahmen und Klima-Einweisungen, Maik Regehr 210669 die App-Einweisung.
 export const AUFGABEN = [
   { id: "wallbox", userId: 212973, titel: "Wallbox-Montage terminieren",
     wenn: (b, a) => b === "ac" && a.ab_ls_wallbox?.wert === "ja" && a.ab_ac_wallbox_da?.wert === "nein",
@@ -44,6 +44,9 @@ export const AUFGABEN = [
   { id: "klima_inbetrieb", userId: 212973, titel: "Klima-Inbetriebnahme terminieren",
     wenn: (b, a) => b === "klima" && a.ab_klima_inbetrieb?.wert === "nein",
     text: (a) => ["Inbetriebnahme der Klimaanlage beim Abschluss nicht erfolgt.", a.ab_klima_aussen?.wert && `Außengerät: ${a.ab_klima_aussen.wert}.`, a.ab_klima_inbetrieb?.notiz && `Notiz: ${a.ab_klima_inbetrieb.notiz}`] },
+  { id: "klima_einweisung", userId: 212973, titel: "Klima-Einweisung terminieren",
+    wenn: (b, a) => b === "klima" && a.ab_klima_einweisung?.wert === "nein",
+    text: (a) => ["Einweisung in Fernbedienung oder App beim Abschluss nicht erfolgt.", a.ab_klima_einweisung?.notiz && `Notiz: ${a.ab_klima_einweisung.notiz}`] },
   { id: "einweisung", userId: 210669, titel: "App-Einweisung terminieren",
     wenn: (b, a) => b === "ac" && a.ab_ac_einweisung?.wert === "nein",
     text: (a) => ["Einweisung in App/System beim Abschluss nicht erfolgt.", a.ab_ac_einweisung?.notiz && `Notiz: ${a.ab_ac_einweisung.notiz}`] },
