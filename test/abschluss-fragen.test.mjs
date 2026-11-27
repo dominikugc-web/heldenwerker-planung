@@ -53,3 +53,10 @@ test("Dachmontage und DC sind ein Bericht; alte Namen zählen weiter", () => {
   assert.equal(berichtVon({ bericht: { wert: "Dachmontage PV" } }), "dc");
   assert.equal(berichtVon({ bericht: { wert: "Elektrik DC" } }), "dc");
 });
+
+test("Unterkonstruktion: Auswahl der K2-Systeme für Schräg- und Flachdach", () => {
+  const f = frageNach("ab_dach_uk");
+  assert.equal(f.art, "liste");
+  for (const n of ["K2 SingleRail", "K2 MiniRail / MiniFive", "K2 Dome 6", "K2 GreenRoof 2.0 / GreenRoof Vento", "Metalldachziegel mit FlexAdapter"]) assert.ok(f.optionen.includes(n), n);
+  assert.equal(f.optionen.length, 16);
+});

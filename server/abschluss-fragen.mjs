@@ -26,6 +26,10 @@ export const ABNAHME_TEXT = ["Die aufgeführten Mängel werden schnellstmöglich
   "Aufgrund sorgfältiger und fachgerechter Arbeit gewährleisten wir gemäß BGB 5 Jahre ab Abnahme der Leistung, dass diese frei von Sachmängeln sind.",
   "Die Anlage gilt mit Unterschrift als mängelfrei abgenommen (ausgenommen der festgestellten Mängel)."];
 
+// Heldenwerker verbaut nur K2 (Dominik, 27.11.). Systeme laut k2-systems.com, Schrägdach und Flachdach.
+const K2_SYSTEME = ["K2 SingleRail", "K2 SolidRail", "K2 MiniRail / MiniFive", "K2 BasicRail", "K2 MultiRail", "K2 Einlegesystem", "K2 Universal KL-Clamp", "Metalldachziegel mit FlexAdapter",
+  "K2 Dome 6", "K2 Dome 6 Portrait", "K2 Dome 6 Trapezblech", "K2 Dome Zero", "K2 TiltUp Vento", "K2 Triangle / MultiAngle", "K2 GreenRoof 2.0 / GreenRoof Vento", "Sonstige (Notiz)"];
+
 const MAX_STRINGS = 6;
 const ab = (n) => Array.from({ length: MAX_STRINGS - n + 1 }, (_, i) => String(n + i)); // „mindestens n Strings“
 const STRING_WERTE = [["module", "Anzahl Module", "Stück"], ["spannung", "Spannung U", "V"], ["strom", "Strom I", "A"], ["erdung", "Erdung R pe", "Ω"], ["isolation", "Isolation R iso", "MΩ"]];
@@ -44,7 +48,7 @@ const F = [
 
   ...nur("dc",
     ["ab_dach", "ab_dach_module", "Module: Anzahl und Typ", "text"],
-    ["ab_dach", "ab_dach_uk", "Fabrikat Unterkonstruktion", "text"],
+    ["ab_dach", "ab_dach_uk", "Unterkonstruktion (K2)", "liste", { optionen: K2_SYSTEME }],
     ["ab_dach", "ab_dach_optimierer", "Moduloptimierer: Anzahl und Typ", "text"],
     ["ab_dach", "ab_dach_belegung", "Belegung wie geplant?", "janein"],
     ["ab_dach", "ab_dach_pfannen", "Beschädigte Pfannen getauscht?", "auswahl", { optionen: ["Ja", "Nein", "Keine beschädigt"] }]),
