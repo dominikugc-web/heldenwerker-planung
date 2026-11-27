@@ -28,10 +28,11 @@ export const PRODUKTE = [
 ].map(([id, name, bereich, boden]) => ({ id, name, bereich, ...(boden && { boden: true }) }));
 
 // Optional daten/produkte/<id>.glb: 3D-Modell, das man beim Bemalen über dem Foto dreht (27.11.).
+// "modell" in der Liste ist der Änderungsstempel der Datei; die App hängt ihn an die Adresse, so kommt ein neu gebautes Modell trotz Cache sofort an.
 const datei = (k, id, endung = ".png") => path.join(k.datenDir, "produkte", id + endung);
 
 route("GET", "/api/produkte", (req, res, p, k) => json(res, 200, PRODUKTE.filter((x) => fs.existsSync(datei(k, x.id)))
-  .map((x) => (fs.existsSync(datei(k, x.id, ".glb")) ? { ...x, modell: true } : x))));
+  .map((x) => (fs.existsSync(datei(k, x.id, ".glb")) ? { ...x, modell: Math.round(fs.statSync(datei(k, x.id, ".glb")).mtimeMs) } : x))));
 route("GET", "/api/produkte/:id/3d", (req, res, p, k) => {
   if (!PRODUKTE.some((x) => x.id === p.id) || !fs.existsSync(datei(k, p.id, ".glb"))) throw fehler(404, "3D-Modell nicht gefunden");
   res.writeHead(200, { "Content-Type": "model/gltf-binary", "Cache-Control": "private, max-age=86400" });

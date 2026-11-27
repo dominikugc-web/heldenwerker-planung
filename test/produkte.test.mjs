@@ -45,7 +45,9 @@ test("Produkte: 3D-Modell als GLB, in der Liste markiert, ohne Datei 404", async
     assert.equal((await fetch(s.url + "/api/produkte/bosch-klima-aussen/3d")).status, 404, "ohne GLB");
     fs.writeFileSync(path.join(ordner, "bosch-klima-aussen.glb"), "GLBDATEN");
     const liste = await (await fetch(s.url + "/api/produkte")).json();
-    assert.equal(liste.find((x) => x.id === "bosch-klima-aussen").modell, true);
+    // modell = Änderungsstempel der GLB, damit Geräte ein neu gebautes Modell sofort holen statt aus dem Cache
+    const stempel = liste.find((x) => x.id === "bosch-klima-aussen").modell;
+    assert.equal(stempel, Math.round(fs.statSync(path.join(ordner, "bosch-klima-aussen.glb")).mtimeMs));
     assert.equal(liste.find((x) => x.id === "bosch-klima-innen").modell, undefined);
     const r = await fetch(s.url + "/api/produkte/bosch-klima-aussen/3d");
     assert.equal(r.headers.get("content-type"), "model/gltf-binary");
