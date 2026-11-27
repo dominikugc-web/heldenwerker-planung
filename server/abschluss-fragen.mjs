@@ -52,7 +52,9 @@ const F = [
     ["ab_dach", "ab_dach_optimierer", "Moduloptimierer: Anzahl und Typ", "text"],
     ["ab_dach", "ab_dach_belegung", "Belegung wie geplant?", "janein"],
     ["ab_dach", "ab_dach_aenderung", "Was wurde geändert? Planungsbild aus HERO öffnen und einzeichnen", "foto", { pflicht: true, titel: "Änderung der Belegung", heroBilder: true, wenn: { frage: "ab_dach_belegung", ist: "nein" } }],
-    ["ab_dach", "ab_dach_pfannen", "Beschädigte Pfannen getauscht?", "auswahl", { optionen: ["Ja", "Nein", "Keine beschädigt"] }]),
+    ["ab_dach", "ab_dach_pfannen", "Beschädigte Pfannen getauscht?", "auswahl", { optionen: ["Ja", "Nein", "Keine beschädigt"] }],
+    ["ab_dach", "ab_dach_pfannen_anzahl", "Wie viele Pfannen wurden getauscht?", "zahl", { einheit: "Stück", wenn: { frage: "ab_dach_pfannen", ist: "Ja" } }]),
+  foto("dach", "Getauschte Pfannen", { bericht: "dc", wenn: { frage: "ab_dach_pfannen", ist: "Ja" } }),
   foto("dach", "Belegte Dachflächen komplett", { bericht: "dc" }),
   foto("dach", "Unterkonstruktion mit Dachhaken", { bericht: "dc" }),
   foto("dach", "Kabeldurchführung Dach", { bericht: "dc" }),
@@ -119,8 +121,8 @@ const F = [
   foto("klima", "Typenschilder"),
 
   // Abnahme mit dem Kunden, Wortlaut wie im bisherigen HERO-Abnahmeprotokoll.
-  ["ab_abnahme", "ab_komponenten_ok", "Gemeinsame Besichtigung der montierten Anlagenkomponenten in Ordnung?", "janein"],
-  ["ab_abnahme", "ab_verkabelung_ok", "Gemeinsame Besichtigung der Verkabelung/Leitungsführung in Ordnung?", "janein"],
+  ["ab_abnahme", "ab_komponenten_ok", "Gemeinsame Besichtigung der montierten Anlagenkomponenten in Ordnung? Ist der Kunde damit zufrieden?", "janein"],
+  ["ab_abnahme", "ab_verkabelung_ok", "Gemeinsame Besichtigung der Verkabelung/Leitungsführung in Ordnung? Ist der Kunde damit zufrieden?", "janein"],
   ["ab_abnahme", "ab_sauberkeit_ok", "Sauberkeit (Abfall entsorgt, Installationsorte besenrein) in Ordnung?", "janein"],
   ["ab_abnahme", "ab_maengel", "Mängel", "auswahl", { optionen: ["Keine sichtbaren Mängel", "Folgende Mängel"] }],
   ["ab_abnahme", "ab_maengel_text", "Folgende Mängel wurden festgestellt", "text", { wenn: { frage: "ab_maengel", ist: "Folgende Mängel" } }],

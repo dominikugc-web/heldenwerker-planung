@@ -60,3 +60,12 @@ test("Unterkonstruktion: Auswahl der K2-Systeme für Schräg- und Flachdach", ()
   for (const n of ["K2 SingleRail", "K2 MiniRail / MiniFive", "K2 Dome 6", "K2 GreenRoof 2.0 / GreenRoof Vento", "Metalldachziegel mit FlexAdapter"]) assert.ok(f.optionen.includes(n), n);
   assert.equal(f.optionen.length, 16);
 });
+
+test("Pfannen getauscht: bei Ja Anzahl und Fotos; Besichtigungsfragen fragen nach Zufriedenheit", () => {
+  const vis = (w) => sichtbar({ bericht: { wert: "Dachmontage DC" }, ab_dach_pfannen: { wert: w } }).map((f) => f.id);
+  assert.ok(vis("Ja").includes("ab_dach_pfannen_anzahl") && vis("Ja").includes("ab_dach_foto_getauschte_pfannen"));
+  assert.ok(!vis("Nein").includes("ab_dach_pfannen_anzahl"));
+  assert.equal(frageNach("ab_dach_pfannen_anzahl").art, "zahl");
+  assert.match(frageNach("ab_komponenten_ok").frage, /Kunde damit zufrieden\?$/);
+  assert.match(frageNach("ab_verkabelung_ok").frage, /Kunde damit zufrieden\?$/);
+});
