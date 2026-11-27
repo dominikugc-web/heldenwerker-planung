@@ -4,8 +4,8 @@
 // weiterziehen, wieder halten, nächste Gerade, ohne abzusetzen (Dominik, 24.11.).
 // Seit 26.11. ist der Stift immer gerade (das laufende Stück spannt vom letzten Haltepunkt zum Finger) und endet mit Pfeilspitze.
 // Produkt: freigestelltes Gerät aus der Liste einsetzen, verschieben, am Griff unten rechts größer/kleiner ziehen (25.11.).
-// 3D (27.11.): Geräte mit Modell liegen erst durchsichtig in einem Kasten über dem Foto. 1 Finger im Kasten dreht um die
-// Gerätemitte; daneben ziehen oder 2 Finger verschieben den Kasten frei übers Bild, 2 Finger zoomen ihn (Dominik, 27.11.).
+// 3D (27.11.): Geräte mit Modell liegen erst durchsichtig in einem Kasten über dem Foto. 1 Finger irgendwo dreht um die
+// Gerätemitte, 2 Finger verschieben den Kasten frei übers Bild und zoomen ihn (Dominik, 27.11.).
 // "Einsetzen" macht ein Bild davon und setzt es genau an diese Stelle als normales Produkt. Ein eingesetztes 3D-Gerät
 // lässt sich über „3D drehen“ wieder in den Kasten holen; das X oben rechts am Produkt löscht es (Dominik, 27.11.).
 import { api, serverUrl, zustand } from "./api.js";
@@ -33,7 +33,7 @@ export function zeichnen(blob) {
         <div class="palette"></div>
         <div class="textleiste" hidden><button class="pill" data-kleiner aria-label="Text kleiner">A−</button><button class="pill" data-groesser aria-label="Text größer">A+</button><button class="pill" data-textweg>Text löschen</button></div>
         <div class="produktleiste" hidden><button class="pill" data-drehen>3D drehen</button><button class="pill" data-kleiner aria-label="Produkt kleiner">Kleiner</button><button class="pill" data-groesser aria-label="Produkt größer">Größer</button><button class="pill" data-textweg>Entfernen</button></div>
-        <div class="modellleiste"><span>Auf dem Gerät drehen, daneben ziehen oder 2 Finger zum Verschieben und Zoomen</span><button class="pill" data-modellweg>Abbrechen</button><button class="pill" data-modellein style="background:#fff;color:#000;font-weight:600">Einsetzen</button></div>
+        <div class="modellleiste"><span>1 Finger drehen, 2 Finger verschieben und zoomen</span><button class="pill" data-modellweg>Abbrechen</button><button class="pill" data-modellein style="background:#fff;color:#000;font-weight:600">Einsetzen</button></div>
         <div class="reihe"><button class="pill" data-werkzeug="stift" aria-pressed="true">Stift</button><button class="pill" data-werkzeug="pfeil" aria-pressed="false">Pfeil</button><button class="pill" data-werkzeug="text" aria-pressed="false">Text</button>
         <select class="pill produktwahl" aria-label="Produkt einsetzen" disabled><option value="">Produkt …</option></select>
         <button class="pill" data-rueck aria-label="Rückgängig" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button><button class="pill" data-vor aria-label="Wiederholen" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button></div></div>`;
@@ -114,16 +114,18 @@ export function zeichnen(blob) {
       kasten.x = Math.min(fr.width - h, Math.max(-h, kasten.x)); kasten.y = Math.min(fr.height - h, Math.max(-h, kasten.y));
       Object.assign(mv.style, { left: kasten.x + "px", top: kasten.y + "px", width: kasten.s + "px", height: kasten.s + "px" });
     };
-    // Gesten im 3D-Modus auf der ganzen Fläche (Capture): 2 Finger verschieben und zoomen den Kasten, 1 Finger neben dem
-    // Kasten verschiebt ihn. 1 Finger im Kasten geht an model-viewer und dreht.
+    // Alle Gesten im 3D-Modus macht die Fläche selbst (Capture), model-viewer bekommt keine Finger (ohne camera-controls).
+    // 1 Finger irgendwo dreht: so stark wie model-viewer über die ganze Fläche (2π je Flächenhöhe), so fühlte es sich am
+    // Anfang an (Dominik, 27.11.); im kleinen Kasten wäre es doppelt so schnell. 2 Finger verschieben und zoomen den Kasten;
+    // danach dreht erst ein neu aufgesetzter Finger wieder, damit nichts springt.
     function mvZeiger(e) {
       if (!mv) return;
       const fr = flaeche.getBoundingClientRect(), fp = { x: e.clientX - fr.left, y: e.clientY - fr.top };
       if (e.type === "pointerdown") {
+        try { flaeche.setPointerCapture(e.pointerId); } catch { /* Zeiger schon weg */ }
         mvFinger.set(e.pointerId, fp);
-        if (mvFinger.size === 1 && !mv.contains(e.target)) { try { flaeche.setPointerCapture(e.pointerId); } catch { /* weg */ } mvZug = { ab: fp, k: { ...kasten } }; }
+        if (mvFinger.size === 1) { const o = mv.getCameraOrbit(); mvZug = { dreh: true, ab: fp, theta: o.theta, phi: o.phi }; }
         if (mvFinger.size === 2) {
-          mv.removeAttribute("camera-controls"); // angefangenes Drehen stoppen, solange zwei Finger liegen
           const [a, b] = [...mvFinger.values()];
           mvZug = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, k: { ...kasten } };
         }
@@ -132,18 +134,20 @@ export function zeichnen(blob) {
       if (!mvFinger.has(e.pointerId)) return;
       if (e.type === "pointermove") {
         mvFinger.set(e.pointerId, fp);
-        if (!mvZug) return;
-        const k = mvZug.k;
-        if (mvZug.d && mvFinger.size >= 2) { // um die Fingermitte zoomen und mitziehen
-          const [a, b] = [...mvFinger.values()], m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (mvZug?.dreh) {
+          const w = (2 * Math.PI) / fr.height, phi = Math.min(Math.PI - 0.01, Math.max(0.01, mvZug.phi - (fp.y - mvZug.ab.y) * w));
+          mv.cameraOrbit = `${mvZug.theta - (fp.x - mvZug.ab.x) * w}rad ${phi}rad auto`;
+        } else if (mvZug?.d && mvFinger.size >= 2) { // um die Fingermitte zoomen und mitziehen
+          const k = mvZug.k, [a, b] = [...mvFinger.values()], m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
           const s = Math.min(fr.width * 3, Math.max(60, k.s * Math.hypot(a.x - b.x, a.y - b.y) / mvZug.d));
           kasten = { s, x: m.x - (mvZug.m.x - k.x) * s / k.s, y: m.y - (mvZug.m.y - k.y) * s / k.s };
-        } else if (mvZug.ab) kasten = { ...k, x: k.x + fp.x - mvZug.ab.x, y: k.y + fp.y - mvZug.ab.y };
-        kastenSetzen(); return;
+          kastenSetzen();
+        }
+        return;
       }
       mvFinger.delete(e.pointerId); // pointerup / pointercancel
       if (mvFinger.size < 2 && mvZug?.d) mvZug = null;
-      if (!mvFinger.size) { mvZug = null; mv.setAttribute("camera-controls", ""); }
+      if (!mvFinger.size) mvZug = null;
     }
     for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) flaeche.addEventListener(t, mvZeiger, true);
     // alt: schon eingesetztes 3D-Gerät, das wieder gedreht wird; Kasten und Blickwinkel kommen von dort.
@@ -160,8 +164,7 @@ export function zeichnen(blob) {
       mv = document.createElement("model-viewer");
       mv.className = "modell3d";
       for (const [k, v] of Object.entries({
-        src: modelle.get(id), "camera-controls": "", "interaction-prompt": "none", "touch-action": "none",
-        "disable-pan": "", "disable-zoom": "", // verschieben und zoomen macht der Kasten, so bleibt der Drehpunkt in der Gerätemitte
+        src: modelle.get(id), "interaction-prompt": "none", // ohne camera-controls: Gesten macht mvZeiger, Drehpunkt bleibt die Gerätemitte
         "camera-orbit": alt?.modell.orbit || "-30deg 75deg auto", "min-camera-orbit": "auto 0deg auto", "max-camera-orbit": "auto 180deg auto",
         "shadow-intensity": /innen/.test(id) ? "0" : "1", // Wandgeräte werfen keinen Schatten auf den Boden
       })) mv.setAttribute(k, v);
