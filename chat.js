@@ -102,6 +102,47 @@ export async function planungStarten(p, { mit = [] } = {}) {
   zeichne();
 }
 
+// ---------- Abnahmeprotokoll aus der Menüleiste ----------
+export function abnahmeSheet() {
+  const monteur = zustand.ich?.rolle === "monteur";
+  const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Abnahmeprotokoll</h2><span></span></div>
+    <div class="label">Montagen</div><div class="gruppe" id="montagen"><div class="leer">Lädt …</div></div>
+    ${monteur ? "" : `<div class="label">Anderes Projekt</div>
+    <label class="suche">${IKON.suche}<input type="search" placeholder="Kunde, Adresse oder Projekt-Nr." aria-label="Projekt suchen" enterkeyhint="search"></label>
+    <div class="gruppe" id="treffer"></div>`}`);
+  $("[data-zu]", d).onclick = () => d.close();
+  let termine = [], treffer = [];
+  const tag = 864e5, heute = new Date(); heute.setHours(0, 0, 0, 0);
+  api(`/api/termine?von=${new Date(+heute - 7 * tag).toISOString()}&bis=${new Date(+heute + 8 * tag).toISOString()}`).then((liste) => {
+    // Montagen mit Projekt; Planer und Admins sehen zuerst ihre eigenen, sonst alle (Monteure bekommen vom Server nur ihre).
+    const montage = liste.filter((t) => t.projektId && ["Umsetzung", "DC Montage", "WP Montage", "Zählertausch"].includes(t.kategorie));
+    termine = (montage.some((t) => t.meins) ? montage.filter((t) => t.meins) : montage).sort((a, b) => Math.abs(new Date(a.start) - Date.now()) - Math.abs(new Date(b.start) - Date.now()));
+    $("#montagen", d).innerHTML = termine.length ? termine.map((t, i) => `<button class="zeile" data-t="${i}"><div class="haupt"><div class="titel">${esc(t.kunde || t.titel)}</div><div class="neben">${esc(new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }))} · ${esc(t.kategorie)}${t.personen?.length ? " · " + esc(t.personen.join(", ")) : ""}</div></div><span class="pfeil">${IKON.pfeil}</span></button>`).join("")
+      : `<div class="leer">Keine Montagen in den letzten und nächsten 7 Tagen.</div>`;
+  }).catch(() => { $("#montagen", d).innerHTML = `<div class="leer">Termine nicht erreichbar.</div>`; });
+  const eingabe = $("input", d), liste = $("#treffer", d);
+  let laufend, timer;
+  eingabe?.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(async () => {
+    const q = eingabe.value.trim();
+    if (!q) { liste.innerHTML = ""; return; }
+    laufend?.abort(); laufend = new AbortController();
+    try {
+      treffer = await api(`/api/projekte?suche=${encodeURIComponent(q)}`, { signal: laufend.signal });
+      liste.innerHTML = treffer.length ? treffer.map((p, i) => `<button class="zeile" data-p="${i}"><div class="haupt"><div class="titel">${esc(p.kunde || p.titel)}</div><div class="neben">${esc(p.nummer)} · ${esc(p.adresse || "ohne Adresse")}</div></div><span class="pfeil">${IKON.pfeil}</span></button>`).join("") : `<div class="leer">Nichts gefunden.</div>`;
+    } catch (e) { if (e.name !== "AbortError") fehlerMelden(e); }
+  }, 300); });
+  d.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-t], [data-p]"); if (!b) return;
+    b.disabled = true;
+    try {
+      if (b.dataset.t !== undefined) {
+        const t = termine[b.dataset.t], p = await api("/api/projekte/" + t.projektId);
+        d.close(); await abschlussStarten(p, { mit: t.projektIds || [], personen: t.personen || [] });
+      } else { const p = treffer[b.dataset.p]; d.close(); await abschlussStarten(p); }
+    } catch (err) { fehlerMelden(err); b.disabled = false; }
+  });
+}
+
 // ---------- Baustelle abschließen ----------
 // Bericht wählen (Vorauswahl aus dem Gewerk), bei einem gebündelten Termin auch das Projekt. Monteure = Personen des Termins.
 const BERICHTE = [["dach", "Dachmontage PV"], ["dc", "Elektrik DC"], ["ac", "Elektrik AC"], ["wp", "Wärmepumpe"], ["klima", "Klima"]];
