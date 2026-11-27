@@ -102,6 +102,45 @@ export async function planungStarten(p, { mit = [] } = {}) {
   zeichne();
 }
 
+// ---------- Baustelle abschließen ----------
+// Bericht wählen (Vorauswahl aus dem Gewerk), bei einem gebündelten Termin auch das Projekt. Monteure = Personen des Termins.
+const BERICHTE = [["dach", "Dachmontage PV"], ["dc", "Elektrik DC"], ["ac", "Elektrik AC"], ["wp", "Wärmepumpe"], ["klima", "Klima"]];
+const berichteAus = (gewerk = "") => { const g = gewerk.toLowerCase(), r = [];
+  if (/photovoltaik|pv/.test(g)) r.push("dach", "dc", "ac"); else if (/wallbox|speicher|elektro/.test(g)) r.push("ac");
+  if (/wärmepumpe/.test(g)) r.push("wp"); if (/klima/.test(g)) r.push("klima"); return r; };
+export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
+  const projekte = [p, ...(await Promise.all(mit.filter((x) => x !== p.id).map((x) => api("/api/projekte/" + x).catch(() => null)))).filter(Boolean)];
+  let bericht = berichteAus(p.gewerk)[0] || null;
+  const passend = () => projekte.find((x) => berichteAus(x.gewerk).includes(bericht)) || p;
+  let projektId = passend().id;
+  const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Baustelle abschließen</h2><span></span></div>
+    <p class="unter">${esc(p.kunde || p.titel || "")}</p>
+    <div class="label">Welcher Bericht?</div>
+    <div class="knoepfe">${BERICHTE.map(([k, t]) => `<button class="wahl" data-b="${k}">${t}</button>`).join("")}</div>
+    <div class="gruppe" id="projektwahl" ${projekte.length < 2 ? "hidden" : ""}><label class="feld"><span>Gehört zu Projekt</span><select>${projekte.map((x) =>
+      `<option value="${x.id}">${esc(x.nummer || String(x.id))}${x.gewerk ? " · " + esc(x.gewerk) : ""}</option>`).join("")}</select></label></div>
+    <button class="gross" data-los>Bericht starten</button>`);
+  const zeichne = () => {
+    for (const b of $$("[data-b]", d)) { b.classList.toggle("gewaehlt", b.dataset.b === bericht); b.setAttribute("aria-pressed", b.dataset.b === bericht); }
+    $("select", d).value = String(projektId);
+    $("[data-los]", d).disabled = !bericht;
+  };
+  $("[data-zu]", d).onclick = () => d.close();
+  for (const b of $$("[data-b]", d)) b.onclick = () => { bericht = b.dataset.b; projektId = passend().id; zeichne(); };
+  $("select", d).onchange = (e) => (projektId = Number(e.target.value));
+  $("[data-los]", d).onclick = async (e) => {
+    const knopf = e.currentTarget, x = projekte.find((y) => y.id === projektId) || p;
+    knopf.disabled = true;
+    try {
+      const titel = [x.nummer, x.kunde || p.kunde, x.adresse].filter(Boolean).join(", ");
+      const pl = await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: personen } });
+      d.close();
+      gehe("chat/" + pl.id);
+    } catch (err) { fehlerMelden(err); knopf.disabled = false; }
+  };
+  zeichne();
+}
+
 // ---------- Bilder vorbereiten ----------
 async function ladeBild(blob) {
   const url = URL.createObjectURL(blob);
@@ -161,10 +200,11 @@ export async function chatAnsicht(el, id) {
   let bearbeite = decodeURIComponent(location.hash.split("/")[2] || "") || null; // #chat/<id>/<frage> springt zum Ändern
   if (bearbeite) history.replaceState(null, "", "#chat/" + id); // Neu laden soll nicht wieder zur Frage springen
   const antworten = () => planung.antworten || {};
+  const abschluss = () => !!berichtKey(fragen, antworten());
 
   el.innerHTML = `<div class="chatseite">
     <div class="chatkopf"><button class="pill rund" data-zurueck aria-label="Zurück">${IKON.zurueck}</button>
-      <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div><div class="sync" id="sync" role="status" hidden></div></div>
+      <div class="haupt"><div class="titel">${esc(antworten().kunde?.wert || antworten().ab_kunde?.wert || planung.projektTitel)}</div><div class="neben" id="stand"></div><div class="sync" id="sync" role="status" hidden></div></div>
       <button class="pill" data-uebersicht>Übersicht</button></div>
     <div class="fortschritt" aria-hidden="true"><span id="balken"></span></div>
     <div class="verlauf" id="verlauf" aria-live="polite"></div>
@@ -224,7 +264,8 @@ export async function chatAnsicht(el, id) {
       return frage + antwortHtml(f, a);
     }).join("") || "";
     verlauf.scrollTop = scrollVorher;
-    if (!akt) verlauf.insertAdjacentHTML("beforeend", `<div class="blase claude">Alles erfasst. Tipp auf „Zusammenfassen“, dann schreibt Claude den Text für die Monteure und du prüfst alles vor dem Speichern.</div>`);
+    if (!akt) verlauf.insertAdjacentHTML("beforeend", abschluss() ? `<div class="blase claude">Alles erfasst. Tipp auf „Prüfen und senden“, dann siehst du alles noch einmal und speicherst den Bericht in HERO.</div>`
+      : `<div class="blase claude">Alles erfasst. Tipp auf „Zusammenfassen“, dann schreibt Claude den Text für die Monteure und du prüfst alles vor dem Speichern.</div>`);
     // Stand vom Server im Hintergrund: Eingabe nicht anfassen (Tastatur, getippter Text), Scrollposition halten.
     if (nurVerlauf) { verlauf.scrollTop = scrollVorher; return; }
     steuerungZeichnen(akt);
@@ -252,8 +293,8 @@ export async function chatAnsicht(el, id) {
   // ---------- Eingabe für die aktuelle Frage ----------
   function steuerungZeichnen(f) {
     if (!f) {
-      steuerung.innerHTML = `<button class="gross" data-zusammen>${IKON.haken}Zusammenfassen und prüfen</button>`;
-      $("[data-zusammen]", steuerung).onclick = zusammenfassen;
+      steuerung.innerHTML = `<button class="gross" data-zusammen>${IKON.haken}${abschluss() ? "Prüfen und senden" : "Zusammenfassen und prüfen"}</button>`;
+      $("[data-zusammen]", steuerung).onclick = abschluss() ? pruefen : zusammenfassen;
       return;
     }
     const a = antworten()[f.id] || {};
@@ -268,12 +309,16 @@ export async function chatAnsicht(el, id) {
     else if (f.art === "liste") eingabe = `<div class="feldzeile"><select id="wert" aria-label="${esc(f.frage)}"><option value="">Bitte wählen …</option>${f.optionen.map((o) => `<option ${a.wert === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
     else if (f.art === "zahl") eingabe = `<div class="feldzeile"><input id="wert" inputmode="decimal" enterkeyhint="next" value="${esc(a.wert || "")}" placeholder="Zahl" aria-label="${esc(f.frage)}">${f.einheit ? `<span class="einheit">${esc(f.einheit)}</span>` : ""}<button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
     else if (f.art === "text") eingabe = `<div class="feldzeile"><textarea id="wert" rows="1" enterkeyhint="next" placeholder="Antwort …" aria-label="${esc(f.frage)}">${esc(a.wert || "")}</textarea><button class="rundknopf diktat" data-diktat hidden aria-label="Diktieren">${IKON.mikro}</button><button class="sendbtn" data-weiter aria-label="Weiter">${IKON.senden}</button></div>`;
+    if (f.art === "unterschrift") eingabe = `<p class="muted small abnahmetext">${esc(f.hinweis || "")}</p>
+      <label class="feld"><span>Name des Unterzeichners</span><input id="wert" autocomplete="off" value="${esc(a.wert || antworten().ab_kunde?.wert || "")}"></label>
+      <canvas class="unterschriftfeld" id="unterschrift" aria-label="Hier mit dem Finger unterschreiben"></canvas>
+      <div class="knoepfe zwei"><button class="wahl" data-unterschriftweg>Löschen</button><button class="wahl gewaehlt" data-unterschriftok>Übernehmen</button></div>`;
     const bilder = (a.dateien || []).filter((d) => d.art === "bild");
     if (f.art === "foto") eingabe = `<div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
         ${bilder.length ? `<button class="wahl gewaehlt" data-fertig>Weiter</button>` : ""}`;
     // Alle Fotos dieser Frage antippen zum Bemalen und Beschriften, egal welche Frage.
     const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<div class="anhangbox"><button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(bildSrc(d))}" alt=""><span class="art">Bemalen</span></button><button class="weg" data-fotoweg="${d.id}" aria-label="Foto löschen">✕</button></div>`).join("")}</div>` : "";
-    steuerung.innerHTML = `${vorschau}${eingabe}
+    steuerung.innerHTML = f.art === "unterschrift" ? eingabe + (bearbeite ? `<div class="zusatz"><span class="platz"></span><button class="pill" data-zurueckzumablauf>Fertig</button></div>` : "") : `${vorschau}${eingabe}
       <div class="zusatz">
         <button class="rundknopf" data-anhang aria-label="Foto, Video oder PDF anhängen">${IKON.bueroklammer}</button>
         <button class="rundknopf" data-sprache aria-label="Sprachnotiz aufnehmen">${IKON.mikro}</button>
@@ -282,6 +327,7 @@ export async function chatAnsicht(el, id) {
         ${bearbeite ? `<button class="pill" data-zurueckzumablauf>Fertig</button>` : ""}
         <button class="pill" data-ueberspringen>Überspringen</button>
       </div>`;
+    if (f.art === "unterschrift") return unterschriftFeld(f);
     const feld = $("#wert", steuerung);
     $$("[data-wert]", steuerung).forEach((b) => (b.onclick = () => speichern(f, { wert: b.dataset.wert })));
     // Mehrfachauswahl: antippen schaltet an und aus, „Weiter“ speichert alle gewählten zusammen.
@@ -309,7 +355,7 @@ export async function chatAnsicht(el, id) {
     $("[data-anhang]", steuerung).onclick = () => $("#galerie", el).click();
     $("[data-sprache]", steuerung).onclick = () => sprachnotiz(f);
     $("[data-notiz]", steuerung).onclick = () => notizSheet(f);
-    $("[data-ueberspringen]", steuerung).onclick = () => speichern(f, { uebersprungen: true });
+    $("[data-ueberspringen]", steuerung).onclick = () => (f.abschluss && f.pflicht ? grundSheet(f) : speichern(f, { uebersprungen: true }));
     $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
   }
 
@@ -325,6 +371,10 @@ export async function chatAnsicht(el, id) {
     // wenn der Fokus noch im selben Tipp wechselt (nicht erst nach einem await).
     const vorher = { antworten: planung.antworten, bearbeite };
     planung.antworten = antwortAnwenden(antworten(), f, body, meta);
+    if (abschluss() && f.id !== "ab_unterschrift" && planung.antworten.ab_unterschrift) {
+      const { ab_unterschrift, ...rest } = planung.antworten; planung.antworten = rest;
+      toast("Geändert: Der Kunde muss neu unterschreiben", "ok");
+    }
     // Nach einer Antwort geht es zur nächsten Frage; nach Datei oder Notiz bleibt die Frage offen (weitere Fotos, Antwort fehlt noch).
     bearbeite = "wert" in body || "uebersprungen" in body ? null : f.id;
     zeichne();
@@ -426,6 +476,58 @@ export async function chatAnsicht(el, id) {
       await hinten; // sonst schreibt ein noch laufendes Hochladen die alte Liste samt Foto zurück
       await speichern(f, { dateien: dateienVon(f).filter((d) => d.id !== dateiId) });
     } catch (e) { bericht("foto-loeschen", e); fehlerMelden(e); }
+  }
+
+  // Unterschrift mit dem Finger: weißes Feld, schwarzer Strich; „Übernehmen“ legt ein PNG an die Antwort (Name = Wert).
+  function unterschriftFeld(f) {
+    const c = $("#unterschrift", steuerung), g = c.getContext("2d"), r = devicePixelRatio || 1;
+    const groesse = () => { const b = c.getBoundingClientRect(); c.width = b.width * r; c.height = b.height * r; g.scale(r, r); g.lineWidth = 2.2; g.lineCap = g.lineJoin = "round"; g.strokeStyle = "#111"; };
+    groesse();
+    let leer = true, zug = null;
+    const punkt = (e) => { const b = c.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+    c.addEventListener("pointerdown", (e) => { c.setPointerCapture(e.pointerId); zug = punkt(e); g.beginPath(); g.moveTo(...zug); g.lineTo(zug[0] + 0.1, zug[1]); g.stroke(); leer = false; });
+    c.addEventListener("pointermove", (e) => { if (!zug) return; const p = punkt(e); g.beginPath(); g.moveTo(...zug); g.lineTo(...p); g.stroke(); zug = p; });
+    for (const t of ["pointerup", "pointercancel"]) c.addEventListener(t, () => (zug = null));
+    $("[data-unterschriftweg]", steuerung).onclick = () => { g.clearRect(0, 0, c.width, c.height); leer = true; };
+    $("[data-zurueckzumablauf]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
+    $("[data-unterschriftok]", steuerung).onclick = async (e) => {
+      const name = $("#wert", steuerung).value.trim();
+      if (!name) return toast("Bitte den Namen des Unterzeichners eintragen", "fehler");
+      if (leer) return toast("Bitte unterschreiben lassen", "fehler");
+      e.currentTarget.disabled = true;
+      try {
+        const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+        const id = neueId(), v = Date.now(), dname = "Unterschrift.png";
+        lokaleUrl.set(id, URL.createObjectURL(blob));
+        await hinten;
+        await dateiEinreihen(id, dname, "bild", blob, false, v);
+        await speichern(f, { wert: name, dateien: [{ id }] }, { [id]: { id, name: dname, art: "bild", groesse: blob.size, v } });
+      } catch (err) { bericht("unterschrift", err); fehlerMelden(err); e.currentTarget.disabled = false; }
+    };
+  }
+
+  // Pflichtfoto im Abschlussbericht fehlt: nur mit Grund (steht dann im Protokoll).
+  function grundSheet(f) {
+    const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Foto fehlt</h2><button class="pill akzent" data-ok>Überspringen</button></div>
+      <p class="muted small">${esc(f.titel || f.frage)}: Warum geht das Foto nicht?</p><textarea rows="4" placeholder="Grund …"></textarea>`);
+    $("[data-zu]", d).onclick = () => d.close();
+    $("[data-ok]", d).onclick = async () => {
+      const grund = $("textarea", d).value.trim();
+      if (!grund) return toast("Bitte einen Grund angeben", "fehler");
+      await speichern(f, { uebersprungen: true, notiz: grund }); d.close();
+    };
+    setTimeout(() => $("textarea", d).focus(), 200);
+  }
+
+  // Abschlussbericht: kein Claude, erst alles hochladen, dann zur Prüfansicht.
+  async function pruefen(e) {
+    const knopf = e.currentTarget; knopf.disabled = true; knopf.textContent = "Lädt noch hoch …";
+    try {
+      await hinten;
+      const offen = await abarbeiten();
+      if (offen) { toast(`Noch ${offen} Einträge nicht hochgeladen. Prüfen geht, sobald wieder Netz da ist.`, "fehler"); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Prüfen und senden"; return; }
+      gehe("pruefung/" + planung.id);
+    } catch (err) { fehlerMelden(err); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Prüfen und senden"; }
   }
 
   function notizSheet(f) {

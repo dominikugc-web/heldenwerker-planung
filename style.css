@@ -354,3 +354,9 @@ a.pill { color: inherit; text-decoration: none; }
 [data-os="android"] .sheetkopf h2 { font-size: 20px; font-weight: 500; }
 [data-os="android"] .toast { top: auto; bottom: calc(env(safe-area-inset-bottom) + 96px); left: 16px; right: 88px; transform: none; max-width: none; border-radius: 8px;
   background: var(--snack); color: var(--snacktxt); backdrop-filter: none; box-shadow: 0 3px 8px rgba(0,0,0,.3); }
+
+/* Baustellenabschluss (27.11.): zweiter großer Knopf auf der Projektseite, Unterschriftsfeld im Ablauf */
+.gross.zweit { background: var(--feld); color: inherit; box-shadow: none; }
+[data-os="android"] .gross.zweit { background: var(--feld); }
+.unterschriftfeld { display: block; width: 100%; height: 180px; background: #fff; border-radius: 14px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); touch-action: none; margin: 8px 0 10px; }
+.abnahmetext { margin: 0 0 8px; line-height: 1.35; }
