@@ -7,7 +7,7 @@ const ERLAUBT = new Set([
   "GET /api/gesund", "GET /api/ich", "GET /api/mitarbeiter", "GET /api/teams", "GET /api/fragen", "GET /api/termine", "GET /api/termin-kategorien",
   "GET /api/produkte", "GET /api/produkte/:id", "GET /api/produkte/:id/3d", "GET /api/projekte/:id",
   "GET /api/planungen", "POST /api/planungen", "GET /api/planungen/:id", "PUT /api/planungen/:id/antworten/:frage",
-  "PUT /api/planungen/:id/dateien/:dateiId", "GET /api/planungen/:id/dateien/:dateiId", "GET /api/planungen/:id/protokoll.pdf",
+  "PUT /api/planungen/:id/dateien/:dateiId", "GET /api/planungen/:id/planungsbilder", "GET /api/planungen/:id/planungsbilder/:bildId", "GET /api/planungen/:id/dateien/:dateiId", "GET /api/planungen/:id/protokoll.pdf",
   "POST /api/planungen/:id/abschliessen", "POST /api/fehlerbericht", "POST /api/feedback",
 ]);
 

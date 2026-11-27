@@ -7,6 +7,7 @@ import { route, json, fehler } from "./router.mjs";
 
 // Kurzbeschreibung fürs Produktblatt beim Bemalen: Modell und Maße B x H x T (Quellen in blender-3d/geraete/recherche, 27.11.).
 const TEXTE = {
+  "pv-modul": "Halbzellenmodul schwarz, ca. 1134 x 1722 x 30 mm",
   "bosch-wp-aussen": "Compress CS6800i AW Außeneinheit, 1350 x 1100 x 540 mm",
   "bosch-wp-innen-wand": "Compress CS6800i AW Inneneinheit E, wandhängend, 400 x 710 x 300 mm",
   "bosch-warmwasserspeicher": "Stora WH 370 LP, 352 l, 750 x 1591 mm",
@@ -31,6 +32,7 @@ const TEXTE = {
 };
 
 export const PRODUKTE = [
+  ["pv-modul", "PV-Modul Full Black", "Modul"],
   ["bosch-wp-aussen", "Bosch Außengerät", "Wärmepumpe", "boden"],
   ["bosch-wp-innen-wand", "Bosch Inneneinheit wandhängend", "Wärmepumpe"],
   ["bosch-warmwasserspeicher", "Bosch Warmwasserspeicher", "Wärmepumpe", "boden"],

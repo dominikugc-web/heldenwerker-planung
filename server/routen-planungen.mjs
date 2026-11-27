@@ -129,6 +129,21 @@ route("GET", "/api/planungen/:id/protokoll.pdf", async (req, res, p, k) => {
 export const linksAus = (pl) => Object.fromEntries(Object.entries(pl.gesendet?.dateien || {}).map(([id, d]) => [id, d.link]));
 
 // Abschlussbericht ohne Claude: nur senden, wenn Pflichtfotos (oder Grund) und Unterschrift da sind.
+// Planungsbilder aus HERO (Kategorien Planung, Dachplanung, Stringplan) für „Was wurde geändert?“, neueste zuerst.
+const PLANUNG = /^(planung|dachplanung|strinplan|stringplan)$/i;
+// Echte Pläne (Planung, Stringplan) vor den Dachfotos (Dachplanung), jeweils neueste zuerst.
+const rang = (b) => (/dachplanung/i.test(b.kategorie) ? 1 : 0);
+const planungsbilder = async (k, pl) => (await k.hero().projektBilder(pl.projektId)).filter((b) => PLANUNG.test(b.kategorie)).sort((a, b) => rang(a) - rang(b) || String(b.datum).localeCompare(String(a.datum)));
+route("GET", "/api/planungen/:id/planungsbilder", async (req, res, p, k) =>
+  json(res, 200, (await planungsbilder(k, k.planungen.laden(p.id))).map(({ url, ...b }) => b)));
+route("GET", "/api/planungen/:id/planungsbilder/:bildId", async (req, res, p, k) => {
+  const b = (await planungsbilder(k, k.planungen.laden(p.id))).find((x) => String(x.id) === p.bildId);
+  if (!b) throw fehler(404, "Bild nicht gefunden");
+  const daten = await k.hero().laden(b.url);
+  res.writeHead(200, { "Content-Type": "image/jpeg", "Content-Length": daten.length, "Cache-Control": "private, max-age=600" });
+  res.end(Buffer.from(daten));
+});
+
 route("POST", "/api/planungen/:id/abschliessen", (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
   if (istAbschluss(pl.antworten) && !abschlussGesperrt(pl)) {

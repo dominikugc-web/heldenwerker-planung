@@ -51,6 +51,7 @@ const F = [
     ["ab_dach", "ab_dach_uk", "Unterkonstruktion (K2)", "liste", { optionen: K2_SYSTEME }],
     ["ab_dach", "ab_dach_optimierer", "Moduloptimierer: Anzahl und Typ", "text"],
     ["ab_dach", "ab_dach_belegung", "Belegung wie geplant?", "janein"],
+    ["ab_dach", "ab_dach_aenderung", "Was wurde geändert? Planungsbild aus HERO öffnen und einzeichnen", "foto", { pflicht: true, titel: "Änderung der Belegung", heroBilder: true, wenn: { frage: "ab_dach_belegung", ist: "nein" } }],
     ["ab_dach", "ab_dach_pfannen", "Beschädigte Pfannen getauscht?", "auswahl", { optionen: ["Ja", "Nein", "Keine beschädigt"] }]),
   foto("dach", "Belegte Dachflächen komplett", { bericht: "dc" }),
   foto("dach", "Unterkonstruktion mit Dachhaken", { bericht: "dc" }),

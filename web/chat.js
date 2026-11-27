@@ -1,5 +1,5 @@
 // Plus-Sheet (neues oder vorhandenes Projekt) und der Planungs-Chat als fester Ablauf.
-import { api, dateiUrl, zustand, bericht, merken } from "./api.js";
+import { api, dateiUrl, zustand, bericht, merken, serverUrl } from "./api.js";
 import { ablage, antwortAnwenden, istZahl } from "./lokal.js";
 import { einreihen, abarbeiten, offeneAntworten, dateiBlob, anzahl } from "./ausgang.js";
 import { $, $$, esc, toast, fehlerMelden, sheet, zurueck, IKON } from "./ui.js";
@@ -417,7 +417,7 @@ export async function chatAnsicht(el, id) {
       <canvas class="unterschriftfeld" id="unterschrift" aria-label="Hier mit dem Finger unterschreiben"></canvas>
       <div class="knoepfe zwei"><button class="wahl" data-unterschriftweg>Löschen</button><button class="wahl gewaehlt" data-unterschriftok>Übernehmen</button></div>`;
     const bilder = (a.dateien || []).filter((d) => d.art === "bild");
-    if (f.art === "foto") eingabe = `<div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
+    if (f.art === "foto") eingabe = `${f.heroBilder ? `<button class="wahl gewaehlt" data-planungsbild style="width:100%;margin-bottom:8px">Planungsbild aus HERO öffnen</button>` : ""}<div class="knoepfe zwei"><button class="wahl" data-kamera>${IKON.kamera} Kamera</button><button class="wahl" data-galerie>Aus Galerie</button></div>
         ${bilder.length ? `<button class="wahl gewaehlt" data-fertig>Weiter</button>` : ""}`;
     // Alle Fotos dieser Frage antippen zum Bemalen und Beschriften, egal welche Frage.
     const vorschau = bilder.length ? `<div class="vorschau">${bilder.map((d) => `<div class="anhangbox"><button class="anhang" data-malen="${d.id}" aria-label="Foto bemalen oder beschriften"><img src="${esc(bildSrc(d))}" alt=""><span class="art">Bemalen</span></button><button class="weg" data-fotoweg="${d.id}" aria-label="Foto löschen">✕</button></div>`).join("")}</div>` : "";
@@ -451,6 +451,7 @@ export async function chatAnsicht(el, id) {
     if (f.art === "text") { feld.style.height = "auto"; feld.addEventListener("input", () => { feld.style.height = "auto"; feld.style.height = Math.min(feld.scrollHeight, 140) + "px"; }); diktieren(feld, $("[data-diktat]", steuerung)); }
     if (feld && matchMedia("(pointer: fine)").matches) feld.focus();
     $("[data-kamera]", steuerung)?.addEventListener("click", () => $("#kamera", el).click());
+    $("[data-planungsbild]", steuerung)?.addEventListener("click", () => planungsbild(f));
     $("[data-galerie]", steuerung)?.addEventListener("click", () => $("#galerie", el).click());
     $("[data-fertig]", steuerung)?.addEventListener("click", () => { bearbeite = null; zeichne(); });
     $$("[data-malen]", steuerung).forEach((b) => (b.onclick = () => malen(f, b.dataset.malen)));
@@ -584,6 +585,28 @@ export async function chatAnsicht(el, id) {
       await hinten; // sonst schreibt ein noch laufendes Hochladen die alte Liste samt Foto zurück
       await speichern(f, { dateien: dateienVon(f).filter((d) => d.id !== dateiId) });
     } catch (e) { bericht("foto-loeschen", e); fehlerMelden(e); }
+  }
+
+  // Belegung geändert (Dominik, 27.11.): Planungsbild des Projekts aus HERO laden, im Editor einzeichnen, als Foto anhängen.
+  async function planungsbild(f) {
+    let liste;
+    try { liste = await api(`/api/planungen/${planung.id}/planungsbilder`); } catch (e) { return fehlerMelden(e); }
+    if (!liste.length) return toast("In HERO ist bei diesem Projekt kein Planungsbild hinterlegt. Bitte ein Foto machen.", "fehler");
+    const bildUrl = (b) => serverUrl(`/api/planungen/${planung.id}/planungsbilder/${b.id}`);
+    const nimm = async (b) => {
+      try {
+        const r = await fetch(bildUrl(b));
+        if (!r.ok) throw new Error("Planungsbild konnte nicht geladen werden");
+        const neu = await zeichnen(await r.blob());
+        if (!neu) return toast("Nichts eingezeichnet, das Bild wurde nicht übernommen", "ok");
+        await hochladenUndAnhaengen(f, [new File([neu], "Planung geändert.jpg", { type: "image/jpeg" })]);
+      } catch (e) { bericht("planungsbild", e); fehlerMelden(e); }
+    };
+    if (liste.length === 1) return nimm(liste[0]);
+    const d = sheet(`<div class="sheetkopf"><button class="pill" data-zu>Abbrechen</button><h2>Planungsbild wählen</h2><span></span></div>
+      <div class="gruppe">${liste.map((b, i) => `<button class="zeile" data-i="${i}"><span class="daumen"><img src="${esc(bildUrl(b))}" alt="" loading="lazy"></span><div class="haupt"><div class="titel">${esc(b.kategorie)}</div><div class="neben">${esc(new Date(b.datum).toLocaleDateString("de-DE"))} · ${esc(b.name)}</div></div><span class="pfeil">${IKON.pfeil}</span></button>`).join("")}</div>`);
+    $("[data-zu]", d).onclick = () => d.close();
+    d.addEventListener("click", (e) => { const z = e.target.closest("[data-i]"); if (z) { d.close(); nimm(liste[z.dataset.i]); } });
   }
 
   // Unterschrift mit dem Finger: weißes Feld, schwarzer Strich; „Übernehmen“ legt ein PNG an die Antwort (Name = Wert).

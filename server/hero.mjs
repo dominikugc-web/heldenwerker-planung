@@ -120,6 +120,12 @@ export function erstelleHero({ key, fetch = globalThis.fetch, warten = (ms) => n
       if (!r.ok) throw new HeroFehler("Datei aus HERO nicht ladbar");
       return new Uint8Array(await r.arrayBuffer());
     },
+    // Bilder eines Projekts mit HERO-Bildkategorie; der Link (temporary_url) gilt nur kurz.
+    async projektBilder(projektId) {
+      const d = await abfrage(`query($id:Int){ project_match(project_match_id:$id){ file_uploads { id filename image_category type created is_deleted temporary_url } } }`, { id: Number(projektId) });
+      return (d.project_match?.file_uploads || []).filter((x) => !x.is_deleted && x.temporary_url && /^image\//.test(x.type || ""))
+        .map((x) => ({ id: x.id, name: x.filename, kategorie: String(x.image_category || "").trim(), datum: x.created, url: x.temporary_url }));
+    },
     // Neuester Heizlastbericht (PDF) aus den Projektdateien, null wenn keiner da ist. Der Link gilt nur kurz.
     async heizlastBericht(projektId) {
       const d = await abfrage(`query($id:Int){ project_match(project_match_id:$id){ file_uploads { filename temporary_url created is_deleted } } }`, { id: Number(projektId) });
