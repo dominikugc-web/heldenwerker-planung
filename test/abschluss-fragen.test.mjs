@@ -68,4 +68,5 @@ test("Pfannen getauscht: bei Ja Anzahl und Fotos; Besichtigungsfragen fragen nac
   assert.equal(frageNach("ab_dach_pfannen_anzahl").art, "zahl");
   assert.match(frageNach("ab_komponenten_ok").frage, /Kunde damit zufrieden\?$/);
   assert.match(frageNach("ab_verkabelung_ok").frage, /Kunde damit zufrieden\?$/);
+  assert.match(frageNach("ab_sauberkeit_ok").frage, /Kunde damit zufrieden\?$/);
 });
