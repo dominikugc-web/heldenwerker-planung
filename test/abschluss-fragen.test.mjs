@@ -70,3 +70,11 @@ test("Pfannen getauscht: bei Ja Anzahl und Fotos; Besichtigungsfragen fragen nac
   assert.match(frageNach("ab_verkabelung_ok").frage, /Kunde damit zufrieden\?$/);
   assert.match(frageNach("ab_sauberkeit_ok").frage, /Kunde damit zufrieden\?$/);
 });
+
+test("Mängel: als Frage an den Kunden, bei Ja folgt der Text (auch alte Antwort)", () => {
+  assert.equal(frageNach("ab_maengel").frage, "Hat der Kunde etwas zu bemängeln?");
+  const vis = (w) => sichtbar({ bericht: { wert: "Klima" }, ab_maengel: { wert: w } }).map((f) => f.id);
+  assert.ok(vis("Ja, folgende Mängel").includes("ab_maengel_text"));
+  assert.ok(vis("Folgende Mängel").includes("ab_maengel_text"));
+  assert.ok(!vis("Nein, keine Mängel").includes("ab_maengel_text"));
+});

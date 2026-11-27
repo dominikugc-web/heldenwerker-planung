@@ -124,8 +124,8 @@ const F = [
   ["ab_abnahme", "ab_komponenten_ok", "Gemeinsame Besichtigung der montierten Anlagenkomponenten in Ordnung? Ist der Kunde damit zufrieden?", "janein"],
   ["ab_abnahme", "ab_verkabelung_ok", "Gemeinsame Besichtigung der Verkabelung/Leitungsführung in Ordnung? Ist der Kunde damit zufrieden?", "janein"],
   ["ab_abnahme", "ab_sauberkeit_ok", "Sauberkeit (Abfall entsorgt, Installationsorte besenrein) in Ordnung? Ist der Kunde damit zufrieden?", "janein"],
-  ["ab_abnahme", "ab_maengel", "Mängel", "auswahl", { optionen: ["Keine sichtbaren Mängel", "Folgende Mängel"] }],
-  ["ab_abnahme", "ab_maengel_text", "Folgende Mängel wurden festgestellt", "text", { wenn: { frage: "ab_maengel", ist: "Folgende Mängel" } }],
+  ["ab_abnahme", "ab_maengel", "Hat der Kunde etwas zu bemängeln?", "auswahl", { optionen: ["Nein, keine Mängel", "Ja, folgende Mängel"] }],
+  ["ab_abnahme", "ab_maengel_text", "Folgende Mängel wurden festgestellt", "text", { wenn: { frage: "ab_maengel", ist: ["Ja, folgende Mängel", "Folgende Mängel"] } }],
   ["ab_abnahme", "ab_werbung", "Bilder dürfen für Werbezwecke (z. B. Instagram, Facebook) genutzt werden?", "janein"],
   ["ab_abnahme", "ab_unterschrift", "Unterschrift des Kunden", "unterschrift", { hinweis: ABNAHME_TEXT.join(" ") }],
 ];
