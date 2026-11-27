@@ -143,6 +143,23 @@ export function abnahmeSheet() {
   });
 }
 
+// ---------- Abschlussbericht neu starten (Dominik, 27.11.) ----------
+// Offen: alle Antworten, Fotos und die Unterschrift weg, Kopf und Monteure bleiben. Schon gesendet: neuen Bericht für dasselbe Projekt.
+export async function berichtNeuStarten(planung, fragen) {
+  const a = planung.antworten || {}, gesendet = planung.status === "gesendet" || !!planung.senden;
+  if (!confirm(gesendet ? "Dieser Bericht ist schon gesendet. Einen neuen Bericht für dasselbe Projekt anlegen?"
+    : "Alle Antworten, Fotos und die Unterschrift werden gelöscht. Bericht wirklich neu starten?")) return;
+  try {
+    await abarbeiten(); // nichts Altes aus dem Ausgang über den neuen Stand legen
+    const pl = gesendet
+      ? await api("/api/planungen", { methode: "POST", body: { bericht: berichtKey(fragen, a), projektId: planung.projektId, projektTitel: planung.projektTitel,
+          kunde: a.ab_kunde?.wert, adresse: a.ab_adresse?.wert, nummer: a.ab_projektnr?.wert, monteure: String(a.ab_monteure?.wert || "").split(",").map((s) => s.trim()).filter(Boolean) } })
+      : await api(`/api/planungen/${planung.id}/neustart`, { methode: "POST", body: {} });
+    toast(gesendet ? "Neuer Bericht angelegt" : "Bericht neu gestartet", "ok");
+    if (location.hash === "#chat/" + pl.id) dispatchEvent(new HashChangeEvent("hashchange")); else gehe("chat/" + pl.id);
+  } catch (e) { fehlerMelden(e); }
+}
+
 // ---------- Baustelle abschließen ----------
 // Bericht wählen (Vorauswahl aus dem Gewerk), bei einem gebündelten Termin auch das Projekt. Monteure = Personen des Termins.
 const BERICHTE = [["dc", "Dachmontage DC"], ["ac", "Elektrik AC"], ["wp", "Wärmepumpe"], ["klima", "Klima"]];
@@ -717,8 +734,10 @@ export async function chatAnsicht(el, id) {
         const a = antworten()[f.id], status = !erledigt(a) ? ["offen", ""] : a.uebersprungen ? ["übersprungen", "orange"] : ["✓", "gruen"];
         const kurz = a?.wert ? mitEinheit(f, a.wert) : a?.dateien?.length ? `${a.dateien.length} Datei(en)` : "";
         return `<button class="zeile" data-springe="${f.id}"><div class="haupt"><div class="titel">${esc(f.frage)}</div>${kurz ? `<div class="neben">${esc(kurz)}</div>` : ""}</div><span class="badge ${status[1]}">${status[0]}</span></button>`;
-      }).join("")}</div>`).join("")}`);
+      }).join("")}</div>`).join("")}
+      ${abschluss() ? `<button class="pill" data-neustart style="width:100%;margin-top:var(--gap);color:var(--err)">Bericht komplett neu starten</button>` : ""}`);
     $("[data-zu]", d).onclick = () => d.close();
+    $("[data-neustart]", d)?.addEventListener("click", () => { d.close(); berichtNeuStarten(planung, fragen); });
     $$("[data-springe]", d).forEach((b) => (b.onclick = () => { bearbeite = b.dataset.springe; d.close(); zeichne(false, true); }));
   }
 
