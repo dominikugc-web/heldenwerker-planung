@@ -209,12 +209,12 @@ export const richtungVon = (id) => (NACH_ID[id]?.nur ? TYPEN[NACH_ID[id].nur] : 
 
 // Welche Fragen gelten bei diesen Antworten? Ohne Typ nur die Startfrage.
 export function sichtbar(antworten = {}) {
-  const passt = (f) => !f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert);
+  const passt = (f) => [].concat(f.wenn || []).every((w) => [].concat(w.ist).includes(antworten[w.frage]?.wert));
   const bericht = berichtVon(antworten);
   if (bericht) {
     const liste = ABSCHLUSS_KATALOG.filter((f) => (!f.bericht || f.bericht === bericht) && passt(f));
     const da = new Set(liste.map((f) => f.id));
-    return liste.filter((f) => !f.versteckt && (!f.wenn || da.has(f.wenn.frage)));
+    return liste.filter((f) => !f.versteckt && [].concat(f.wenn || []).every((w) => da.has(w.frage)));
   }
   const gewaehlt = typen(antworten);
   if (!gewaehlt.length) return [KATALOG[0]];

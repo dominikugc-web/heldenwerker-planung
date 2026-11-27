@@ -12,7 +12,7 @@ test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedanke
     assert.ok(BEREICHE[f.bereich], "Bereich fehlt: " + f.id);
     assert.ok(f.frage && !/[–—]/.test(f.frage), f.id);
     if (["auswahl", "mehrfach", "liste"].includes(f.art)) assert.ok(f.optionen?.length >= 2, f.id);
-    if (f.wenn) assert.ok(frageNach(f.wenn.frage), "Bedingung zeigt ins Leere: " + f.id);
+    for (const w of [].concat(f.wenn || [])) assert.ok(frageNach(w.frage), "Bedingung zeigt ins Leere: " + f.id);
   }
   assert.equal(KATALOG[0].id, "typ");
   assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht && !f.abschluss).length, 12);

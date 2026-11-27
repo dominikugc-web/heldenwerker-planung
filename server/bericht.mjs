@@ -61,7 +61,7 @@ export const berichtTitel = (antworten = {}) => (istAbschluss(antworten) ? `Abna
   : `Technische Besichtigung ${typen(antworten).join(" + ") || "PV"}`);
 // Dateiname des Protokolls in Drive und HERO; datum = Sendetag (TT.MM.JJJJ).
 export const pdfDateiname = (pl, datum) => (istAbschluss(pl.antworten)
-  ? `${berichtTitel(pl.antworten)} ${pl.antworten.ab_kunde?.wert || ""} ${datum}`.replace(/[/\\:?*"<>|]/g, "-").replace(/\s+/g, " ") + ".pdf"
+  ? `${berichtTitel(pl.antworten)} ${pl.antworten.ab_kunde?.wert || ""} ${datum}${pl.nachtrag ? " Inbetriebnahme" : ""}`.replace(/[/\\:?*"<>|]/g, "-").replace(/\s+/g, " ") + ".pdf"
   : `Besichtigungsprotokoll ${datum}.pdf`);
 
 export async function berichtPdf(pl, { links = {}, bild }) {

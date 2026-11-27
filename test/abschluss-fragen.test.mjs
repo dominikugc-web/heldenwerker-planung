@@ -119,3 +119,24 @@ test("Klima: Inbetriebnahme vor der Druckprobe; ohne Inbetriebnahme keine Druckp
   const nein = ids("nein");
   for (const x of ["ab_klima_druck", "ab_klima_druck_dauer", "ab_klima_vakuum", "ab_klima_kaeltemittel", "ab_klima_foto_manometer_bei_der_druckprobe", "ab_klima_foto_vakuummeter"]) assert.ok(!nein.includes(x), x);
 });
+
+test("Klima: Foto direkt nach der Frage, Innengeräte vor der Inbetriebnahme, Einweisung nur nach Inbetriebnahme", () => {
+  const s = ids(sichtbar({ bericht: { wert: "Klima" }, ab_klima_anzahl: { wert: "1" }, ab_klima_elektro: { wert: "ja" }, ab_klima_inbetrieb: { wert: "ja" } }));
+  const reihe = ["ab_klima_aussen", "ab_klima_foto_aussengeraet", "ab_klima_konsole", "ab_klima_foto_befestigung_aussengeraet", "ab_klima_elektro",
+    "ab_klima_foto_zaehlerschrank_mit_sicherung_und_beschriftung", "ab_klima_anzahl", "ab_klima_ig1", "ab_klima_foto_innengeraet_1", "ab_klima_inbetrieb",
+    "ab_klima_druck", "ab_klima_druck_dauer", "ab_klima_vakuum", "ab_klima_kaeltemittel", "ab_klima_einweisung"];
+  for (const x of reihe) assert.ok(s.includes(x), x);
+  assert.deepEqual(reihe.map((x) => s.indexOf(x)), reihe.map((x) => s.indexOf(x)).toSorted((a, b) => a - b));
+  const nein = ids(sichtbar({ bericht: { wert: "Klima" }, ab_klima_inbetrieb: { wert: "nein" } }));
+  assert.ok(!nein.includes("ab_klima_einweisung"));
+});
+
+test("Klima: Zählerschrank mit Sicherung bei der Montage, sonst erst bei der Inbetriebnahme", () => {
+  const titel = (el, ib) => sichtbar({ bericht: { wert: "Klima" }, ab_klima_elektro: { wert: el }, ab_klima_inbetrieb: { wert: ib } }).filter((f) => f.pflicht).map((f) => f.titel);
+  const zs = (t) => t.filter((x) => x.startsWith("Zählerschrank"));
+  assert.deepEqual(zs(titel("ja", "ja")), ["Zählerschrank mit Sicherung und Beschriftung"]);
+  assert.deepEqual(zs(titel("nein", "nein")), []);
+  assert.deepEqual(zs(titel("nein", "ja")), ["Zählerschrank mit Sicherung und Beschriftung (Inbetriebnahme)"]);
+  const s = ids(sichtbar({ bericht: { wert: "Klima" }, ab_klima_elektro: { wert: "nein" }, ab_klima_inbetrieb: { wert: "ja" } }));
+  assert.ok(s.indexOf("ab_klima_inbetrieb") < s.indexOf("ab_klima_foto_zaehlerschrank_mit_sicherung_und_beschriftung_inbetriebnahme"));
+});

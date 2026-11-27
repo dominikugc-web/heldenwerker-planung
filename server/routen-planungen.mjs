@@ -183,6 +183,8 @@ route("GET", "/api/planungen/:id/planungsbilder/:bildId", async (req, res, p, k)
   res.end(Buffer.from(daten));
 });
 
+route("POST", "/api/planungen/:id/nachtrag", (req, res, p, k) => json(res, 200, k.abschluss.nachtrag(p.id)));
+
 route("POST", "/api/planungen/:id/abschliessen", (req, res, p, k) => {
   const pl = k.planungen.laden(p.id);
   if (istAbschluss(pl.antworten) && !abschlussGesperrt(pl)) {

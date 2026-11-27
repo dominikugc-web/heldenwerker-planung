@@ -52,7 +52,7 @@ export const AUFGABEN = [
     text: (a) => ["Einweisung in App/System beim Abschluss nicht erfolgt.", a.ab_ac_einweisung?.notiz && `Notiz: ${a.ab_ac_einweisung.notiz}`] },
 ];
 export const BILDKATEGORIE = { dc: "Dachbelegung ", ac: "AC Montage", wp: "wärmepumpe ", klima: "aussengerät" };
-export const logbuchTextAbschluss = (antworten) => `Baustelle abgeschlossen: ${BERICHTE[berichtVon(antworten)]}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
+export const logbuchTextAbschluss = (antworten, nachtrag) => `${nachtrag ? "Inbetriebnahme nachgetragen" : "Baustelle abgeschlossen"}: ${BERICHTE[berichtVon(antworten)]}\nMonteure: ${antworten.ab_monteure?.wert || "nicht angegeben"}`;
 
 // Schickt eine Planung ab. Jeder Schritt wird sofort in planung.gesendet vermerkt, damit ein
 // zweiter Lauf nur nachholt, was fehlt. ablage = null heißt: kein Ort für Dateien verfügbar.
@@ -82,7 +82,25 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
       return planungen.laden(id).senden;
     },
     laeuft: (id) => laufend.has(id),
+    // Klima ohne Inbetriebnahme gesendet (Dominik, 27.11.): Bericht wieder öffnen, um die Inbetriebnahme nachzutragen.
+    // Fotos und Aufgaben bleiben vermerkt (nichts doppelt); Protokoll und Logbuch gehen neu raus, der Kunde unterschreibt neu.
+    nachtrag(id) {
+      if (laufend.has(id)) throw fehler(409, "Wird gerade gespeichert");
+      const pl = planungen.laden(id);
+      if (berichtVon(pl.antworten) !== "klima" || pl.status !== "gesendet" || pl.antworten.ab_klima_inbetrieb?.wert !== "nein") throw fehler(409, "Inbetriebnahme nachtragen geht nur bei einem gesendeten Klima-Bericht ohne Inbetriebnahme");
+      Object.assign(pl, { nachtrag: true, status: "offen", ergebnis: null });
+      delete pl.senden;
+      delete pl.antworten.ab_unterschrift;
+      const g = pl.gesendet || {};
+      delete g.dateien?.protokoll;
+      for (const z of Object.values(g.inHero || {})) delete z.protokoll;
+      Object.assign(g, { logbuchIn: [], logbuch: false });
+      planungen.speichern(pl);
+      fs.rmSync(protokollPfadVon(id), { force: true });
+      return pl;
+    },
   };
+  function protokollPfadVon(id) { return path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf"); }
 
   async function lauf(id) {
     const ablage = typeof ablageQuelle === "function" ? ablageQuelle() : ablageQuelle;
@@ -107,7 +125,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
 
     // Was hochgeladen werden muss: alle Fotos, Videos, Sprachnotizen und PDFs, zuletzt das Protokoll (es braucht deren Links).
     const auftraege = alle.map((d) => ({ schluessel: d.id, richtung: d.richtung, name: d.art === "bild" ? namen[d.id] || d.name : d.name, pfad: planungen.dateiPfad(id, d.id), art: ART_ORDNER[d.art], mime: d.art === "audio" ? audioMime(d.name) : MIME[d.art] }));
-    const protokollPfad = path.join(path.dirname(planungen.dateiPfad(id, "x")), "..", "protokoll.pdf");
+    const protokollPfad = protokollPfadVon(id);
     const bericht = berichtVon(pl.antworten);
     const tag = new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Berlin" });
     auftraege.push({ schluessel: "protokoll", name: bericht ? pdfDateiname(pl, tag) : `Besichtigungsprotokoll ${datum}.pdf`, pfad: protokollPfad, mime: MIME.pdf, protokoll: true });
@@ -164,7 +182,7 @@ export function erstelleAbschluss({ planungen, schreiber, dateien, ablage: ablag
     // Je Projekt ein kurzer Logbuch-Eintrag, sobald alles abgelegt und dort in HERO ist (ohne Ablage nur HERO).
     for (const z of ziele) {
       if (pl.gesendet.logbuchIn.includes(z.id) || !(fertig || !ablage) || !fuerHero.every((a) => !gehoertZu(a, z) || istInHero(z, a))) continue;
-      await dateien.logbuchEintrag(z.id, bericht ? logbuchTextAbschluss(pl.antworten) : logbuchText(aufgenommen));
+      await dateien.logbuchEintrag(z.id, bericht ? logbuchTextAbschluss(pl.antworten, pl.nachtrag) : logbuchText(aufgenommen));
       pl.gesendet.logbuchIn.push(z.id);
       planungen.speichern(pl);
     }

@@ -145,3 +145,41 @@ test("Klima ohne Einweisung Fernbedienung/App: HERO-Aufgabe für Sebastian Regeh
   assert.equal(log.aufgaben[0].userId, 212973);
   assert.match(log.aufgaben[0].titel, /^Klima-Einweisung terminieren: Erika Muster \(KLA-2\)$/);
 });
+
+test("Klima-Inbetriebnahme nachtragen: neues Protokoll mit Zusatz, Fotos nicht doppelt, neues Logbuch, Aufgabe nicht doppelt", async () => {
+  const { p, planungen, log, abschluss } = aufbau();
+  log.aufgaben = [];
+  let pl = planungen.laden(p.id);
+  pl.antworten.bericht = a("Klima");
+  pl.antworten.ab_klima_inbetrieb = a("nein");
+  planungen.speichern(pl);
+  await abschluss.abschliessen(p.id);
+  assert.equal(planungen.laden(p.id).status, "gesendet");
+  pl = abschluss.nachtrag(p.id);
+  assert.equal(pl.status, "offen");
+  assert.equal(pl.nachtrag, true);
+  assert.equal(pl.antworten.ab_unterschrift, undefined);
+  assert.equal(pl.senden, undefined);
+  pl.antworten.ab_klima_inbetrieb = a("ja");
+  pl.antworten.ab_unterschrift = a("Erika Muster", [{ id: "unter001", name: "Unterschrift.png", art: "bild" }]);
+  pl.ergebnis = { fehlt: [], abschluss: true };
+  planungen.speichern(pl);
+  const vorher = log.hero.length;
+  assert.deepEqual((await abschluss.abschliessen(p.id)).fehler, []);
+  const neu = log.hero.slice(vorher);
+  assert.deepEqual(neu.map((x) => x.mime), ["application/pdf"], "nur das neue Protokoll, die Fotos sind schon drin");
+  assert.match(neu[0].name, /^Abnahmeprotokoll Klima Erika Muster .+ Inbetriebnahme\.pdf$/);
+  assert.equal(log.logbuch.length, 2);
+  assert.match(log.logbuch[1].text, /^Inbetriebnahme nachgetragen: Klima\n/);
+  assert.equal(log.aufgaben.length, 1, "Inbetriebnahme-Aufgabe nur einmal");
+  assert.equal(planungen.laden(p.id).status, "gesendet");
+  assert.throws(() => abschluss.nachtrag(p.id), /Inbetriebnahme/);
+});
+
+test("Nachtragen geht nur bei gesendetem Klima-Bericht ohne Inbetriebnahme", async () => {
+  const { p, planungen, abschluss } = aufbau();
+  assert.throws(() => abschluss.nachtrag(p.id), /Inbetriebnahme/, "AC, nicht gesendet");
+  await abschluss.abschliessen(p.id);
+  assert.throws(() => abschluss.nachtrag(p.id), /Inbetriebnahme/, "AC gesendet");
+  assert.equal(planungen.laden(p.id).status, "gesendet");
+});

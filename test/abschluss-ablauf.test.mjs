@@ -181,3 +181,20 @@ test("Neu starten mit neuer Auswahl: anderer Bericht und andere Monteure, bzw. a
     assert.deepEqual(b2.projekte[0].richtungen, ["Wärmepumpe", "Klimaanlage"]);
   } finally { await s.stop(); }
 });
+
+test("Route Inbetriebnahme nachtragen: entsperrt den gesendeten Klima-Bericht", async () => {
+  const s = await testServer();
+  try {
+    const p = await bericht(s);
+    await put(s, `/api/planungen/${p.id}/antworten/bericht`, { wert: "Klima" });
+    await put(s, `/api/planungen/${p.id}/antworten/ab_klima_inbetrieb`, { wert: "nein" });
+    assert.equal((await post(s, `/api/planungen/${p.id}/nachtrag`, {})).status, 409, "noch nicht gesendet");
+    const datei = path.join(s.datenDir, "planungen", p.id, "planung.json");
+    fs.writeFileSync(datei, JSON.stringify({ ...JSON.parse(fs.readFileSync(datei, "utf8")), status: "gesendet", gesendet: { dateien: {}, inHero: {}, logbuchIn: [1], logbuch: true }, senden: { status: "fertig" } }));
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_klima_inbetrieb`, { wert: "ja" })).status, 409);
+    const r = await post(s, `/api/planungen/${p.id}/nachtrag`, {});
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).status, "offen");
+    assert.equal((await put(s, `/api/planungen/${p.id}/antworten/ab_klima_inbetrieb`, { wert: "ja" })).status, 200);
+  } finally { await s.stop(); }
+});
