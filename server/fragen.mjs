@@ -5,6 +5,7 @@
 // art: janein | auswahl (wenige Knöpfe) | liste (lange Auswahlliste) | zahl (mit einheit) | text | foto
 // nur: "pv" | "wp" (Bereich gilt nur dafür), wenn: { frage, ist } (Folgefrage; ist auch als Liste), pflicht: true (Pflichtfoto)
 import { fehler } from "./router.mjs";
+import { ABSCHLUSS_KATALOG, ABSCHLUSS_BEREICHE, BERICHTE } from "./abschluss-fragen.mjs";
 
 export const BEREICHE = {
   start: "Besichtigung",
@@ -192,17 +193,26 @@ const F = [
   ["abschluss", "hinweis_monteure", "Noch etwas, das die Monteure wissen müssen?", "text"],
 ];
 
-export const KATALOG = F.map(([bereich, id, frage, art, extra = {}]) => ({ bereich, id, frage, art, ...(NUR[bereich] && { nur: NUR[bereich] }), ...extra }));
+const BESICHTIGUNG = F.map(([bereich, id, frage, art, extra = {}]) => ({ bereich, id, frage, art, ...(NUR[bereich] && { nur: NUR[bereich] }), ...extra }));
+// Ein Katalog für beides: Besichtigung vorne (Startfrage typ bleibt KATALOG[0]), Abschlussberichte (abschluss: true) dahinter.
+export const KATALOG = [...BESICHTIGUNG, ...ABSCHLUSS_KATALOG];
+Object.assign(BEREICHE, ABSCHLUSS_BEREICHE);
 const NACH_ID = Object.fromEntries(KATALOG.map((f) => [f.id, f]));
+// Abschlussbericht = Startfrage "bericht" beantwortet (statt "typ" bei der Besichtigung).
+export const berichtVon = (antworten = {}) => Object.keys(BERICHTE).find((k) => BERICHTE[k] === antworten.bericht?.wert) || null;
+export const istAbschluss = (antworten = {}) => !!berichtVon(antworten);
 export const frageNach = (id) => NACH_ID[id];
 // Zu welcher Richtung (PV, Wärmepumpe, Klimaanlage) eine Frage gehört; null für Allgemeines (Objekt, Abschluss).
 export const richtungVon = (id) => (NACH_ID[id]?.nur ? TYPEN[NACH_ID[id].nur] : null);
 
 // Welche Fragen gelten bei diesen Antworten? Ohne Typ nur die Startfrage.
 export function sichtbar(antworten = {}) {
+  const passt = (f) => !f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert);
+  const bericht = berichtVon(antworten);
+  if (bericht) return ABSCHLUSS_KATALOG.filter((f) => (!f.bericht || f.bericht === bericht) && passt(f));
   const gewaehlt = typen(antworten);
   if (!gewaehlt.length) return [KATALOG[0]];
-  return KATALOG.filter((f) => (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && (!f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert)));
+  return BESICHTIGUNG.filter((f) => (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && passt(f));
 }
 
 const erledigt = (a) => a && (a.uebersprungen || (a.wert ?? "") !== "" || a.dateien?.length);

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { KATALOG, BEREICHE, sichtbar, naechste, pruefeAntwort, frageNach } from "../server/fragen.mjs";
 
-const ARTEN = ["janein", "auswahl", "mehrfach", "liste", "zahl", "text", "foto"];
+const ARTEN = ["janein", "auswahl", "mehrfach", "liste", "zahl", "text", "foto", "unterschrift"];
 
 test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedankenstriche", () => {
   const ids = KATALOG.map((f) => f.id);
@@ -15,7 +15,7 @@ test("Katalog: eindeutige IDs, gültige Arten, Bereiche vorhanden, keine Gedanke
     if (f.wenn) assert.ok(frageNach(f.wenn.frage), "Bedingung zeigt ins Leere: " + f.id);
   }
   assert.equal(KATALOG[0].id, "typ");
-  assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht).length, 12);
+  assert.equal(KATALOG.filter((f) => f.art === "foto" && f.pflicht && !f.abschluss).length, 12);
 });
 
 test("Typ PV blendet Wärmepumpe aus und umgekehrt", () => {
