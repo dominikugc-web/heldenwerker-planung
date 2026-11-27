@@ -19,6 +19,7 @@ import "./routen-planungen.mjs";
 import "./routen-ablauf.mjs";
 import "./produkte.mjs";
 import "./feedback.mjs";
+import "./teams.mjs";
 import { erstelleProfile } from "./profile.mjs";
 import { istMonteur, monteurPruefen } from "./monteur.mjs";
 

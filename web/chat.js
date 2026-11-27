@@ -161,24 +161,44 @@ export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
     <div class="gruppe" id="projektwahl" ${projekte.length < 2 ? "hidden" : ""}><label class="feld"><span>Gehört zu Projekt</span><select>${projekte.map((x) =>
       `<option value="${x.id}">${esc(x.nummer || String(x.id))}${x.gewerk ? " · " + esc(x.gewerk) : ""}</option>`).join("")}</select></label></div>
     <button class="gross" data-los>Weiter</button>`);
-  // Schritt 2 (Dominik, 27.11.): wer war mit auf der Baustelle? Namen aus HERO, vorausgewählt die Personen des Termins und ich selbst.
-  const namenLaden = api("/api/mitarbeiter").catch(() => []);
+  // Schritt 2 (Dominik, 27.11.): wer war mit auf der Baustelle? Teams aus den Einstellungen bringen ihre Mitglieder mit
+  // (vorausgewählt, abwählbar); danach weitere Teams oder einzelne Namen. Vorausgewählt: Personen/Teams des Termins und ich.
+  const laden = Promise.all([api("/api/mitarbeiter").catch(() => []), api("/api/teams").catch(() => [])]);
   const ich = zustand.ich?.heroPerson?.name || zustand.ich?.name || "";
-  const dabei = new Set([...personen, ich].filter(Boolean));
+  const dabei = new Set(), teamsAn = new Set(), extra = new Set();
+  let vorbelegt = false;
   async function werWarDabei() {
-    const namen = [...new Set([...(await namenLaden), ...dabei])].sort((a, b) => a.localeCompare(b, "de"));
+    const [heroNamen, teams] = await laden;
+    const teamVon = (n) => teams.find((t) => t.name === n);
+    const teamAn = (t) => { teamsAn.add(t.name); t.mitglieder.forEach((m) => dabei.add(m)); };
+    if (!vorbelegt) { vorbelegt = true; for (const n of [...personen, ich].filter(Boolean)) teamVon(n) ? teamAn(teamVon(n)) : dabei.add(n); }
+    const imTeam = new Set(teams.flatMap((t) => t.mitglieder));
+    const einzeln = [...new Set([...heroNamen.filter((n) => !teamVon(n)), ...extra, ...[...dabei].filter((n) => !imTeam.has(n))])].sort((a, b) => a.localeCompare(b, "de"));
+    const chip = (n, attr) => `<button class="wahl" ${attr}="${esc(n)}">${esc(n)}</button>`;
     $(".panel", d).innerHTML = `<div class="griff"></div><div class="sheetkopf"><button class="pill" data-zurueckb>Zurück</button><h2>Wer war dabei?</h2><span></span></div>
-      <p class="unter">Alle antippen, die mit auf der Baustelle waren.</p>
-      <div class="knoepfe" id="leute">${namen.map((n) => `<button class="wahl" data-n="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+      ${teams.length ? `<div class="label">Teams</div><div class="knoepfe">${teams.map((t) => chip(t.name, "data-team")).join("")}</div>` : ""}
+      ${teams.filter((t) => teamsAn.has(t.name)).map((t) => `<div class="label">${esc(t.name)}</div><div class="knoepfe">${t.mitglieder.map((m) => chip(m, "data-n")).join("") || `<span class="muted small">Noch niemand eingetragen (Einstellungen > Montage-Teams)</span>`}</div>`).join("")}
+      <div class="label">${teams.length ? "Weitere Personen" : "Personen"}</div>
+      <div class="knoepfe">${einzeln.map((n) => chip(n, "data-n")).join("")}${teams.filter((t) => !teamsAn.has(t.name)).flatMap((t) => t.mitglieder).filter((m) => !einzeln.includes(m)).map((m) => chip(m, "data-n")).join("")}</div>
       <div class="feldzeile" style="margin:10px 0"><input id="weitere" placeholder="Weitere Person (Name)" autocomplete="off" aria-label="Weitere Person"><button class="sendbtn" data-dazu aria-label="Hinzufügen">${IKON.plus}</button></div>
       <button class="gross" data-start>Bericht starten</button>`;
-    const markieren = () => { for (const b of $$("[data-n]", d)) { const an = dabei.has(b.dataset.n); b.classList.toggle("gewaehlt", an); b.setAttribute("aria-pressed", an); } $("[data-start]", d).disabled = !dabei.size; };
-    $("#leute", d).onclick = (e) => { const b = e.target.closest("[data-n]"); if (!b) return; dabei.has(b.dataset.n) ? dabei.delete(b.dataset.n) : dabei.add(b.dataset.n); markieren(); };
-    $("[data-dazu]", d).onclick = () => { const n = $("#weitere", d).value.trim().slice(0, 80); if (!n) return; dabei.add(n); werWarDabei(); };
-    $("[data-zurueckb]", d).onclick = () => { d.close(); abschlussStarten(p, { mit, personen: [...dabei] }); };
-    $("[data-start]", d).onclick = starten;
+    const markieren = () => {
+      for (const b of $$("[data-n]", d)) { const an = dabei.has(b.dataset.n); b.classList.toggle("gewaehlt", an); b.setAttribute("aria-pressed", an); }
+      for (const b of $$("[data-team]", d)) { const an = teamsAn.has(b.dataset.team); b.classList.toggle("gewaehlt", an); b.setAttribute("aria-pressed", an); }
+      $("[data-start]", d).disabled = !dabei.size && !teamsAn.size;
+    };
+    $(".panel", d).onclick = (e) => {
+      const n = e.target.closest("[data-n]"), t = e.target.closest("[data-team]");
+      if (n) { dabei.has(n.dataset.n) ? dabei.delete(n.dataset.n) : dabei.add(n.dataset.n); markieren(); }
+      if (t) { const team = teamVon(t.dataset.team); if (teamsAn.has(team.name)) { teamsAn.delete(team.name); team.mitglieder.forEach((m) => dabei.delete(m)); } else teamAn(team); werWarDabei(); }
+    };
+    $("[data-dazu]", d).onclick = () => { const n = $("#weitere", d).value.trim().slice(0, 80); if (!n) return; extra.add(n); dabei.add(n); werWarDabei(); };
+    $("[data-zurueckb]", d).onclick = (e) => { e.stopPropagation(); d.close(); abschlussStarten(p, { mit, personen: [...teamsAn, ...dabei] }); };
+    $("[data-start]", d).onclick = (e) => { e.stopPropagation(); starten(e); };
     markieren();
   }
+  // Für den Bericht: alle gewählten Namen; ein gewähltes Team ohne gewählte Mitglieder steht mit seinem Namen drin.
+  const werListe = async () => { const [, teams] = await laden; return [...dabei, ...[...teamsAn].filter((t) => !(teams.find((x) => x.name === t)?.mitglieder || []).some((m) => dabei.has(m)))]; };
   const zeichne = () => {
     for (const b of $$("[data-b]", d)) { b.classList.toggle("gewaehlt", b.dataset.b === bericht); b.setAttribute("aria-pressed", b.dataset.b === bericht); }
     $("select", d).value = String(projektId);
@@ -193,7 +213,7 @@ export async function abschlussStarten(p, { mit = [], personen = [] } = {}) {
     knopf.disabled = true;
     try {
       const titel = [x.nummer, x.kunde || p.kunde, x.adresse].filter(Boolean).join(", ");
-      const pl = await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: [...dabei] } });
+      const pl = await api("/api/planungen", { methode: "POST", body: { bericht, projektId: x.id, projektTitel: titel, kunde: x.kunde || p.kunde, adresse: x.adresse, nummer: x.nummer, monteure: await werListe() } });
       d.close();
       gehe("chat/" + pl.id);
     } catch (err) { fehlerMelden(err); knopf.disabled = false; }
