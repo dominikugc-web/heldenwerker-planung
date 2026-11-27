@@ -173,7 +173,8 @@ export async function chatAnsicht(el, id) {
   $("[data-uebersicht]", el).onclick = uebersicht;
   // Tastatur geht auf (oder die Eingabe wächst): Verlauf wird kleiner, also um genau so viel mit nach oben schieben.
   let verlaufH = 0;
-  const anheften = () => { const h = verlauf.clientHeight, d = verlaufH - h; verlaufH = h; if (d > 0) verlauf.scrollTop += d; };
+  // Nur wer unten war, wird mitgeschoben; weiter oben öffnet sich das Feld einfach darüber, ohne dass der Chat springt.
+  const anheften = () => { const h = verlauf.clientHeight, d = verlaufH - h, warUnten = verlauf.scrollHeight - verlauf.scrollTop - verlaufH < 40; verlaufH = h; if (d > 0 && warUnten) verlauf.scrollTop += d; };
   new ResizeObserver(anheften).observe(verlauf);
   const vv = window.visualViewport;
   const beiTastatur = () => (verlauf.isConnected ? anheften() : vv.removeEventListener("resize", beiTastatur));
@@ -199,8 +200,11 @@ export async function chatAnsicht(el, id) {
 
   const aktuelleFrage = () => (bearbeite && fragen.find((f) => f.id === bearbeite)) || sichtbar(fragen, antworten()).find((f) => !erledigt(antworten()[f.id])) || null;
 
-  function zeichne(nurVerlauf = false) {
-    const scrollVorher = verlauf.scrollTop;
+  // Scrollen (Dominik, 27.11.): Wer unten ist, bleibt unten (die nächste Frage kommt dort). Wer hochgescrollt hat, um etwas
+  // zu ändern, bleibt an derselben Stelle, auch nach dem Speichern. Nur ein gezielter Sprung (aus der Prüfübersicht oder der
+  // Übersicht) holt die Frage in die Mitte.
+  function zeichne(nurVerlauf = false, springen = false) {
+    const scrollVorher = verlauf.scrollTop, amEnde = verlauf.scrollHeight - scrollVorher - verlauf.clientHeight < 40;
     const liste = sichtbar(fragen, antworten()), akt = aktuelleFrage();
     const fertig = liste.filter((f) => erledigt(antworten()[f.id])).length;
     $("#balken", el).style.width = Math.round((fertig / Math.max(liste.length, 1)) * 100) + "%";
@@ -214,11 +218,17 @@ export async function chatAnsicht(el, id) {
       if (!erledigt(a) || f === akt && bearbeite) return frage + (f === akt && a ? antwortHtml(f, a) : "");
       return frage + antwortHtml(f, a);
     }).join("") || "";
+    verlauf.scrollTop = scrollVorher;
     if (!akt) verlauf.insertAdjacentHTML("beforeend", `<div class="blase claude">Alles erfasst. Tipp auf „Zusammenfassen“, dann schreibt Claude den Text für die Monteure und du prüfst alles vor dem Speichern.</div>`);
     // Stand vom Server im Hintergrund: Eingabe nicht anfassen (Tastatur, getippter Text), Scrollposition halten.
     if (nurVerlauf) { verlauf.scrollTop = scrollVorher; return; }
     steuerungZeichnen(akt);
-    requestAnimationFrame(() => { const z = akt && $("#f-" + akt.id, el); (bearbeite && z) ? z.scrollIntoView({ block: "center" }) : (verlauf.scrollTop = verlauf.scrollHeight); });
+    requestAnimationFrame(() => {
+      const z = akt && $("#f-" + akt.id, el);
+      if (springen && z) return z.scrollIntoView({ block: "center" });
+      if (amEnde) verlauf.scrollTop = verlauf.scrollHeight;
+      if (bearbeite && z) z.scrollIntoView({ block: "nearest" }); // nur falls die Frage gerade verdeckt ist
+    });
   }
 
   function antwortHtml(f, a) {
@@ -462,7 +472,7 @@ export async function chatAnsicht(el, id) {
         return `<button class="zeile" data-springe="${f.id}"><div class="haupt"><div class="titel">${esc(f.frage)}</div>${kurz ? `<div class="neben">${esc(kurz)}</div>` : ""}</div><span class="badge ${status[1]}">${status[0]}</span></button>`;
       }).join("")}</div>`).join("")}`);
     $("[data-zu]", d).onclick = () => d.close();
-    $$("[data-springe]", d).forEach((b) => (b.onclick = () => { bearbeite = b.dataset.springe; d.close(); zeichne(); }));
+    $$("[data-springe]", d).forEach((b) => (b.onclick = () => { bearbeite = b.dataset.springe; d.close(); zeichne(false, true); }));
   }
 
   async function zusammenfassen(e) {
@@ -476,7 +486,7 @@ export async function chatAnsicht(el, id) {
     catch (err) { fehlerMelden(err); knopf.disabled = false; knopf.innerHTML = IKON.haken + "Zusammenfassen und prüfen"; }
   }
 
-  zeichne();
+  zeichne(false, !!bearbeite); // aus der Prüfübersicht: direkt zur Frage
   verlaufH = verlauf.clientHeight;
 }
 
