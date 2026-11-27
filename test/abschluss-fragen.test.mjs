@@ -71,6 +71,17 @@ test("Pfannen getauscht: bei Ja Anzahl und Fotos; Besichtigungsfragen fragen nac
   assert.match(frageNach("ab_sauberkeit_ok").frage, /Kunde damit zufrieden\?$/);
 });
 
+test("Zufriedenheitsfragen: bei Nein folgt direkt ein Textfeld, bei Ja nicht", () => {
+  for (const k of ["komponenten", "verkabelung", "sauberkeit"]) {
+    const vis = (w) => ids(sichtbar({ bericht: { wert: "Klima" }, [`ab_${k}_ok`]: { wert: w } }));
+    const nein = vis("nein");
+    assert.equal(nein[nein.indexOf(`ab_${k}_ok`) + 1], `ab_${k}_text`, `${k}: Text direkt danach`);
+    assert.equal(frageNach(`ab_${k}_text`).art, "text");
+    assert.ok(!vis("ja").includes(`ab_${k}_text`), `${k}: bei Ja kein Text`);
+    assert.ok(!ids(sichtbar({ bericht: { wert: "Klima" } })).includes(`ab_${k}_text`), `${k}: ohne Antwort kein Text`);
+  }
+});
+
 test("Mängel: als Frage an den Kunden, bei Ja folgt der Text (auch alte Antwort)", () => {
   assert.equal(frageNach("ab_maengel").frage, "Hat der Kunde etwas zu bemängeln?");
   const vis = (w) => sichtbar({ bericht: { wert: "Klima" }, ab_maengel: { wert: w } }).map((f) => f.id);
@@ -82,4 +93,8 @@ test("Mängel: als Frage an den Kunden, bei Ja folgt der Text (auch alte Antwort
 test("AC: zwei Pflichtfotos für die Typenschilder (Wechselrichter und Speicher)", () => {
   const s = sichtbar({ bericht: { wert: "Elektrik AC" } }).filter((f) => f.pflicht).map((f) => f.titel);
   assert.ok(s.includes("Typenschild Wechselrichter mit Seriennummer") && s.includes("Typenschild Speicher mit Seriennummer"));
+});
+
+test("AC: kein Foto „App läuft“ mehr", () => {
+  assert.equal(frageNach("ab_ac_foto_app_laeuft"), undefined);
 });
