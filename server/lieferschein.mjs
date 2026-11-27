@@ -81,6 +81,8 @@ const klar = (x) => x && (x.wert === SONSTIGE ? x.notiz?.replace(/^Laut Liefersc
 const mitMenge = (p) => (p.menge > 1 ? `${p.menge} x ${p.name}` : p.name);
 export function abschlussAusLieferscheinen(liste = []) {
   const b = antwortenAusLieferscheinen(liste), raus = {};
+  // Merker: steht eine Wallbox im Lieferschein? Ohne Lieferschein „unbekannt“, dann wird gefragt.
+  raus.ab_ls_wallbox = { wert: !liste.length ? "unbekannt" : b.wallbox?.wert ? "ja" : "nein" };
   const setze = (id, wert, quelle) => { if (wert && !(id in raus)) raus[id] = { wert: String(wert), quelle }; };
   const modul = klar(b.modul);
   setze("ab_dach_module", modul && (b.anzahl_module ? `${b.anzahl_module.wert} x ${modul}` : modul), b.modul?.quelle);

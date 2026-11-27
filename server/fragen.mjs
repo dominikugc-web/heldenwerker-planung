@@ -211,7 +211,11 @@ export const richtungVon = (id) => (NACH_ID[id]?.nur ? TYPEN[NACH_ID[id].nur] : 
 export function sichtbar(antworten = {}) {
   const passt = (f) => !f.wenn || [].concat(f.wenn.ist).includes(antworten[f.wenn.frage]?.wert);
   const bericht = berichtVon(antworten);
-  if (bericht) return ABSCHLUSS_KATALOG.filter((f) => (!f.bericht || f.bericht === bericht) && passt(f));
+  if (bericht) {
+    const liste = ABSCHLUSS_KATALOG.filter((f) => (!f.bericht || f.bericht === bericht) && passt(f));
+    const da = new Set(liste.map((f) => f.id));
+    return liste.filter((f) => !f.versteckt && (!f.wenn || da.has(f.wenn.frage)));
+  }
   const gewaehlt = typen(antworten);
   if (!gewaehlt.length) return [KATALOG[0]];
   return BESICHTIGUNG.filter((f) => (!f.nur || gewaehlt.includes(TYPEN[f.nur])) && passt(f));

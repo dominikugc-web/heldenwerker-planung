@@ -73,3 +73,15 @@ test("Lieferschein: Warmwasser- und Pufferspeicher als verbaut vorbelegt", () =>
   assert.equal(a.ab_wp_ww_da.wert, "ja");
   assert.equal(a.ab_wp_puffer_da.wert, "ja");
 });
+
+test("Wallbox nur abfragen, wenn sie im Lieferschein steht (ohne Lieferschein: fragen)", async () => {
+  const { sichtbar } = await import("../server/fragen.mjs");
+  const ids = (extra) => sichtbar({ bericht: { wert: "Elektrik AC" }, ...extra }).map((f) => f.id);
+  const ls = (produkte) => abschlussAusLieferscheinen(produkte ? [{ nr: "LS-3", datum: "2026-11-01", produkte }] : []);
+  const ohne = ls([{ name: "Sungrow SH10RT Wechselrichter 10 kW", menge: 1 }]), mit = ls([{ name: "Wallbox Sungrow AC22E", menge: 1 }]), keinLs = ls(null);
+  assert.equal(ohne.ab_ls_wallbox.wert, "nein");
+  assert.ok(!ids(ohne).includes("ab_ac_wallbox_da"), "keine Wallbox im Lieferschein: nicht fragen");
+  assert.ok(ids(mit).includes("ab_ac_wallbox_da"), "Wallbox im Lieferschein: fragen");
+  assert.ok(ids(keinLs).includes("ab_ac_wallbox_da"), "kein Lieferschein: lieber fragen");
+  assert.ok(!ids(mit).includes("ab_ls_wallbox"), "Merker ist keine sichtbare Frage");
+});
